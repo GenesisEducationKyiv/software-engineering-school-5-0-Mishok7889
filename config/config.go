@@ -3,33 +3,33 @@ package config
 
 import (
 	"fmt"
-	"os"
-	"strconv"
+
+	"github.com/kelseyhightower/envconfig"
 )
 
 // Config represents the application configuration structure
 type Config struct {
-	Server     ServerConfig
-	Database   DatabaseConfig
-	Weather    WeatherConfig
-	Email      EmailConfig
-	Scheduler  SchedulerConfig
-	AppBaseURL string
+	Server     ServerConfig    `split_words:"true"`
+	Database   DatabaseConfig  `split_words:"true"`
+	Weather    WeatherConfig   `split_words:"true"`
+	Email      EmailConfig     `split_words:"true"`
+	Scheduler  SchedulerConfig `split_words:"true"`
+	AppBaseURL string          `envconfig:"APP_URL" default:"http://localhost:8080"`
 }
 
 // ServerConfig contains HTTP server configuration
 type ServerConfig struct {
-	Port int
+	Port int `envconfig:"SERVER_PORT" default:"8080"`
 }
 
 // DatabaseConfig contains database connection settings
 type DatabaseConfig struct {
-	Host     string
-	Port     int
-	User     string
-	Password string
-	Name     string
-	SSLMode  string
+	Host     string `envconfig:"DB_HOST" default:"localhost"`
+	Port     int    `envconfig:"DB_PORT" default:"5432"`
+	User     string `envconfig:"DB_USER" default:"postgres"`
+	Password string `envconfig:"DB_PASSWORD" default:"postgres"`
+	Name     string `envconfig:"DB_NAME" default:"weatherapi"`
+	SSLMode  string `envconfig:"DB_SSL_MODE" default:"disable"`
 }
 
 // GetDSN returns a formatted database connection string
@@ -40,80 +40,32 @@ func (c DatabaseConfig) GetDSN() string {
 
 // WeatherConfig contains settings for the weather API service
 type WeatherConfig struct {
-	APIKey  string
-	BaseURL string
+	APIKey  string `envconfig:"WEATHER_API_KEY" required:"true"`
+	BaseURL string `envconfig:"WEATHER_API_BASE_URL" default:"https://api.weatherapi.com/v1"`
 }
 
 // EmailConfig contains email server and sending settings
 type EmailConfig struct {
-	SMTPHost     string
-	SMTPPort     int
-	SMTPUsername string
-	SMTPPassword string
-	FromName     string
-	FromAddress  string
+	SMTPHost     string `envconfig:"EMAIL_SMTP_HOST" default:"smtp.gmail.com"`
+	SMTPPort     int    `envconfig:"EMAIL_SMTP_PORT" default:"587"`
+	SMTPUsername string `envconfig:"EMAIL_SMTP_USERNAME" required:"true"`
+	SMTPPassword string `envconfig:"EMAIL_SMTP_PASSWORD" required:"true"`
+	FromName     string `envconfig:"EMAIL_FROM_NAME" default:"Weather API"`
+	FromAddress  string `envconfig:"EMAIL_FROM_ADDRESS" default:"no-reply@weatherapi.app"`
 }
 
 // SchedulerConfig contains settings for the background task scheduler
 type SchedulerConfig struct {
-	HourlyInterval int
-	DailyInterval  int
+	HourlyInterval int `envconfig:"HOURLY_INTERVAL" default:"60"`
+	DailyInterval  int `envconfig:"DAILY_INTERVAL" default:"1440"`
 }
 
-// LoadConfig loads application configuration from file or environment
+// LoadConfig loads application configuration from environment variables
 func LoadConfig() (*Config, error) {
-	dbPort, _ := strconv.Atoi(getEnvOrDefault("DB_PORT", "5432"))
-	serverPort, _ := strconv.Atoi(getEnvOrDefault("SERVER_PORT", "8080"))
-	hourlyInterval, _ := strconv.Atoi(getEnvOrDefault("HOURLY_INTERVAL", "60"))
-	dailyInterval, _ := strconv.Atoi(getEnvOrDefault("DAILY_INTERVAL", "1440"))
-	smtpPort, _ := strconv.Atoi(getEnvOrDefault("EMAIL_SMTP_PORT", "587"))
-
-	config := &Config{
-		Server: ServerConfig{
-			Port: serverPort,
-		},
-		Database: DatabaseConfig{
-			Host:     getEnvOrDefault("DB_HOST", "localhost"),
-			Port:     dbPort,
-			User:     getEnvOrDefault("DB_USER", "postgres"),
-			Password: getEnvOrDefault("DB_PASSWORD", "postgres"),
-			Name:     getEnvOrDefault("DB_NAME", "weatherapi"),
-			SSLMode:  getEnvOrDefault("DB_SSL_MODE", "disable"),
-		},
-		Weather: WeatherConfig{
-			APIKey:  getEnvOrDefault("WEATHER_API_KEY", ""),
-			BaseURL: getEnvOrDefault("WEATHER_API_BASE_URL", "https://api.weatherapi.com/v1"),
-		},
-		Email: EmailConfig{
-			SMTPHost:     getEnvOrDefault("EMAIL_SMTP_HOST", "smtp.gmail.com"),
-			SMTPPort:     smtpPort,
-			SMTPUsername: getEnvOrDefault("EMAIL_SMTP_USERNAME", ""),
-			SMTPPassword: getEnvOrDefault("EMAIL_SMTP_PASSWORD", ""),
-			FromName:     getEnvOrDefault("EMAIL_FROM_NAME", "Weather API"),
-			FromAddress:  getEnvOrDefault("EMAIL_FROM_ADDRESS", "no-reply@weatherapi.app"),
-		},
-		Scheduler: SchedulerConfig{
-			HourlyInterval: hourlyInterval,
-			DailyInterval:  dailyInterval,
-		},
-		AppBaseURL: getEnvOrDefault("APP_URL", "http://localhost:8080"),
+	var config Config
+	if err := envconfig.Process("", &config); err != nil {
+		return nil, fmt.Errorf("error processing config: %w", err)
 	}
 
-	if config.Weather.APIKey == "" {
-		return nil, fmt.Errorf("WEATHER_API_KEY environment variable is required")
-	}
-
-	if config.Email.SMTPUsername == "" || config.Email.SMTPPassword == "" {
-		return nil, fmt.Errorf("EMAIL_SMTP_USERNAME and EMAIL_SMTP_PASSWORD environment variables are required")
-	}
-
-	return config, nil
-}
-
-func getEnvOrDefault(key, defaultValue string) string {
-	value, exists := os.LookupEnv(key)
-	if !exists {
-		return defaultValue
-	}
-	return value
+	return &config, nil
 }
