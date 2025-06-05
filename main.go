@@ -17,11 +17,11 @@ import (
 // printConfig prints all fields in the configuration
 func printConfig(cfg *config.Config) {
 	fmt.Println("==== APPLICATION CONFIGURATION ====")
-	
+
 	// Print Server config
 	fmt.Printf("SERVER:\n")
 	fmt.Printf("  Port: %d\n", cfg.Server.Port)
-	
+
 	// Print Database config
 	fmt.Printf("\nDATABASE:\n")
 	fmt.Printf("  Host: %s\n", cfg.Database.Host)
@@ -30,12 +30,12 @@ func printConfig(cfg *config.Config) {
 	fmt.Printf("  Password: %s\n", maskString(cfg.Database.Password))
 	fmt.Printf("  Name: %s\n", cfg.Database.Name)
 	fmt.Printf("  SSLMode: %s\n", cfg.Database.SSLMode)
-	
+
 	// Print Weather config
 	fmt.Printf("\nWEATHER API:\n")
 	fmt.Printf("  API Key: %s\n", maskString(cfg.Weather.APIKey))
 	fmt.Printf("  Base URL: %s\n", cfg.Weather.BaseURL)
-	
+
 	// Print Email config
 	fmt.Printf("\nEMAIL:\n")
 	fmt.Printf("  SMTP Host: %s\n", cfg.Email.SMTPHost)
@@ -44,15 +44,15 @@ func printConfig(cfg *config.Config) {
 	fmt.Printf("  SMTP Password: %s\n", maskString(cfg.Email.SMTPPassword))
 	fmt.Printf("  From Name: %s\n", cfg.Email.FromName)
 	fmt.Printf("  From Address: %s\n", cfg.Email.FromAddress)
-	
+
 	// Print Scheduler config
 	fmt.Printf("\nSCHEDULER:\n")
 	fmt.Printf("  Hourly Interval: %d minutes\n", cfg.Scheduler.HourlyInterval)
 	fmt.Printf("  Daily Interval: %d minutes\n", cfg.Scheduler.DailyInterval)
-	
+
 	// Print App Base URL
 	fmt.Printf("\nAPP BASE URL: %s\n", cfg.AppBaseURL)
-	
+
 	fmt.Println("===================================")
 }
 
@@ -68,27 +68,27 @@ func maskString(s string) string {
 // printAllEnvVars prints all environment variables available to the application
 func printAllEnvVars() {
 	fmt.Println("==== ENVIRONMENT VARIABLES ====")
-	
+
 	// Get all environment variables
 	envVars := os.Environ()
-	
+
 	// Sort them for better readability
 	sort.Strings(envVars)
-	
+
 	// Print each one
 	for _, env := range envVars {
 		pair := strings.SplitN(env, "=", 2)
 		key := pair[0]
 		value := pair[1]
-		
+
 		// Mask sensitive values
 		if isSensitive(key) {
 			value = maskString(value)
 		}
-		
+
 		fmt.Printf("%s=%s\n", key, value)
 	}
-	
+
 	fmt.Println("===============================")
 }
 
@@ -97,14 +97,14 @@ func isSensitive(key string) bool {
 	sensitiveKeys := []string{
 		"API_KEY", "PASSWORD", "SECRET", "TOKEN", "KEY", "PASS", "PWD",
 	}
-	
+
 	key = strings.ToUpper(key)
 	for _, sensitive := range sensitiveKeys {
 		if strings.Contains(key, sensitive) {
 			return true
 		}
 	}
-	
+
 	return false
 }
 
@@ -113,7 +113,7 @@ func main() {
 	if err := godotenv.Load(); err != nil {
 		log.Println("No .env file found or error loading it")
 	}
-	
+
 	// Print all environment variables
 	printAllEnvVars()
 
@@ -122,7 +122,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to load configuration: %v", err)
 	}
-	
+
 	// Print the loaded configuration
 	printConfig(cfg)
 

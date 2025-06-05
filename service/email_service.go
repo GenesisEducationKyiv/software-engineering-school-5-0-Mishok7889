@@ -20,7 +20,7 @@ func NewEmailService(config *config.Config) *EmailService {
 }
 
 // sendEmail sends an email using Gmail SMTP server
-func (s *EmailService) sendEmail(to, subject, body string, isHtml bool) error {
+func (s *EmailService) sendEmail(to, subject, body string, isHTML bool) error {
 	fmt.Printf("[DEBUG] EmailService.sendEmail called with: to=%s, subject=%s\n", to, subject)
 
 	// SMTP server configuration
@@ -37,15 +37,15 @@ func (s *EmailService) sendEmail(to, subject, body string, isHtml bool) error {
 	// Set up email headers
 	mimeHeaders := "MIME-Version: 1.0\r\n"
 	contentType := "Content-Type: text/plain; charset=UTF-8\r\n"
-	if isHtml {
+	if isHTML {
 		contentType = "Content-Type: text/html; charset=UTF-8\r\n"
 	}
 
 	subject = strings.ReplaceAll(subject, "\r\n", "")
 	subject = strings.ReplaceAll(subject, "\n", "")
-	
+
 	from := fmt.Sprintf("%s <%s>", fromName, fromAddress)
-	headers := fmt.Sprintf("From: %s\r\nTo: %s\r\nSubject: %s\r\n%s%s\r\n", 
+	headers := fmt.Sprintf("From: %s\r\nTo: %s\r\nSubject: %s\r\n%s%s\r\n",
 		from, to, subject, mimeHeaders, contentType)
 
 	// Combine headers and message body
