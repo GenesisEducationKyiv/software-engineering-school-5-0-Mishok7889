@@ -1,3 +1,4 @@
+// Package repository implements data access layer for the application
 package repository
 
 import (
@@ -10,14 +11,17 @@ import (
 	"weatherapi.app/models"
 )
 
+// SubscriptionRepository handles data access operations for subscriptions
 type SubscriptionRepository struct {
 	db *gorm.DB
 }
 
+// NewSubscriptionRepository creates a new repository for subscription data
 func NewSubscriptionRepository(db *gorm.DB) *SubscriptionRepository {
 	return &SubscriptionRepository{db: db}
 }
 
+// FindByEmail retrieves a subscription by email and city
 func (r *SubscriptionRepository) FindByEmail(email, city string) (*models.Subscription, error) {
 	fmt.Printf("[DEBUG] SubscriptionRepository.FindByEmail: email=%s, city=%s\n", email, city)
 
@@ -36,6 +40,7 @@ func (r *SubscriptionRepository) FindByEmail(email, city string) (*models.Subscr
 	return &subscription, nil
 }
 
+// FindByID retrieves a subscription by its ID
 func (r *SubscriptionRepository) FindByID(id uint) (*models.Subscription, error) {
 	fmt.Printf("[DEBUG] SubscriptionRepository.FindByID: id=%d\n", id)
 
@@ -50,6 +55,7 @@ func (r *SubscriptionRepository) FindByID(id uint) (*models.Subscription, error)
 	return &subscription, nil
 }
 
+// Create persists a new subscription to the database
 func (r *SubscriptionRepository) Create(subscription *models.Subscription) error {
 	fmt.Printf("[DEBUG] SubscriptionRepository.Create: %+v\n", subscription)
 
@@ -63,6 +69,7 @@ func (r *SubscriptionRepository) Create(subscription *models.Subscription) error
 	return nil
 }
 
+// Update modifies an existing subscription
 func (r *SubscriptionRepository) Update(subscription *models.Subscription) error {
 	fmt.Printf("[DEBUG] SubscriptionRepository.Update: %+v\n", subscription)
 
@@ -76,6 +83,7 @@ func (r *SubscriptionRepository) Update(subscription *models.Subscription) error
 	return nil
 }
 
+// Delete removes a subscription from the database
 func (r *SubscriptionRepository) Delete(subscription *models.Subscription) error {
 	fmt.Printf("[DEBUG] SubscriptionRepository.Delete: %+v\n", subscription)
 
@@ -89,6 +97,7 @@ func (r *SubscriptionRepository) Delete(subscription *models.Subscription) error
 	return nil
 }
 
+// GetSubscriptionsForUpdates retrieves all confirmed subscriptions for a specific frequency
 func (r *SubscriptionRepository) GetSubscriptionsForUpdates(frequency string) ([]models.Subscription, error) {
 	fmt.Printf("[DEBUG] SubscriptionRepository.GetSubscriptionsForUpdates: frequency=%s\n", frequency)
 
@@ -103,14 +112,17 @@ func (r *SubscriptionRepository) GetSubscriptionsForUpdates(frequency string) ([
 	return subscriptions, nil
 }
 
+// TokenRepository handles data access operations for authentication tokens
 type TokenRepository struct {
 	db *gorm.DB
 }
 
+// NewTokenRepository creates a new repository for token operations
 func NewTokenRepository(db *gorm.DB) *TokenRepository {
 	return &TokenRepository{db: db}
 }
 
+// CreateToken generates and stores a new token for a subscription
 func (r *TokenRepository) CreateToken(subscriptionID uint, tokenType string, expiresIn time.Duration) (*models.Token, error) {
 	fmt.Printf("[DEBUG] TokenRepository.CreateToken: subscriptionID=%d, type=%s, expiresIn=%v\n",
 		subscriptionID, tokenType, expiresIn)
@@ -132,6 +144,7 @@ func (r *TokenRepository) CreateToken(subscriptionID uint, tokenType string, exp
 	return token, nil
 }
 
+// FindByToken retrieves a token by its string value
 func (r *TokenRepository) FindByToken(tokenStr string) (*models.Token, error) {
 	fmt.Printf("[DEBUG] TokenRepository.FindByToken: token=%s\n", tokenStr)
 
@@ -146,6 +159,7 @@ func (r *TokenRepository) FindByToken(tokenStr string) (*models.Token, error) {
 	return &token, nil
 }
 
+// DeleteToken removes a token from the database
 func (r *TokenRepository) DeleteToken(token *models.Token) error {
 	fmt.Printf("[DEBUG] TokenRepository.DeleteToken: %+v\n", token)
 
@@ -159,6 +173,7 @@ func (r *TokenRepository) DeleteToken(token *models.Token) error {
 	return nil
 }
 
+// DeleteExpiredTokens removes all expired tokens from the database
 func (r *TokenRepository) DeleteExpiredTokens() error {
 	fmt.Println("[DEBUG] TokenRepository.DeleteExpiredTokens called")
 

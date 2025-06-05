@@ -1,3 +1,4 @@
+// Package scheduler implements background job scheduling
 package scheduler
 
 import (
@@ -10,6 +11,7 @@ import (
 	"weatherapi.app/service"
 )
 
+// Scheduler manages periodic tasks for the application
 type Scheduler struct {
 	db                  *gorm.DB
 	config              *config.Config
@@ -20,6 +22,7 @@ type Scheduler struct {
 	subscriptionService *service.SubscriptionService
 }
 
+// NewScheduler creates and configures a new task scheduler
 func NewScheduler(db *gorm.DB, config *config.Config) *Scheduler {
 	weatherService := service.NewWeatherService(config)
 	emailService := service.NewEmailService(config)
@@ -47,6 +50,7 @@ func NewScheduler(db *gorm.DB, config *config.Config) *Scheduler {
 	}
 }
 
+// Start begins the scheduler's operations
 func (s *Scheduler) Start() {
 	go s.scheduleDaily(24*time.Hour, s.cleanupExpiredTokens)
 

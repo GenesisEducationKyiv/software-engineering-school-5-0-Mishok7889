@@ -1,3 +1,4 @@
+// Package database provides database connection and migration functionality
 package database
 
 import (
@@ -9,6 +10,7 @@ import (
 	"weatherapi.app/models"
 )
 
+// InitDB initializes the database connection
 func InitDB(config config.DatabaseConfig) (*gorm.DB, error) {
 	db, err := gorm.Open(postgres.Open(config.GetDSN()), &gorm.Config{})
 	if err != nil {
@@ -18,6 +20,7 @@ func InitDB(config config.DatabaseConfig) (*gorm.DB, error) {
 	return db, nil
 }
 
+// RunMigrations executes database schema migrations
 func RunMigrations(db *gorm.DB) error {
 	return db.AutoMigrate(
 		&models.Subscription{},
@@ -25,6 +28,7 @@ func RunMigrations(db *gorm.DB) error {
 	)
 }
 
+// CloseDB safely closes the database connection
 func CloseDB(db *gorm.DB) error {
 	sqlDB, err := db.DB()
 	if err != nil {

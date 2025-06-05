@@ -1,3 +1,4 @@
+// Package config provides configuration functionality for the application
 package config
 
 import (
@@ -6,6 +7,7 @@ import (
 	"strconv"
 )
 
+// Config represents the application configuration structure
 type Config struct {
 	Server     ServerConfig
 	Database   DatabaseConfig
@@ -15,10 +17,12 @@ type Config struct {
 	AppBaseURL string
 }
 
+// ServerConfig contains HTTP server configuration
 type ServerConfig struct {
 	Port int
 }
 
+// DatabaseConfig contains database connection settings
 type DatabaseConfig struct {
 	Host     string
 	Port     int
@@ -28,16 +32,19 @@ type DatabaseConfig struct {
 	SSLMode  string
 }
 
+// GetDSN returns a formatted database connection string
 func (c DatabaseConfig) GetDSN() string {
 	return fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
 		c.Host, c.Port, c.User, c.Password, c.Name, c.SSLMode)
 }
 
+// WeatherConfig contains settings for the weather API service
 type WeatherConfig struct {
 	APIKey  string
 	BaseURL string
 }
 
+// EmailConfig contains email server and sending settings
 type EmailConfig struct {
 	SMTPHost     string
 	SMTPPort     int
@@ -47,11 +54,13 @@ type EmailConfig struct {
 	FromAddress  string
 }
 
+// SchedulerConfig contains settings for the background task scheduler
 type SchedulerConfig struct {
 	HourlyInterval int
 	DailyInterval  int
 }
 
+// LoadConfig loads application configuration from file or environment
 func LoadConfig() (*Config, error) {
 	dbPort, _ := strconv.Atoi(getEnvOrDefault("DB_PORT", "5432"))
 	serverPort, _ := strconv.Atoi(getEnvOrDefault("SERVER_PORT", "8080"))

@@ -1,8 +1,10 @@
+// Package service implements business logic and external API interactions
 package service
 
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"time"
 
@@ -11,11 +13,13 @@ import (
 	"weatherapi.app/models"
 )
 
+// WeatherService handles interactions with the weather API
 type WeatherService struct {
 	config *config.Config
 	client *http.Client
 }
 
+// NewWeatherService creates a new weather service instance
 func NewWeatherService(config *config.Config) *WeatherService {
 	return &WeatherService{
 		config: config,
@@ -23,6 +27,7 @@ func NewWeatherService(config *config.Config) *WeatherService {
 	}
 }
 
+// GetWeather retrieves current weather information for a specific city
 func (s *WeatherService) GetWeather(city string) (*models.WeatherResponse, error) {
 	fmt.Printf("[DEBUG] WeatherService.GetWeather called for city: %s\n", city)
 
@@ -36,7 +41,12 @@ func (s *WeatherService) GetWeather(city string) (*models.WeatherResponse, error
 		fmt.Printf("[ERROR] Failed to get weather data: %v\n", err)
 		return nil, fmt.Errorf("failed to get weather data: %w", err)
 	}
-	defer resp.Body.Close()
+	// Fix for unchecked error from resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			log.Printf("Error closing response body: %v", err)
+		}
+	}()
 
 	fmt.Printf("[DEBUG] Weather API response status: %d\n", resp.StatusCode)
 
@@ -78,6 +88,7 @@ func (s *WeatherService) GetWeather(city string) (*models.WeatherResponse, error
 	return weather, nil
 }
 
+// SubscriptionService handles business logic for subscription management
 type SubscriptionService struct {
 	db               *gorm.DB
 	subscriptionRepo SubscriptionRepositoryInterface
@@ -87,6 +98,7 @@ type SubscriptionService struct {
 	config           *config.Config
 }
 
+// NewSubscriptionService creates a new subscription service instance
 func NewSubscriptionService(
 	db *gorm.DB,
 	subscriptionRepo SubscriptionRepositoryInterface,
@@ -105,6 +117,7 @@ func NewSubscriptionService(
 	}
 }
 
+// Subscribe creates a new weather subscription or updates an existing one
 func (s *SubscriptionService) Subscribe(req *models.SubscriptionRequest) error {
 	fmt.Printf("[DEBUG] SubscriptionService.Subscribe called with: %+v\n", req)
 
@@ -233,6 +246,7 @@ func (s *SubscriptionService) Subscribe(req *models.SubscriptionRequest) error {
 	return nil
 }
 
+// ConfirmSubscription validates and confirms a subscription using a token
 func (s *SubscriptionService) ConfirmSubscription(tokenStr string) error {
 	fmt.Printf("[DEBUG] ConfirmSubscription called with token: %s\n", tokenStr)
 
@@ -320,6 +334,7 @@ func (s *SubscriptionService) ConfirmSubscription(tokenStr string) error {
 	return nil
 }
 
+// Unsubscribe removes a subscription using an unsubscribe token
 func (s *SubscriptionService) Unsubscribe(tokenStr string) error {
 	fmt.Printf("[DEBUG] Unsubscribe called with token: %s\n", tokenStr)
 
@@ -392,6 +407,7 @@ func (s *SubscriptionService) Unsubscribe(tokenStr string) error {
 	return nil
 }
 
+// SendWeatherUpdate sends weather updates to all subscribers of the specified frequency
 func (s *SubscriptionService) SendWeatherUpdate(frequency string) error {
 	fmt.Printf("[DEBUG] SendWeatherUpdate called for frequency: %s\n", frequency)
 

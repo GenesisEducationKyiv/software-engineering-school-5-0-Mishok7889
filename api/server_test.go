@@ -17,14 +17,14 @@ import (
 )
 
 // MockWeatherService for testing
-type mockWeatherService struct {
+type MockWeatherService struct {
 	mock.Mock
 }
 
-// Ensure mockWeatherService implements service.WeatherServiceInterface
-var _ service.WeatherServiceInterface = (*mockWeatherService)(nil)
+// Ensure MockWeatherService implements service.WeatherServiceInterface
+var _ service.WeatherServiceInterface = (*MockWeatherService)(nil)
 
-func (m *mockWeatherService) GetWeather(city string) (*models.WeatherResponse, error) {
+func (m *MockWeatherService) GetWeather(city string) (*models.WeatherResponse, error) {
 	args := m.Called(city)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
@@ -39,7 +39,7 @@ func TestGetWeather(t *testing.T) {
 	router := gin.Default()
 
 	// Create mock weather service
-	mockService := new(mockWeatherService)
+	mockService := new(MockWeatherService)
 
 	// Create server with mock service
 	server := &Server{
@@ -89,7 +89,7 @@ func TestGetWeather_CityNotFound(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := gin.Default()
 
-	mockService := new(mockWeatherService)
+	mockService := new(MockWeatherService)
 
 	server := &Server{
 		router:         router,
@@ -127,7 +127,7 @@ func TestGetWeather_MissingCity(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := gin.Default()
 
-	mockService := new(mockWeatherService)
+	mockService := new(MockWeatherService)
 
 	server := &Server{
 		router:         router,
@@ -154,37 +154,40 @@ func TestGetWeather_MissingCity(t *testing.T) {
 }
 
 // MockSubscriptionService implements a mock subscription service for testing
-type mockSubscriptionService struct {
+type MockSubscriptionService struct {
 	mock.Mock
 }
 
-func (m *mockSubscriptionService) Subscribe(req *models.SubscriptionRequest) error {
+// Ensure MockSubscriptionService implements service.SubscriptionServiceInterface
+var _ service.SubscriptionServiceInterface = (*MockSubscriptionService)(nil)
+
+func (m *MockSubscriptionService) Subscribe(req *models.SubscriptionRequest) error {
 	args := m.Called(req)
 	return args.Error(0)
 }
 
-func (m *mockSubscriptionService) ConfirmSubscription(token string) error {
+func (m *MockSubscriptionService) ConfirmSubscription(token string) error {
 	args := m.Called(token)
 	return args.Error(0)
 }
 
-func (m *mockSubscriptionService) Unsubscribe(token string) error {
+func (m *MockSubscriptionService) Unsubscribe(token string) error {
 	args := m.Called(token)
 	return args.Error(0)
 }
 
-func (m *mockSubscriptionService) SendWeatherUpdate(frequency string) error {
+func (m *MockSubscriptionService) SendWeatherUpdate(frequency string) error {
 	args := m.Called(frequency)
 	return args.Error(0)
 }
 
 // Helper function to set up a test server with mocks
-func setupTestServer() (*gin.Engine, *mockWeatherService, *mockSubscriptionService) {
+func setupTestServer() (*gin.Engine, *MockWeatherService, *MockSubscriptionService) {
 	gin.SetMode(gin.TestMode)
 	router := gin.Default()
 
-	mockWeather := new(mockWeatherService)
-	mockSubscription := new(mockSubscriptionService)
+	mockWeather := new(MockWeatherService)
+	mockSubscription := new(MockSubscriptionService)
 
 	server := &Server{
 		router:              router,

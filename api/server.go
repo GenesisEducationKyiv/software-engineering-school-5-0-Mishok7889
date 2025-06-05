@@ -1,3 +1,4 @@
+// Package api provides HTTP server and API endpoints
 package api
 
 import (
@@ -13,6 +14,7 @@ import (
 	"weatherapi.app/service"
 )
 
+// Server represents the HTTP server and API handler
 type Server struct {
 	router              *gin.Engine
 	db                  *gorm.DB
@@ -21,6 +23,7 @@ type Server struct {
 	subscriptionService service.SubscriptionServiceInterface
 }
 
+// NewServer creates and configures a new HTTP server
 func NewServer(db *gorm.DB, config *config.Config) *Server {
 	router := gin.Default()
 
@@ -67,6 +70,7 @@ func (s *Server) setupRoutes() {
 	s.ServeStaticFiles()
 }
 
+// Start begins the HTTP server
 func (s *Server) Start() error {
 	return s.router.Run(fmt.Sprintf(":%d", s.config.Server.Port))
 }

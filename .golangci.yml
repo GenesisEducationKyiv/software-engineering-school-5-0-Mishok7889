@@ -10,3 +10,8 @@ linters:
     - goimports
     - gocyclo
     - revive
+    - typecheck
+
+issues:
+  exclude-use-default: false
+  exclude-rules: []

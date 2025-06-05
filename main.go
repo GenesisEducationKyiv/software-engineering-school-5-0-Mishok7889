@@ -1,3 +1,4 @@
+// Package main is the entry point for the weather subscription service application
 package main
 
 import (

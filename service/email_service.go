@@ -9,10 +9,12 @@ import (
 	"weatherapi.app/models"
 )
 
+// EmailService handles email generation and sending
 type EmailService struct {
 	config *config.Config
 }
 
+// NewEmailService creates a new email service instance
 func NewEmailService(config *config.Config) *EmailService {
 	return &EmailService{
 		config: config,
@@ -65,6 +67,7 @@ func (s *EmailService) sendEmail(to, subject, body string, isHTML bool) error {
 	return nil
 }
 
+// SendConfirmationEmail sends an email with a confirmation link
 func (s *EmailService) SendConfirmationEmail(email, confirmURL, city string) error {
 	fmt.Printf("[DEBUG] SendConfirmationEmail called for: %s, city: %s\n", email, city)
 
@@ -80,6 +83,7 @@ func (s *EmailService) SendConfirmationEmail(email, confirmURL, city string) err
 	return s.sendEmail(email, subject, htmlContent, true)
 }
 
+// SendWelcomeEmail sends a welcome email after subscription confirmation
 func (s *EmailService) SendWelcomeEmail(email, city, frequency, unsubscribeURL string) error {
 	fmt.Printf("[DEBUG] SendWelcomeEmail called for: %s, city: %s, frequency: %s\n",
 		email, city, frequency)
@@ -101,6 +105,7 @@ func (s *EmailService) SendWelcomeEmail(email, city, frequency, unsubscribeURL s
 	return s.sendEmail(email, subject, htmlContent, true)
 }
 
+// SendUnsubscribeConfirmationEmail sends a confirmation after unsubscribing
 func (s *EmailService) SendUnsubscribeConfirmationEmail(email, city string) error {
 	fmt.Printf("[DEBUG] SendUnsubscribeConfirmationEmail called for: %s, city: %s\n", email, city)
 
@@ -114,6 +119,7 @@ func (s *EmailService) SendUnsubscribeConfirmationEmail(email, city string) erro
 	return s.sendEmail(email, subject, htmlContent, true)
 }
 
+// SendWeatherUpdateEmail sends a weather update email to a subscriber
 func (s *EmailService) SendWeatherUpdateEmail(email, city string, weather *models.WeatherResponse, unsubscribeURL string) error {
 	fmt.Printf("[DEBUG] SendWeatherUpdateEmail called for: %s, city: %s\n", email, city)
 
