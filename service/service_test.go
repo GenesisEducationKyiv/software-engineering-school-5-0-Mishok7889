@@ -9,6 +9,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"weatherapi.app/config"
@@ -26,7 +27,7 @@ func TestWeatherService_GetWeather(t *testing.T) {
 		// Return a sample weather response
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		if _, err := w.Write([]byte(`{
+		_, err := w.Write([]byte(`{
 			"location": {
 				"name": "London",
 				"region": "City of London, Greater London",
@@ -39,9 +40,8 @@ func TestWeatherService_GetWeather(t *testing.T) {
 					"text": "Partly cloudy"
 				}
 			}
-		}`)); err != nil {
-			t.Errorf("failed to write mock response: %v", err)
-		}
+		}`))
+		require.NoError(t, err, "failed to write mock response")
 	}))
 	defer mockServer.Close()
 
