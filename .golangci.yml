@@ -12,6 +12,12 @@ linters:
     - revive
     - typecheck
 
+linters-settings:
+  revive:
+    rules:
+      - name: package-comments
+        disabled: true
+
 issues:
   exclude-use-default: false
   exclude-rules: []
