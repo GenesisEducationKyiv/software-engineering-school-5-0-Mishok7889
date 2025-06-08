@@ -2,7 +2,7 @@
 package scheduler
 
 import (
-	"fmt"
+	"log"
 	"time"
 
 	"gorm.io/gorm"
@@ -56,13 +56,13 @@ func (s *Scheduler) Start() {
 
 	go s.scheduleInterval(time.Duration(s.config.Scheduler.HourlyInterval)*time.Minute, func() {
 		if err := s.subscriptionService.SendWeatherUpdate("hourly"); err != nil {
-			fmt.Printf("Error sending hourly weather updates: %v\n", err)
+			log.Printf("Error sending hourly weather updates: %v\n", err)
 		}
 	})
 
 	go s.scheduleInterval(time.Duration(s.config.Scheduler.DailyInterval)*time.Minute, func() {
 		if err := s.subscriptionService.SendWeatherUpdate("daily"); err != nil {
-			fmt.Printf("Error sending daily weather updates: %v\n", err)
+			log.Printf("Error sending daily weather updates: %v\n", err)
 		}
 	})
 }
@@ -87,6 +87,6 @@ func (s *Scheduler) scheduleDaily(interval time.Duration, job func()) {
 
 func (s *Scheduler) cleanupExpiredTokens() {
 	if err := s.tokenRepo.DeleteExpiredTokens(); err != nil {
-		fmt.Printf("Error cleaning up expired tokens: %v\n", err)
+		log.Printf("Error cleaning up expired tokens: %v\n", err)
 	}
 }

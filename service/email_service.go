@@ -2,6 +2,7 @@ package service
 
 import (
 	"fmt"
+	"log"
 	"net/smtp"
 	"strings"
 
@@ -23,7 +24,7 @@ func NewEmailService(config *config.Config) *EmailService {
 
 // sendEmail sends an email using Gmail SMTP server
 func (s *EmailService) sendEmail(to, subject, body string, isHTML bool) error {
-	fmt.Printf("[DEBUG] EmailService.sendEmail called with: to=%s, subject=%s\n", to, subject)
+	log.Printf("[DEBUG] EmailService.sendEmail called with: to=%s, subject=%s\n", to, subject)
 
 	// SMTP server configuration
 	smtpHost := s.config.Email.SMTPHost
@@ -56,20 +57,20 @@ func (s *EmailService) sendEmail(to, subject, body string, isHTML bool) error {
 	// Connect to the SMTP server and send email
 	smtpAddr := fmt.Sprintf("%s:%d", smtpHost, smtpPort)
 
-	fmt.Printf("[DEBUG] Sending email via SMTP: server=%s, from=%s, to=%s\n", smtpAddr, fromAddress, to)
+	log.Printf("[DEBUG] Sending email via SMTP: server=%s, from=%s, to=%s\n", smtpAddr, fromAddress, to)
 	err := smtp.SendMail(smtpAddr, auth, fromAddress, []string{to}, []byte(message))
 	if err != nil {
-		fmt.Printf("[ERROR] Failed to send email: %v\n", err)
+		log.Printf("[ERROR] Failed to send email: %v\n", err)
 		return fmt.Errorf("failed to send email: %w", err)
 	}
 
-	fmt.Println("[DEBUG] Email sent successfully")
+	log.Println("[DEBUG] Email sent successfully")
 	return nil
 }
 
 // SendConfirmationEmail sends an email with a confirmation link
 func (s *EmailService) SendConfirmationEmail(email, confirmURL, city string) error {
-	fmt.Printf("[DEBUG] SendConfirmationEmail called for: %s, city: %s\n", email, city)
+	log.Printf("[DEBUG] SendConfirmationEmail called for: %s, city: %s\n", email, city)
 
 	subject := fmt.Sprintf("Confirm your weather subscription for %s", city)
 
@@ -85,7 +86,7 @@ func (s *EmailService) SendConfirmationEmail(email, confirmURL, city string) err
 
 // SendWelcomeEmail sends a welcome email after subscription confirmation
 func (s *EmailService) SendWelcomeEmail(email, city, frequency, unsubscribeURL string) error {
-	fmt.Printf("[DEBUG] SendWelcomeEmail called for: %s, city: %s, frequency: %s\n",
+	log.Printf("[DEBUG] SendWelcomeEmail called for: %s, city: %s, frequency: %s\n",
 		email, city, frequency)
 
 	subject := fmt.Sprintf("Welcome to Weather Updates for %s", city)
@@ -107,7 +108,7 @@ func (s *EmailService) SendWelcomeEmail(email, city, frequency, unsubscribeURL s
 
 // SendUnsubscribeConfirmationEmail sends a confirmation after unsubscribing
 func (s *EmailService) SendUnsubscribeConfirmationEmail(email, city string) error {
-	fmt.Printf("[DEBUG] SendUnsubscribeConfirmationEmail called for: %s, city: %s\n", email, city)
+	log.Printf("[DEBUG] SendUnsubscribeConfirmationEmail called for: %s, city: %s\n", email, city)
 
 	subject := fmt.Sprintf("You have unsubscribed from weather updates for %s", city)
 
@@ -121,7 +122,7 @@ func (s *EmailService) SendUnsubscribeConfirmationEmail(email, city string) erro
 
 // SendWeatherUpdateEmail sends a weather update email to a subscriber
 func (s *EmailService) SendWeatherUpdateEmail(email, city string, weather *models.WeatherResponse, unsubscribeURL string) error {
-	fmt.Printf("[DEBUG] SendWeatherUpdateEmail called for: %s, city: %s\n", email, city)
+	log.Printf("[DEBUG] SendWeatherUpdateEmail called for: %s, city: %s\n", email, city)
 
 	subject := fmt.Sprintf("Weather Update for %s", city)
 

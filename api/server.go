@@ -3,6 +3,7 @@ package api
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 	"strings"
 
@@ -87,10 +88,10 @@ func (s *Server) getWeather(c *gin.Context) {
 		return
 	}
 
-	fmt.Printf("[DEBUG] Getting weather for city: %s\n", city)
+	log.Printf("[DEBUG] Getting weather for city: %s\n", city)
 	weather, err := s.weatherService.GetWeather(city)
 	if err != nil {
-		fmt.Printf("[ERROR] Weather API error: %v\n", err)
+		log.Printf("[ERROR] Weather API error: %v\n", err)
 		if err.Error() == "city not found" {
 			c.JSON(http.StatusNotFound, models.ErrorResponse{Error: "city not found"})
 			return
@@ -99,26 +100,26 @@ func (s *Server) getWeather(c *gin.Context) {
 		return
 	}
 
-	fmt.Printf("!!!!!!!!!!!!!!!!!!![DEBUG] Weather result: %+v\n", weather)
+	log.Printf("!!!!!!!!!!!!!!!!!!![DEBUG] Weather result: %+v\n", weather)
 	c.JSON(http.StatusOK, weather)
 }
 
 func (s *Server) subscribe(c *gin.Context) {
 	var req models.SubscriptionRequest
-	fmt.Println("[DEBUG] Handling subscription request")
+	log.Println("[DEBUG] Handling subscription request")
 
 	if err := c.ShouldBind(&req); err != nil {
-		fmt.Printf("[ERROR] Binding error: %v\n", err)
-		fmt.Printf("[ERROR] Request content-type: %s\n", c.ContentType())
-		fmt.Printf("[ERROR] Request body: %+v\n", c.Request.Body)
+		log.Printf("[ERROR] Binding error: %v\n", err)
+		log.Printf("[ERROR] Request content-type: %s\n", c.ContentType())
+		log.Printf("[ERROR] Request body: %+v\n", c.Request.Body)
 		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: err.Error()})
 		return
 	}
 
-	fmt.Printf("[DEBUG] Subscription request received: %+v\n", req)
+	log.Printf("[DEBUG] Subscription request received: %+v\n", req)
 
 	if err := s.subscriptionService.Subscribe(&req); err != nil {
-		fmt.Printf("[ERROR] Subscription error: %v\n", err)
+		log.Printf("[ERROR] Subscription error: %v\n", err)
 
 		if err.Error() == "email already subscribed" {
 			c.JSON(http.StatusConflict, models.ErrorResponse{Error: "email already subscribed"})
@@ -135,7 +136,7 @@ func (s *Server) subscribe(c *gin.Context) {
 		return
 	}
 
-	fmt.Println("[DEBUG] Subscription created successfully")
+	log.Println("[DEBUG] Subscription created successfully")
 	c.JSON(http.StatusOK, gin.H{"message": "Subscription successful. Confirmation email sent."})
 }
 
@@ -146,10 +147,10 @@ func (s *Server) confirmSubscription(c *gin.Context) {
 		return
 	}
 
-	fmt.Printf("[DEBUG] Confirming subscription with token: %s\n", token)
+	log.Printf("[DEBUG] Confirming subscription with token: %s\n", token)
 
 	if err := s.subscriptionService.ConfirmSubscription(token); err != nil {
-		fmt.Printf("[ERROR] Confirmation error: %v\n", err)
+		log.Printf("[ERROR] Confirmation error: %v\n", err)
 
 		if err.Error() == "record not found" {
 			c.JSON(http.StatusNotFound, models.ErrorResponse{Error: "token not found"})
@@ -163,7 +164,7 @@ func (s *Server) confirmSubscription(c *gin.Context) {
 		return
 	}
 
-	fmt.Println("[DEBUG] Subscription confirmed successfully")
+	log.Println("[DEBUG] Subscription confirmed successfully")
 	c.JSON(http.StatusOK, gin.H{"message": "Subscription confirmed successfully"})
 }
 
@@ -174,10 +175,10 @@ func (s *Server) unsubscribe(c *gin.Context) {
 		return
 	}
 
-	fmt.Printf("[DEBUG] Unsubscribing with token: %s\n", token)
+	log.Printf("[DEBUG] Unsubscribing with token: %s\n", token)
 
 	if err := s.subscriptionService.Unsubscribe(token); err != nil {
-		fmt.Printf("[ERROR] Unsubscribe error: %v\n", err)
+		log.Printf("[ERROR] Unsubscribe error: %v\n", err)
 
 		if err.Error() == "record not found" {
 			c.JSON(http.StatusNotFound, models.ErrorResponse{Error: "token not found"})
@@ -191,13 +192,13 @@ func (s *Server) unsubscribe(c *gin.Context) {
 		return
 	}
 
-	fmt.Println("[DEBUG] Unsubscribed successfully")
+	log.Println("[DEBUG] Unsubscribed successfully")
 	c.JSON(http.StatusOK, gin.H{"message": "Unsubscribed successfully"})
 }
 
 // Debug endpoint to check configuration and connectivity
 func (s *Server) debugEndpoint(c *gin.Context) {
-	fmt.Println("[DEBUG] Debug endpoint called")
+	log.Println("[DEBUG] Debug endpoint called")
 
 	// Test database connection
 	var subscriptionCount int64
@@ -209,7 +210,7 @@ func (s *Server) debugEndpoint(c *gin.Context) {
 	// Test SMTP configuration
 	smtpConfig := map[string]string{
 		"host":        s.config.Email.SMTPHost,
-		"port":        fmt.Sprintf("%d", s.config.Email.SMTPPort),
+		"port":        log.Sprintf("%d", s.config.Email.SMTPPort),
 		"username":    s.config.Email.SMTPUsername,
 		"fromAddress": s.config.Email.FromAddress,
 		"fromName":    s.config.Email.FromName,
