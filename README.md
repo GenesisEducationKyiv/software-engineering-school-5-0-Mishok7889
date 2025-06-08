@@ -58,6 +58,39 @@ go run main.go
 - `GET /api/confirm/:token` - Confirm email subscription
 - `GET /api/unsubscribe/:token` - Unsubscribe from weather updates
 
+## Development
+
+### Linting
+
+This project uses golangci-lint v2 for code quality assurance.
+
+Configuration notes:
+- Linting is automatically run on all branches and pull requests via GitHub Actions
+
+To run the linter locally:
+
+```bash
+# Install golangci-lint
+go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.1.6
+
+# Run linter
+golangci-lint run ./...
+```
+
+### Pre-commit Hooks
+
+This repository includes pre-commit hooks to automatically run linting before each commit.
+
+To set up pre-commit hooks:
+
+```bash
+# Install pre-commit
+pip install pre-commit
+
+# Install the git hooks
+pre-commit install
+```
+
 ## Problems during development
 
 ### Email Service

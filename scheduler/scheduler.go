@@ -1,7 +1,8 @@
+// Package scheduler implements background job scheduling
 package scheduler
 
 import (
-	"fmt"
+	"log"
 	"time"
 
 	"gorm.io/gorm"
@@ -10,6 +11,7 @@ import (
 	"weatherapi.app/service"
 )
 
+// Scheduler manages periodic tasks for the application
 type Scheduler struct {
 	db                  *gorm.DB
 	config              *config.Config
@@ -20,13 +22,14 @@ type Scheduler struct {
 	subscriptionService *service.SubscriptionService
 }
 
+// NewScheduler creates and configures a new task scheduler
 func NewScheduler(db *gorm.DB, config *config.Config) *Scheduler {
 	weatherService := service.NewWeatherService(config)
 	emailService := service.NewEmailService(config)
-	
+
 	subscriptionRepo := repository.NewSubscriptionRepository(db)
 	tokenRepo := repository.NewTokenRepository(db)
-	
+
 	subscriptionService := service.NewSubscriptionService(
 		db,
 		subscriptionRepo,
@@ -35,7 +38,7 @@ func NewScheduler(db *gorm.DB, config *config.Config) *Scheduler {
 		weatherService,
 		config,
 	)
-	
+
 	return &Scheduler{
 		db:                  db,
 		config:              config,
@@ -47,25 +50,26 @@ func NewScheduler(db *gorm.DB, config *config.Config) *Scheduler {
 	}
 }
 
+// Start begins the scheduler's operations
 func (s *Scheduler) Start() {
 	go s.scheduleDaily(24*time.Hour, s.cleanupExpiredTokens)
-	
+
 	go s.scheduleInterval(time.Duration(s.config.Scheduler.HourlyInterval)*time.Minute, func() {
 		if err := s.subscriptionService.SendWeatherUpdate("hourly"); err != nil {
-			fmt.Printf("Error sending hourly weather updates: %v\n", err)
+			log.Printf("Error sending hourly weather updates: %v\n", err)
 		}
 	})
-	
+
 	go s.scheduleInterval(time.Duration(s.config.Scheduler.DailyInterval)*time.Minute, func() {
 		if err := s.subscriptionService.SendWeatherUpdate("daily"); err != nil {
-			fmt.Printf("Error sending daily weather updates: %v\n", err)
+			log.Printf("Error sending daily weather updates: %v\n", err)
 		}
 	})
 }
 
 func (s *Scheduler) scheduleInterval(interval time.Duration, job func()) {
 	job()
-	
+
 	ticker := time.NewTicker(interval)
 	for range ticker.C {
 		job()
@@ -74,7 +78,7 @@ func (s *Scheduler) scheduleInterval(interval time.Duration, job func()) {
 
 func (s *Scheduler) scheduleDaily(interval time.Duration, job func()) {
 	job()
-	
+
 	ticker := time.NewTicker(interval)
 	for range ticker.C {
 		job()
@@ -83,6 +87,6 @@ func (s *Scheduler) scheduleDaily(interval time.Duration, job func()) {
 
 func (s *Scheduler) cleanupExpiredTokens() {
 	if err := s.tokenRepo.DeleteExpiredTokens(); err != nil {
-		fmt.Printf("Error cleaning up expired tokens: %v\n", err)
+		log.Printf("Error cleaning up expired tokens: %v\n", err)
 	}
 }

@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"weatherapi.app/config"
@@ -25,22 +27,21 @@ func TestWeatherService_GetWeather(t *testing.T) {
 		// Return a sample weather response
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`
-			{
-				"location": {
-					"name": "London",
-					"region": "City of London, Greater London",
-					"country": "United Kingdom"
-				},
-				"current": {
-					"temp_c": 15.0,
-					"humidity": 76,
-					"condition": {
-						"text": "Partly cloudy"
-					}
+		_, err := w.Write([]byte(`{
+			"location": {
+				"name": "London",
+				"region": "City of London, Greater London",
+				"country": "United Kingdom"
+			},
+			"current": {
+				"temp_c": 15.0,
+				"humidity": 76,
+				"condition": {
+					"text": "Partly cloudy"
 				}
 			}
-		`))
+		}`))
+		require.NoError(t, err, "failed to write mock response")
 	}))
 	defer mockServer.Close()
 
@@ -67,7 +68,7 @@ func TestWeatherService_GetWeather(t *testing.T) {
 // Test for city not found scenario
 func TestWeatherService_GetWeather_CityNotFound(t *testing.T) {
 	// Create a mock HTTP server that returns a 404 status
-	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 	}))
 	defer mockServer.Close()
@@ -91,12 +92,14 @@ func TestWeatherService_GetWeather_CityNotFound(t *testing.T) {
 }
 
 // mockWeatherService for testing
-type mockWeatherService struct{}
+type mockWeatherService struct {
+	mock.Mock
+}
 
 // Ensure mockWeatherService implements WeatherServiceInterface
 var _ WeatherServiceInterface = (*mockWeatherService)(nil)
 
-func (m *mockWeatherService) GetWeather(city string) (*models.WeatherResponse, error) {
+func (m *mockWeatherService) GetWeather(_ string) (*models.WeatherResponse, error) {
 	return &models.WeatherResponse{
 		Temperature: 15.0,
 		Humidity:    76.0,
@@ -110,19 +113,19 @@ type mockEmailService struct{}
 // Ensure mockEmailService implements EmailServiceInterface
 var _ EmailServiceInterface = (*mockEmailService)(nil)
 
-func (m *mockEmailService) SendConfirmationEmail(email, confirmURL, city string) error {
+func (m *mockEmailService) SendConfirmationEmail(_, _, _ string) error {
 	return nil
 }
 
-func (m *mockEmailService) SendWelcomeEmail(email, city, frequency, unsubscribeURL string) error {
+func (m *mockEmailService) SendWelcomeEmail(_, _, _, _ string) error {
 	return nil
 }
 
-func (m *mockEmailService) SendUnsubscribeConfirmationEmail(email, city string) error {
+func (m *mockEmailService) SendUnsubscribeConfirmationEmail(_, _ string) error {
 	return nil
 }
 
-func (m *mockEmailService) SendWeatherUpdateEmail(email, city string, weather *models.WeatherResponse, unsubscribeURL string) error {
+func (m *mockEmailService) SendWeatherUpdateEmail(_, _ string, _ *models.WeatherResponse, _ string) error {
 	return nil
 }
 
@@ -157,7 +160,7 @@ func (m *mockTokenRepository) FindByToken(tokenStr string) (*models.Token, error
 	return nil, fmt.Errorf("record not found")
 }
 
-func (m *mockTokenRepository) DeleteToken(token *models.Token) error {
+func (m *mockTokenRepository) DeleteToken(_ *models.Token) error {
 	return nil
 }
 
@@ -206,11 +209,11 @@ func (m *mockSubscriptionRepository) Create(subscription *models.Subscription) e
 	return nil
 }
 
-func (m *mockSubscriptionRepository) Update(subscription *models.Subscription) error {
+func (m *mockSubscriptionRepository) Update(_ *models.Subscription) error {
 	return nil
 }
 
-func (m *mockSubscriptionRepository) Delete(subscription *models.Subscription) error {
+func (m *mockSubscriptionRepository) Delete(_ *models.Subscription) error {
 	return nil
 }
 
