@@ -1,4 +1,3 @@
-// Package api provides HTTP server and API endpoints
 package api
 
 import (
@@ -210,7 +209,7 @@ func (s *Server) debugEndpoint(c *gin.Context) {
 	// Test SMTP configuration
 	smtpConfig := map[string]string{
 		"host":        s.config.Email.SMTPHost,
-		"port":        log.Sprintf("%d", s.config.Email.SMTPPort),
+		"port":        fmt.Sprintf("%d", s.config.Email.SMTPPort),
 		"username":    s.config.Email.SMTPUsername,
 		"fromAddress": s.config.Email.FromAddress,
 		"fromName":    s.config.Email.FromName,

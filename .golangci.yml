@@ -1,23 +1,26 @@
-run:
-  timeout: 5m
-
+version: "2"
 linters:
   enable:
-    - govet
-    - errcheck
-    - staticcheck
-    - gofmt
-    - goimports
     - gocyclo
     - revive
-    - typecheck
-
-linters-settings:
-  revive:
-    rules:
-      - name: package-comments
-        disabled: true
-
-issues:
-  exclude-use-default: false
-  exclude-rules: []
+  settings:
+    revive:
+      rules:
+        - name: package-comments
+          disabled: true
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
