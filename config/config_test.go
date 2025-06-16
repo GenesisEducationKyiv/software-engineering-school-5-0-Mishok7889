@@ -1,42 +1,40 @@
 package config
 
 import (
+	"errors"
 	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	apperrors "weatherapi.app/errors"
 )
 
 func TestLoadConfig(t *testing.T) {
 	// Test case 1: Required fields - should return error when missing
 	t.Run("RequiredFieldsMissing", func(t *testing.T) {
-		// Clear environment variables
 		os.Clearenv()
 
-		// Load config
 		config, err := LoadConfig()
 
-		// Verify error is returned
 		assert.Error(t, err)
 		assert.Nil(t, config)
-		assert.Contains(t, err.Error(), "required key WEATHER_API_KEY missing")
+
+		var appErr *apperrors.AppError
+		assert.True(t, errors.As(err, &appErr))
+		assert.Equal(t, apperrors.ConfigurationError, appErr.Type)
 	})
 
-	// Test case 2: Default values - should use defaults when not provided
+	// Test case 2: Default values with required fields set
 	t.Run("DefaultValues", func(t *testing.T) {
-		// Clear environment variables
 		os.Clearenv()
 
-		// Set required fields
 		require.NoError(t, os.Setenv("WEATHER_API_KEY", "test-api-key"))
 		require.NoError(t, os.Setenv("EMAIL_SMTP_USERNAME", "test-username"))
 		require.NoError(t, os.Setenv("EMAIL_SMTP_PASSWORD", "test-password"))
 
-		// Load config
 		config, err := LoadConfig()
 
-		// Verify no error and defaults are used
 		assert.NoError(t, err)
 		assert.NotNil(t, config)
 		assert.Equal(t, 8080, config.Server.Port)
@@ -55,12 +53,10 @@ func TestLoadConfig(t *testing.T) {
 		assert.Equal(t, "http://localhost:8080", config.AppBaseURL)
 	})
 
-	// Test case 3: Custom values - should use provided values
+	// Test case 3: Custom values
 	t.Run("CustomValues", func(t *testing.T) {
-		// Clear environment variables
 		os.Clearenv()
 
-		// Set custom values
 		require.NoError(t, os.Setenv("SERVER_PORT", "9090"))
 		require.NoError(t, os.Setenv("DB_HOST", "test-db-host"))
 		require.NoError(t, os.Setenv("DB_PORT", "5433"))
@@ -80,10 +76,8 @@ func TestLoadConfig(t *testing.T) {
 		require.NoError(t, os.Setenv("DAILY_INTERVAL", "720"))
 		require.NoError(t, os.Setenv("APP_URL", "https://custom.example.com"))
 
-		// Load config
 		config, err := LoadConfig()
 
-		// Verify no error and custom values are used
 		assert.NoError(t, err)
 		assert.NotNil(t, config)
 		assert.Equal(t, 9090, config.Server.Port)
@@ -106,7 +100,7 @@ func TestLoadConfig(t *testing.T) {
 		assert.Equal(t, "https://custom.example.com", config.AppBaseURL)
 	})
 
-	// Test case 4: Test DSN generation
+	// Test case 4: DSN generation
 	t.Run("GetDSN", func(t *testing.T) {
 		dbConfig := DatabaseConfig{
 			Host:     "test-host",
@@ -119,5 +113,136 @@ func TestLoadConfig(t *testing.T) {
 
 		expectedDSN := "host=test-host port=5432 user=test-user password=test-password dbname=test-db sslmode=prefer"
 		assert.Equal(t, expectedDSN, dbConfig.GetDSN())
+	})
+}
+
+func TestConfigValidation(t *testing.T) {
+	t.Run("InvalidServerPort", func(t *testing.T) {
+		config := &ServerConfig{Port: 0}
+		err := config.Validate()
+
+		assert.Error(t, err)
+		var appErr *apperrors.AppError
+		assert.True(t, errors.As(err, &appErr))
+		assert.Equal(t, apperrors.ConfigurationError, appErr.Type)
+		assert.Contains(t, appErr.Message, "SERVER_PORT must be between 1 and 65535")
+	})
+
+	t.Run("InvalidDatabaseHost", func(t *testing.T) {
+		config := &DatabaseConfig{Host: "", Port: 5432, User: "user", Name: "db", SSLMode: "disable"}
+		err := config.Validate()
+
+		assert.Error(t, err)
+		var appErr *apperrors.AppError
+		assert.True(t, errors.As(err, &appErr))
+		assert.Equal(t, apperrors.ConfigurationError, appErr.Type)
+		assert.Contains(t, appErr.Message, "DB_HOST cannot be empty")
+	})
+
+	t.Run("InvalidSSLMode", func(t *testing.T) {
+		config := &DatabaseConfig{Host: "host", Port: 5432, User: "user", Name: "db", SSLMode: "invalid"}
+		err := config.Validate()
+
+		assert.Error(t, err)
+		var appErr *apperrors.AppError
+		assert.True(t, errors.As(err, &appErr))
+		assert.Equal(t, apperrors.ConfigurationError, appErr.Type)
+		assert.Contains(t, appErr.Message, "DB_SSL_MODE must be one of")
+	})
+
+	t.Run("EmptyWeatherAPIKey", func(t *testing.T) {
+		config := &WeatherConfig{APIKey: "", BaseURL: "https://api.example.com"}
+		err := config.Validate()
+
+		assert.Error(t, err)
+		var appErr *apperrors.AppError
+		assert.True(t, errors.As(err, &appErr))
+		assert.Equal(t, apperrors.ConfigurationError, appErr.Type)
+		assert.Contains(t, appErr.Message, "WEATHER_API_KEY is required")
+	})
+
+	t.Run("InvalidWeatherBaseURL", func(t *testing.T) {
+		config := &WeatherConfig{APIKey: "key", BaseURL: "invalid-url"}
+		err := config.Validate()
+
+		assert.Error(t, err)
+		var appErr *apperrors.AppError
+		assert.True(t, errors.As(err, &appErr))
+		assert.Equal(t, apperrors.ConfigurationError, appErr.Type)
+		assert.Contains(t, appErr.Message, "WEATHER_API_BASE_URL must start with http:// or https://")
+	})
+
+	t.Run("InvalidEmailAddress", func(t *testing.T) {
+		config := &EmailConfig{
+			SMTPHost:     "smtp.example.com",
+			SMTPPort:     587,
+			SMTPUsername: "user",
+			SMTPPassword: "pass",
+			FromName:     "Test",
+			FromAddress:  "invalid-email",
+		}
+		err := config.Validate()
+
+		assert.Error(t, err)
+		var appErr *apperrors.AppError
+		assert.True(t, errors.As(err, &appErr))
+		assert.Equal(t, apperrors.ConfigurationError, appErr.Type)
+		assert.Contains(t, appErr.Message, "EMAIL_FROM_ADDRESS must be a valid email address")
+	})
+
+	t.Run("InvalidSchedulerInterval", func(t *testing.T) {
+		config := &SchedulerConfig{HourlyInterval: 0, DailyInterval: 1440}
+		err := config.Validate()
+
+		assert.Error(t, err)
+		var appErr *apperrors.AppError
+		assert.True(t, errors.As(err, &appErr))
+		assert.Equal(t, apperrors.ConfigurationError, appErr.Type)
+		assert.Contains(t, appErr.Message, "HOURLY_INTERVAL must be at least 1 minute")
+	})
+
+	t.Run("InvalidAppBaseURL", func(t *testing.T) {
+		config := &Config{AppBaseURL: "invalid-url"}
+		err := config.validateAppBaseURL()
+
+		assert.Error(t, err)
+		var appErr *apperrors.AppError
+		assert.True(t, errors.As(err, &appErr))
+		assert.Equal(t, apperrors.ConfigurationError, appErr.Type)
+		assert.Contains(t, appErr.Message, "APP_URL must start with http:// or https://")
+	})
+
+	t.Run("ValidConfig", func(t *testing.T) {
+		config := &Config{
+			Server: ServerConfig{Port: 8080},
+			Database: DatabaseConfig{
+				Host:     "localhost",
+				Port:     5432,
+				User:     "user",
+				Password: "pass",
+				Name:     "db",
+				SSLMode:  "disable",
+			},
+			Weather: WeatherConfig{
+				APIKey:  "test-key",
+				BaseURL: "https://api.example.com",
+			},
+			Email: EmailConfig{
+				SMTPHost:     "smtp.example.com",
+				SMTPPort:     587,
+				SMTPUsername: "user",
+				SMTPPassword: "pass",
+				FromName:     "Test",
+				FromAddress:  "test@example.com",
+			},
+			Scheduler: SchedulerConfig{
+				HourlyInterval: 60,
+				DailyInterval:  1440,
+			},
+			AppBaseURL: "http://localhost:8080",
+		}
+
+		err := config.Validate()
+		assert.NoError(t, err)
 	})
 }
