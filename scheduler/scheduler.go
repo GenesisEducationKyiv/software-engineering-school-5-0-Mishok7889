@@ -1,4 +1,3 @@
-// Package scheduler implements background job scheduling
 package scheduler
 
 import (
@@ -15,62 +14,59 @@ import (
 type Scheduler struct {
 	db                  *gorm.DB
 	config              *config.Config
-	subscriptionRepo    *repository.SubscriptionRepository
 	tokenRepo           *repository.TokenRepository
-	weatherService      *service.WeatherService
-	emailService        *service.EmailService
-	subscriptionService *service.SubscriptionService
+	subscriptionService service.NotificationServiceInterface
 }
 
 // NewScheduler creates and configures a new task scheduler
-func NewScheduler(db *gorm.DB, config *config.Config) *Scheduler {
-	weatherService := service.NewWeatherService(config)
-	emailService := service.NewEmailService(config)
-
-	subscriptionRepo := repository.NewSubscriptionRepository(db)
+func NewScheduler(
+	db *gorm.DB,
+	config *config.Config,
+	subscriptionService service.NotificationServiceInterface,
+) *Scheduler {
 	tokenRepo := repository.NewTokenRepository(db)
-
-	subscriptionService := service.NewSubscriptionService(
-		db,
-		subscriptionRepo,
-		tokenRepo,
-		emailService,
-		weatherService,
-		config,
-	)
 
 	return &Scheduler{
 		db:                  db,
 		config:              config,
-		subscriptionRepo:    subscriptionRepo,
 		tokenRepo:           tokenRepo,
-		weatherService:      weatherService,
-		emailService:        emailService,
 		subscriptionService: subscriptionService,
 	}
 }
 
 // Start begins the scheduler's operations
 func (s *Scheduler) Start() {
+	log.Println("[INFO] Starting scheduler...")
+
 	go s.scheduleDaily(24*time.Hour, s.cleanupExpiredTokens)
 
 	go s.scheduleInterval(time.Duration(s.config.Scheduler.HourlyInterval)*time.Minute, func() {
+		log.Println("[INFO] Running hourly weather updates...")
 		if err := s.subscriptionService.SendWeatherUpdate("hourly"); err != nil {
-			log.Printf("Error sending hourly weather updates: %v\n", err)
+			log.Printf("[ERROR] Failed to send hourly weather updates: %v\n", err)
+		} else {
+			log.Println("[INFO] Hourly weather updates completed successfully")
 		}
 	})
 
 	go s.scheduleInterval(time.Duration(s.config.Scheduler.DailyInterval)*time.Minute, func() {
+		log.Println("[INFO] Running daily weather updates...")
 		if err := s.subscriptionService.SendWeatherUpdate("daily"); err != nil {
-			log.Printf("Error sending daily weather updates: %v\n", err)
+			log.Printf("[ERROR] Failed to send daily weather updates: %v\n", err)
+		} else {
+			log.Println("[INFO] Daily weather updates completed successfully")
 		}
 	})
+
+	log.Println("[INFO] Scheduler started successfully")
 }
 
 func (s *Scheduler) scheduleInterval(interval time.Duration, job func()) {
 	job()
 
 	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
 	for range ticker.C {
 		job()
 	}
@@ -80,13 +76,18 @@ func (s *Scheduler) scheduleDaily(interval time.Duration, job func()) {
 	job()
 
 	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
 	for range ticker.C {
 		job()
 	}
 }
 
 func (s *Scheduler) cleanupExpiredTokens() {
+	log.Println("[INFO] Running expired token cleanup...")
 	if err := s.tokenRepo.DeleteExpiredTokens(); err != nil {
-		log.Printf("Error cleaning up expired tokens: %v\n", err)
+		log.Printf("[ERROR] Failed to cleanup expired tokens: %v\n", err)
+	} else {
+		log.Println("[INFO] Expired token cleanup completed successfully")
 	}
 }

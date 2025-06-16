@@ -1,16 +1,16 @@
 package api
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
-	"strings"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 	"weatherapi.app/config"
+	apperrors "weatherapi.app/errors"
 	"weatherapi.app/models"
-	"weatherapi.app/repository"
 	"weatherapi.app/service"
 )
 
@@ -24,23 +24,13 @@ type Server struct {
 }
 
 // NewServer creates and configures a new HTTP server
-func NewServer(db *gorm.DB, config *config.Config) *Server {
+func NewServer(
+	db *gorm.DB,
+	config *config.Config,
+	weatherService service.WeatherServiceInterface,
+	subscriptionService service.SubscriptionServiceInterface,
+) *Server {
 	router := gin.Default()
-
-	weatherService := service.NewWeatherService(config)
-	emailService := service.NewEmailService(config)
-
-	subscriptionRepo := repository.NewSubscriptionRepository(db)
-	tokenRepo := repository.NewTokenRepository(db)
-
-	subscriptionService := service.NewSubscriptionService(
-		db,
-		subscriptionRepo,
-		tokenRepo,
-		emailService,
-		weatherService,
-		config,
-	)
 
 	server := &Server{
 		router:              router,
@@ -51,7 +41,6 @@ func NewServer(db *gorm.DB, config *config.Config) *Server {
 	}
 
 	server.setupRoutes()
-
 	return server
 }
 
@@ -62,8 +51,6 @@ func (s *Server) setupRoutes() {
 		api.POST("/subscribe", s.subscribe)
 		api.GET("/confirm/:token", s.confirmSubscription)
 		api.GET("/unsubscribe/:token", s.unsubscribe)
-
-		// Add a debug endpoint
 		api.GET("/debug", s.debugEndpoint)
 	}
 
@@ -83,23 +70,19 @@ func (s *Server) GetRouter() *gin.Engine {
 func (s *Server) getWeather(c *gin.Context) {
 	city := c.Query("city")
 	if city == "" {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "city is required"})
+		s.handleError(c, apperrors.NewValidationError("city parameter is required"))
 		return
 	}
 
 	log.Printf("[DEBUG] Getting weather for city: %s\n", city)
 	weather, err := s.weatherService.GetWeather(city)
 	if err != nil {
-		log.Printf("[ERROR] Weather API error: %v\n", err)
-		if err.Error() == "city not found" {
-			c.JSON(http.StatusNotFound, models.ErrorResponse{Error: "city not found"})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "failed to get weather data"})
+		log.Printf("[ERROR] Weather service error: %v\n", err)
+		s.handleError(c, err)
 		return
 	}
 
-	log.Printf("!!!!!!!!!!!!!!!!!!![DEBUG] Weather result: %+v\n", weather)
+	log.Printf("[DEBUG] Weather result: %+v\n", weather)
 	c.JSON(http.StatusOK, weather)
 }
 
@@ -109,9 +92,7 @@ func (s *Server) subscribe(c *gin.Context) {
 
 	if err := c.ShouldBind(&req); err != nil {
 		log.Printf("[ERROR] Binding error: %v\n", err)
-		log.Printf("[ERROR] Request content-type: %s\n", c.ContentType())
-		log.Printf("[ERROR] Request body: %+v\n", c.Request.Body)
-		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: err.Error()})
+		s.handleError(c, apperrors.NewValidationError("invalid request format"))
 		return
 	}
 
@@ -119,19 +100,7 @@ func (s *Server) subscribe(c *gin.Context) {
 
 	if err := s.subscriptionService.Subscribe(&req); err != nil {
 		log.Printf("[ERROR] Subscription error: %v\n", err)
-
-		if err.Error() == "email already subscribed" {
-			c.JSON(http.StatusConflict, models.ErrorResponse{Error: "email already subscribed"})
-			return
-		}
-
-		if err.Error() == "failed to send confirmation email: failed to send email: 426 Upgrade Required" ||
-			strings.Contains(err.Error(), "failed to send confirmation email") {
-			c.JSON(http.StatusServiceUnavailable, models.ErrorResponse{Error: "unable to send confirmation email"})
-			return
-		}
-
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "failed to create subscription"})
+		s.handleError(c, err)
 		return
 	}
 
@@ -142,7 +111,7 @@ func (s *Server) subscribe(c *gin.Context) {
 func (s *Server) confirmSubscription(c *gin.Context) {
 	token := c.Param("token")
 	if token == "" {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "token is required"})
+		s.handleError(c, apperrors.NewValidationError("token parameter is required"))
 		return
 	}
 
@@ -150,16 +119,7 @@ func (s *Server) confirmSubscription(c *gin.Context) {
 
 	if err := s.subscriptionService.ConfirmSubscription(token); err != nil {
 		log.Printf("[ERROR] Confirmation error: %v\n", err)
-
-		if err.Error() == "record not found" {
-			c.JSON(http.StatusNotFound, models.ErrorResponse{Error: "token not found"})
-			return
-		}
-		if err.Error() == "invalid token type" {
-			c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "invalid token"})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "failed to confirm subscription"})
+		s.handleError(c, err)
 		return
 	}
 
@@ -170,7 +130,7 @@ func (s *Server) confirmSubscription(c *gin.Context) {
 func (s *Server) unsubscribe(c *gin.Context) {
 	token := c.Param("token")
 	if token == "" {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "token is required"})
+		s.handleError(c, apperrors.NewValidationError("token parameter is required"))
 		return
 	}
 
@@ -178,16 +138,7 @@ func (s *Server) unsubscribe(c *gin.Context) {
 
 	if err := s.subscriptionService.Unsubscribe(token); err != nil {
 		log.Printf("[ERROR] Unsubscribe error: %v\n", err)
-
-		if err.Error() == "record not found" {
-			c.JSON(http.StatusNotFound, models.ErrorResponse{Error: "token not found"})
-			return
-		}
-		if err.Error() == "invalid token type" {
-			c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "invalid token"})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "failed to unsubscribe"})
+		s.handleError(c, err)
 		return
 	}
 
@@ -195,18 +146,14 @@ func (s *Server) unsubscribe(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Unsubscribed successfully"})
 }
 
-// Debug endpoint to check configuration and connectivity
 func (s *Server) debugEndpoint(c *gin.Context) {
 	log.Println("[DEBUG] Debug endpoint called")
 
-	// Test database connection
 	var subscriptionCount int64
 	dbErr := s.db.Model(&models.Subscription{}).Count(&subscriptionCount).Error
 
-	// Test weather API
 	weatherResponse, weatherErr := s.weatherService.GetWeather("London")
 
-	// Test SMTP configuration
 	smtpConfig := map[string]string{
 		"host":        s.config.Email.SMTPHost,
 		"port":        fmt.Sprintf("%d", s.config.Email.SMTPPort),
@@ -233,4 +180,45 @@ func (s *Server) debugEndpoint(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, response)
+}
+
+// handleError handles different types of application errors
+func (s *Server) handleError(c *gin.Context, err error) {
+	var appErr *apperrors.AppError
+	var statusCode int
+	var message string
+
+	if errors.As(err, &appErr) {
+		switch appErr.Type {
+		case apperrors.ValidationError:
+			statusCode = http.StatusBadRequest
+			message = appErr.Message
+		case apperrors.NotFoundError:
+			statusCode = http.StatusNotFound
+			message = appErr.Message
+		case apperrors.AlreadyExistsError:
+			statusCode = http.StatusConflict
+			message = appErr.Message
+		case apperrors.ExternalAPIError:
+			statusCode = http.StatusServiceUnavailable
+			message = "External service unavailable"
+		case apperrors.DatabaseError:
+			statusCode = http.StatusInternalServerError
+			message = "Internal server error"
+		case apperrors.EmailError:
+			statusCode = http.StatusServiceUnavailable
+			message = "Unable to send email"
+		case apperrors.TokenError:
+			statusCode = http.StatusBadRequest
+			message = appErr.Message
+		default:
+			statusCode = http.StatusInternalServerError
+			message = "Internal server error"
+		}
+	} else {
+		statusCode = http.StatusInternalServerError
+		message = "Internal server error"
+	}
+
+	c.JSON(statusCode, models.ErrorResponse{Error: message})
 }

@@ -3,77 +3,39 @@ package service
 import (
 	"fmt"
 	"log"
-	"net/smtp"
-	"strings"
 
-	"weatherapi.app/config"
+	"weatherapi.app/errors"
 	"weatherapi.app/models"
+	"weatherapi.app/providers"
 )
 
-// EmailService handles email generation and sending
+// EmailService handles email operations using a provider
 type EmailService struct {
-	config *config.Config
+	provider providers.EmailProvider
 }
 
-// NewEmailService creates a new email service instance
-func NewEmailService(config *config.Config) *EmailService {
+// NewEmailService creates a new email service with the specified provider
+func NewEmailService(provider providers.EmailProvider) *EmailService {
 	return &EmailService{
-		config: config,
+		provider: provider,
 	}
-}
-
-// sendEmail sends an email using Gmail SMTP server
-func (s *EmailService) sendEmail(to, subject, body string, isHTML bool) error {
-	log.Printf("[DEBUG] EmailService.sendEmail called with: to=%s, subject=%s\n", to, subject)
-
-	// SMTP server configuration
-	smtpHost := s.config.Email.SMTPHost
-	smtpPort := s.config.Email.SMTPPort
-	smtpUsername := s.config.Email.SMTPUsername
-	smtpPassword := s.config.Email.SMTPPassword
-	fromName := s.config.Email.FromName
-	fromAddress := s.config.Email.FromAddress
-
-	// Set up authentication information
-	auth := smtp.PlainAuth("", smtpUsername, smtpPassword, smtpHost)
-
-	// Set up email headers
-	mimeHeaders := "MIME-Version: 1.0\r\n"
-	contentType := "Content-Type: text/plain; charset=UTF-8\r\n"
-	if isHTML {
-		contentType = "Content-Type: text/html; charset=UTF-8\r\n"
-	}
-
-	subject = strings.ReplaceAll(subject, "\r\n", "")
-	subject = strings.ReplaceAll(subject, "\n", "")
-
-	from := fmt.Sprintf("%s <%s>", fromName, fromAddress)
-	headers := fmt.Sprintf("From: %s\r\nTo: %s\r\nSubject: %s\r\n%s%s\r\n",
-		from, to, subject, mimeHeaders, contentType)
-
-	// Combine headers and message body
-	message := headers + body
-
-	// Connect to the SMTP server and send email
-	smtpAddr := fmt.Sprintf("%s:%d", smtpHost, smtpPort)
-
-	log.Printf("[DEBUG] Sending email via SMTP: server=%s, from=%s, to=%s\n", smtpAddr, fromAddress, to)
-	err := smtp.SendMail(smtpAddr, auth, fromAddress, []string{to}, []byte(message))
-	if err != nil {
-		log.Printf("[ERROR] Failed to send email: %v\n", err)
-		return fmt.Errorf("failed to send email: %w", err)
-	}
-
-	log.Println("[DEBUG] Email sent successfully")
-	return nil
 }
 
 // SendConfirmationEmail sends an email with a confirmation link
 func (s *EmailService) SendConfirmationEmail(email, confirmURL, city string) error {
 	log.Printf("[DEBUG] SendConfirmationEmail called for: %s, city: %s\n", email, city)
 
-	subject := fmt.Sprintf("Confirm your weather subscription for %s", city)
+	if email == "" {
+		return errors.NewValidationError("email cannot be empty")
+	}
+	if confirmURL == "" {
+		return errors.NewValidationError("confirmation URL cannot be empty")
+	}
+	if city == "" {
+		return errors.NewValidationError("city cannot be empty")
+	}
 
+	subject := fmt.Sprintf("Confirm your weather subscription for %s", city)
 	htmlContent := fmt.Sprintf(
 		"<p>Please confirm your subscription to weather updates for %s by clicking the following link:</p>"+
 			"<p><a href=\"%s\">Confirm Subscription</a></p>"+
@@ -81,16 +43,27 @@ func (s *EmailService) SendConfirmationEmail(email, confirmURL, city string) err
 		city, confirmURL,
 	)
 
-	return s.sendEmail(email, subject, htmlContent, true)
+	return s.provider.SendEmail(email, subject, htmlContent, true)
 }
 
 // SendWelcomeEmail sends a welcome email after subscription confirmation
 func (s *EmailService) SendWelcomeEmail(email, city, frequency, unsubscribeURL string) error {
-	log.Printf("[DEBUG] SendWelcomeEmail called for: %s, city: %s, frequency: %s\n",
-		email, city, frequency)
+	log.Printf("[DEBUG] SendWelcomeEmail called for: %s, city: %s, frequency: %s\n", email, city, frequency)
+
+	if email == "" {
+		return errors.NewValidationError("email cannot be empty")
+	}
+	if city == "" {
+		return errors.NewValidationError("city cannot be empty")
+	}
+	if frequency == "" {
+		return errors.NewValidationError("frequency cannot be empty")
+	}
+	if unsubscribeURL == "" {
+		return errors.NewValidationError("unsubscribe URL cannot be empty")
+	}
 
 	subject := fmt.Sprintf("Welcome to Weather Updates for %s", city)
-
 	frequencyText := "every hour"
 	if frequency == "daily" {
 		frequencyText = "every day"
@@ -103,29 +76,47 @@ func (s *EmailService) SendWelcomeEmail(email, city, frequency, unsubscribeURL s
 		frequency, city, frequencyText, unsubscribeURL,
 	)
 
-	return s.sendEmail(email, subject, htmlContent, true)
+	return s.provider.SendEmail(email, subject, htmlContent, true)
 }
 
 // SendUnsubscribeConfirmationEmail sends a confirmation after unsubscribing
 func (s *EmailService) SendUnsubscribeConfirmationEmail(email, city string) error {
 	log.Printf("[DEBUG] SendUnsubscribeConfirmationEmail called for: %s, city: %s\n", email, city)
 
-	subject := fmt.Sprintf("You have unsubscribed from weather updates for %s", city)
+	if email == "" {
+		return errors.NewValidationError("email cannot be empty")
+	}
+	if city == "" {
+		return errors.NewValidationError("city cannot be empty")
+	}
 
+	subject := fmt.Sprintf("You have unsubscribed from weather updates for %s", city)
 	htmlContent := fmt.Sprintf(
 		"<p>You have successfully unsubscribed from weather updates for %s.</p>",
 		city,
 	)
 
-	return s.sendEmail(email, subject, htmlContent, true)
+	return s.provider.SendEmail(email, subject, htmlContent, true)
 }
 
 // SendWeatherUpdateEmail sends a weather update email to a subscriber
 func (s *EmailService) SendWeatherUpdateEmail(email, city string, weather *models.WeatherResponse, unsubscribeURL string) error {
 	log.Printf("[DEBUG] SendWeatherUpdateEmail called for: %s, city: %s\n", email, city)
 
-	subject := fmt.Sprintf("Weather Update for %s", city)
+	if email == "" {
+		return errors.NewValidationError("email cannot be empty")
+	}
+	if city == "" {
+		return errors.NewValidationError("city cannot be empty")
+	}
+	if weather == nil {
+		return errors.NewValidationError("weather data cannot be nil")
+	}
+	if unsubscribeURL == "" {
+		return errors.NewValidationError("unsubscribe URL cannot be empty")
+	}
 
+	subject := fmt.Sprintf("Weather Update for %s", city)
 	htmlContent := fmt.Sprintf(
 		"<h2>Current weather for %s</h2>"+
 			"<p><strong>Temperature:</strong> %.1f°C</p>"+
@@ -135,5 +126,5 @@ func (s *EmailService) SendWeatherUpdateEmail(email, city string, weather *model
 		city, weather.Temperature, weather.Humidity, weather.Description, unsubscribeURL,
 	)
 
-	return s.sendEmail(email, subject, htmlContent, true)
+	return s.provider.SendEmail(email, subject, htmlContent, true)
 }

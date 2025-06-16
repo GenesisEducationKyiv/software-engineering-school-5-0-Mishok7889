@@ -1,7 +1,7 @@
 package service
 
 import (
-	"fmt"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -13,26 +13,116 @@ import (
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"weatherapi.app/config"
+	apperrors "weatherapi.app/errors"
 	"weatherapi.app/models"
+	"weatherapi.app/providers"
 )
 
-// Simple test for the WeatherService
-func TestWeatherService_GetWeather(t *testing.T) {
-	// Create a mock HTTP server that returns a fixed response
+// Mock Weather Provider for testing
+type mockWeatherProvider struct {
+	mock.Mock
+}
+
+func (m *mockWeatherProvider) GetCurrentWeather(city string) (*models.WeatherResponse, error) {
+	args := m.Called(city)
+	if args.Error(1) != nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.WeatherResponse), nil
+}
+
+// Mock Email Provider for testing
+type mockEmailProvider struct {
+	mock.Mock
+}
+
+func (m *mockEmailProvider) SendEmail(to, subject, body string, isHTML bool) error {
+	args := m.Called(to, subject, body, isHTML)
+	return args.Error(0)
+}
+
+// Test WeatherService with provider
+func TestWeatherService_GetWeather_WithProvider(t *testing.T) {
+	mockProvider := new(mockWeatherProvider)
+	weatherService := NewWeatherService(mockProvider)
+
+	expectedWeather := &models.WeatherResponse{
+		Temperature: 15.0,
+		Humidity:    76.0,
+		Description: "Partly cloudy",
+	}
+
+	mockProvider.On("GetCurrentWeather", "London").Return(expectedWeather, nil)
+
+	weather, err := weatherService.GetWeather("London")
+
+	assert.NoError(t, err)
+	assert.Equal(t, expectedWeather, weather)
+	mockProvider.AssertExpectations(t)
+}
+
+func TestWeatherService_GetWeather_EmptyCity(t *testing.T) {
+	mockProvider := new(mockWeatherProvider)
+	weatherService := NewWeatherService(mockProvider)
+
+	weather, err := weatherService.GetWeather("")
+
+	assert.Error(t, err)
+	assert.Nil(t, weather)
+
+	var appErr *apperrors.AppError
+	assert.True(t, errors.As(err, &appErr))
+	assert.Equal(t, apperrors.ValidationError, appErr.Type)
+}
+
+func TestWeatherService_GetWeather_ProviderError(t *testing.T) {
+	mockProvider := new(mockWeatherProvider)
+	weatherService := NewWeatherService(mockProvider)
+
+	mockProvider.On("GetCurrentWeather", "InvalidCity").Return(nil, apperrors.NewNotFoundError("city not found"))
+
+	weather, err := weatherService.GetWeather("InvalidCity")
+
+	assert.Error(t, err)
+	assert.Nil(t, weather)
+	mockProvider.AssertExpectations(t)
+}
+
+// Test EmailService with provider
+func TestEmailService_SendConfirmationEmail(t *testing.T) {
+	mockProvider := new(mockEmailProvider)
+	emailService := NewEmailService(mockProvider)
+
+	mockProvider.On("SendEmail", "test@example.com", "Confirm your weather subscription for London", mock.AnythingOfType("string"), true).Return(nil)
+
+	err := emailService.SendConfirmationEmail("test@example.com", "http://example.com/confirm/token", "London")
+
+	assert.NoError(t, err)
+	mockProvider.AssertExpectations(t)
+}
+
+func TestEmailService_SendConfirmationEmail_EmptyEmail(t *testing.T) {
+	mockProvider := new(mockEmailProvider)
+	emailService := NewEmailService(mockProvider)
+
+	err := emailService.SendConfirmationEmail("", "http://example.com/confirm/token", "London")
+
+	assert.Error(t, err)
+
+	var appErr *apperrors.AppError
+	assert.True(t, errors.As(err, &appErr))
+	assert.Equal(t, apperrors.ValidationError, appErr.Type)
+}
+
+// Test WeatherAPIProvider with real HTTP server
+func TestWeatherAPIProvider_GetCurrentWeather(t *testing.T) {
 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Assert that the request contains the expected query parameters
 		assert.Contains(t, r.URL.String(), "/current.json")
 		assert.Contains(t, r.URL.String(), "q=London")
 
-		// Return a sample weather response
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_, err := w.Write([]byte(`{
-			"location": {
-				"name": "London",
-				"region": "City of London, Greater London",
-				"country": "United Kingdom"
-			},
 			"current": {
 				"temp_c": 15.0,
 				"humidity": 76,
@@ -41,23 +131,18 @@ func TestWeatherService_GetWeather(t *testing.T) {
 				}
 			}
 		}`))
-		require.NoError(t, err, "failed to write mock response")
+		require.NoError(t, err)
 	}))
 	defer mockServer.Close()
 
-	// Configure the WeatherService with the mock server URL
-	cfg := &config.Config{
-		Weather: config.WeatherConfig{
-			APIKey:  "test-api-key",
-			BaseURL: mockServer.URL,
-		},
+	config := &config.WeatherConfig{
+		APIKey:  "test-api-key",
+		BaseURL: mockServer.URL,
 	}
 
-	// Create the service and call GetWeather
-	weatherService := NewWeatherService(cfg)
-	weather, err := weatherService.GetWeather("London")
+	provider := providers.NewWeatherAPIProvider(config)
+	weather, err := provider.GetCurrentWeather("London")
 
-	// Assert the results
 	assert.NoError(t, err)
 	assert.NotNil(t, weather)
 	assert.Equal(t, 15.0, weather.Temperature)
@@ -65,217 +150,238 @@ func TestWeatherService_GetWeather(t *testing.T) {
 	assert.Equal(t, "Partly cloudy", weather.Description)
 }
 
-// Test for city not found scenario
-func TestWeatherService_GetWeather_CityNotFound(t *testing.T) {
-	// Create a mock HTTP server that returns a 404 status
+func TestWeatherAPIProvider_GetCurrentWeather_NotFound(t *testing.T) {
 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 	}))
 	defer mockServer.Close()
 
-	// Configure the WeatherService with the mock server URL
-	cfg := &config.Config{
-		Weather: config.WeatherConfig{
-			APIKey:  "test-api-key",
-			BaseURL: mockServer.URL,
-		},
+	config := &config.WeatherConfig{
+		APIKey:  "test-api-key",
+		BaseURL: mockServer.URL,
 	}
 
-	// Create the service and call GetWeather with a non-existent city
-	weatherService := NewWeatherService(cfg)
-	weather, err := weatherService.GetWeather("NonExistentCity")
+	provider := providers.NewWeatherAPIProvider(config)
+	weather, err := provider.GetCurrentWeather("NonExistentCity")
 
-	// Assert the error
 	assert.Error(t, err)
 	assert.Nil(t, weather)
-	assert.Equal(t, "city not found", err.Error())
+
+	var appErr *apperrors.AppError
+	assert.True(t, errors.As(err, &appErr))
+	assert.Equal(t, apperrors.NotFoundError, appErr.Type)
 }
 
-// mockWeatherService for testing
+// Mock implementations for SubscriptionService tests
+type mockSubscriptionRepository struct {
+	mock.Mock
+}
+
+func (m *mockSubscriptionRepository) FindByEmail(email, city string) (*models.Subscription, error) {
+	args := m.Called(email, city)
+	if args.Error(1) != nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.Subscription), nil
+}
+
+func (m *mockSubscriptionRepository) FindByID(id uint) (*models.Subscription, error) {
+	args := m.Called(id)
+	if args.Error(1) != nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.Subscription), nil
+}
+
+func (m *mockSubscriptionRepository) Create(subscription *models.Subscription) error {
+	args := m.Called(subscription)
+	subscription.ID = 1 // Set ID for testing
+	return args.Error(0)
+}
+
+func (m *mockSubscriptionRepository) Update(subscription *models.Subscription) error {
+	args := m.Called(subscription)
+	return args.Error(0)
+}
+
+func (m *mockSubscriptionRepository) Delete(subscription *models.Subscription) error {
+	args := m.Called(subscription)
+	return args.Error(0)
+}
+
+func (m *mockSubscriptionRepository) GetSubscriptionsForUpdates(frequency string) ([]models.Subscription, error) {
+	args := m.Called(frequency)
+	if args.Error(1) != nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]models.Subscription), nil
+}
+
+type mockTokenRepository struct {
+	mock.Mock
+}
+
+func (m *mockTokenRepository) CreateToken(subscriptionID uint, tokenType string, expiresIn time.Duration) (*models.Token, error) {
+	args := m.Called(subscriptionID, tokenType, expiresIn)
+	if args.Error(1) != nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.Token), nil
+}
+
+func (m *mockTokenRepository) FindByToken(tokenStr string) (*models.Token, error) {
+	args := m.Called(tokenStr)
+	if args.Error(1) != nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.Token), nil
+}
+
+func (m *mockTokenRepository) DeleteToken(token *models.Token) error {
+	args := m.Called(token)
+	return args.Error(0)
+}
+
+func (m *mockTokenRepository) DeleteExpiredTokens() error {
+	args := m.Called()
+	return args.Error(0)
+}
+
+type mockEmailService struct {
+	mock.Mock
+}
+
+func (m *mockEmailService) SendConfirmationEmail(email, confirmURL, city string) error {
+	args := m.Called(email, confirmURL, city)
+	return args.Error(0)
+}
+
+func (m *mockEmailService) SendWelcomeEmail(email, city, frequency, unsubscribeURL string) error {
+	args := m.Called(email, city, frequency, unsubscribeURL)
+	return args.Error(0)
+}
+
+func (m *mockEmailService) SendUnsubscribeConfirmationEmail(email, city string) error {
+	args := m.Called(email, city)
+	return args.Error(0)
+}
+
+func (m *mockEmailService) SendWeatherUpdateEmail(email, city string, weather *models.WeatherResponse, unsubscribeURL string) error {
+	args := m.Called(email, city, weather, unsubscribeURL)
+	return args.Error(0)
+}
+
 type mockWeatherService struct {
 	mock.Mock
 }
 
-// Ensure mockWeatherService implements WeatherServiceInterface
-var _ WeatherServiceInterface = (*mockWeatherService)(nil)
-
-func (m *mockWeatherService) GetWeather(_ string) (*models.WeatherResponse, error) {
-	return &models.WeatherResponse{
-		Temperature: 15.0,
-		Humidity:    76.0,
-		Description: "Partly cloudy",
-	}, nil
-}
-
-// MockEmailService for testing
-type mockEmailService struct{}
-
-// Ensure mockEmailService implements EmailServiceInterface
-var _ EmailServiceInterface = (*mockEmailService)(nil)
-
-func (m *mockEmailService) SendConfirmationEmail(_, _, _ string) error {
-	return nil
-}
-
-func (m *mockEmailService) SendWelcomeEmail(_, _, _, _ string) error {
-	return nil
-}
-
-func (m *mockEmailService) SendUnsubscribeConfirmationEmail(_, _ string) error {
-	return nil
-}
-
-func (m *mockEmailService) SendWeatherUpdateEmail(_, _ string, _ *models.WeatherResponse, _ string) error {
-	return nil
-}
-
-// MockTokenRepository for testing
-type mockTokenRepository struct{}
-
-// Ensure mockTokenRepository implements TokenRepositoryInterface
-var _ TokenRepositoryInterface = (*mockTokenRepository)(nil)
-
-func (m *mockTokenRepository) CreateToken(subscriptionID uint, tokenType string, expiresIn time.Duration) (*models.Token, error) {
-	return &models.Token{
-		ID:             1,
-		Token:          "test-token",
-		SubscriptionID: subscriptionID,
-		Type:           tokenType,
-		ExpiresAt:      time.Now().Add(expiresIn),
-		CreatedAt:      time.Now(),
-	}, nil
-}
-
-func (m *mockTokenRepository) FindByToken(tokenStr string) (*models.Token, error) {
-	if tokenStr == "valid-token" {
-		return &models.Token{
-			ID:             1,
-			Token:          tokenStr,
-			SubscriptionID: 1,
-			Type:           "confirmation",
-			ExpiresAt:      time.Now().Add(24 * time.Hour),
-			CreatedAt:      time.Now(),
-		}, nil
+func (m *mockWeatherService) GetWeather(city string) (*models.WeatherResponse, error) {
+	args := m.Called(city)
+	if args.Error(1) != nil {
+		return nil, args.Error(1)
 	}
-	return nil, fmt.Errorf("record not found")
+	return args.Get(0).(*models.WeatherResponse), nil
 }
 
-func (m *mockTokenRepository) DeleteToken(_ *models.Token) error {
-	return nil
-}
+// Test SubscriptionService with improved architecture
+func TestSubscriptionService_Subscribe_Success(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	require.NoError(t, err)
 
-func (m *mockTokenRepository) DeleteExpiredTokens() error {
-	return nil
-}
-
-// MockSubscriptionRepository for testing
-type mockSubscriptionRepository struct{}
-
-// Ensure mockSubscriptionRepository implements SubscriptionRepositoryInterface
-var _ SubscriptionRepositoryInterface = (*mockSubscriptionRepository)(nil)
-
-func (m *mockSubscriptionRepository) FindByEmail(email, city string) (*models.Subscription, error) {
-	if email == "existing@example.com" && city == "London" {
-		return &models.Subscription{
-			ID:        1,
-			Email:     email,
-			City:      city,
-			Frequency: "daily",
-			Confirmed: true,
-			CreatedAt: time.Now(),
-			UpdatedAt: time.Now(),
-		}, nil
-	}
-	return nil, nil
-}
-
-func (m *mockSubscriptionRepository) FindByID(id uint) (*models.Subscription, error) {
-	if id == 1 {
-		return &models.Subscription{
-			ID:        id,
-			Email:     "test@example.com",
-			City:      "London",
-			Frequency: "daily",
-			Confirmed: false,
-			CreatedAt: time.Now(),
-			UpdatedAt: time.Now(),
-		}, nil
-	}
-	return nil, fmt.Errorf("record not found")
-}
-
-func (m *mockSubscriptionRepository) Create(subscription *models.Subscription) error {
-	subscription.ID = 1
-	return nil
-}
-
-func (m *mockSubscriptionRepository) Update(_ *models.Subscription) error {
-	return nil
-}
-
-func (m *mockSubscriptionRepository) Delete(_ *models.Subscription) error {
-	return nil
-}
-
-func (m *mockSubscriptionRepository) GetSubscriptionsForUpdates(frequency string) ([]models.Subscription, error) {
-	return []models.Subscription{
-		{
-			ID:        1,
-			Email:     "test@example.com",
-			City:      "London",
-			Frequency: frequency,
-			Confirmed: true,
-			CreatedAt: time.Now(),
-			UpdatedAt: time.Now(),
-		},
-	}, nil
-}
-
-// TestSubscriptionService_Subscribe tests the Subscribe method
-func TestSubscriptionService_Subscribe(t *testing.T) {
-	// Set up a proper in-memory database with migrations
-	db, err := gorm.Open(sqlite.Open("file::memory:?cache=shared"), &gorm.Config{})
-	assert.NoError(t, err)
-
-	// Run migrations to create tables
 	err = db.AutoMigrate(&models.Subscription{}, &models.Token{})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
-	// Create necessary mocks
-	mockRepo := &mockSubscriptionRepository{}
-	mockTokenRepo := &mockTokenRepository{}
-	mockEmailService := &mockEmailService{}
-	mockWeatherService := &mockWeatherService{}
+	mockSubRepo := new(mockSubscriptionRepository)
+	mockTokenRepo := new(mockTokenRepository)
+	mockEmailService := new(mockEmailService)
+	mockWeatherService := new(mockWeatherService)
 
-	// Configure the service with a real DB connection
 	config := &config.Config{AppBaseURL: "http://localhost:8080"}
-	service := &SubscriptionService{
-		db:               db,
-		subscriptionRepo: mockRepo,
-		tokenRepo:        mockTokenRepo,
-		emailService:     mockEmailService,
-		weatherService:   mockWeatherService,
-		config:           config,
+
+	service := NewSubscriptionService(
+		db,
+		mockSubRepo,
+		mockTokenRepo,
+		mockEmailService,
+		mockWeatherService,
+		config,
+	)
+
+	req := &models.SubscriptionRequest{
+		Email:     "test@example.com",
+		City:      "London",
+		Frequency: "daily",
 	}
 
-	// Test case: New subscription
+	// Setup mocks - Note: The service uses direct DB operations for transactions,
+	// so we only mock the repository calls that actually happen
+	mockSubRepo.On("FindByEmail", "test@example.com", "London").Return((*models.Subscription)(nil), nil)
+	// CreateToken is called with subscription ID = 1 (auto-incremented)
+	mockTokenRepo.On("CreateToken", uint(1), "confirmation", 24*time.Hour).Return(&models.Token{
+		ID:    1,
+		Token: "test-token",
+	}, nil)
+	mockEmailService.On("SendConfirmationEmail", "test@example.com", "http://localhost:8080/api/confirm/test-token", "London").Return(nil)
+
+	err = service.Subscribe(req)
+
+	assert.NoError(t, err)
+	mockSubRepo.AssertExpectations(t)
+	mockTokenRepo.AssertExpectations(t)
+	mockEmailService.AssertExpectations(t)
+}
+
+func TestSubscriptionService_Subscribe_ValidationError(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	require.NoError(t, err)
+
+	service := NewSubscriptionService(db, nil, nil, nil, nil, &config.Config{})
+
 	req := &models.SubscriptionRequest{
-		Email:     "new@example.com",
-		City:      "Paris",
+		Email:     "", // Empty email should cause validation error
+		City:      "London",
 		Frequency: "daily",
 	}
 
 	err = service.Subscribe(req)
-	assert.NoError(t, err)
 
-	// Test case: Already confirmed subscription
-	req = &models.SubscriptionRequest{
+	assert.Error(t, err)
+
+	var appErr *apperrors.AppError
+	assert.True(t, errors.As(err, &appErr))
+	assert.Equal(t, apperrors.ValidationError, appErr.Type)
+	assert.Contains(t, appErr.Message, "email is required")
+}
+
+func TestSubscriptionService_Subscribe_AlreadyExists(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	require.NoError(t, err)
+
+	mockSubRepo := new(mockSubscriptionRepository)
+
+	service := NewSubscriptionService(db, mockSubRepo, nil, nil, nil, &config.Config{})
+
+	req := &models.SubscriptionRequest{
 		Email:     "existing@example.com",
 		City:      "London",
-		Frequency: "hourly",
+		Frequency: "daily",
 	}
 
+	existingSub := &models.Subscription{
+		ID:        1,
+		Email:     "existing@example.com",
+		City:      "London",
+		Confirmed: true,
+	}
+
+	mockSubRepo.On("FindByEmail", "existing@example.com", "London").Return(existingSub, nil)
+
 	err = service.Subscribe(req)
+
 	assert.Error(t, err)
-	assert.Equal(t, "email already subscribed", err.Error())
+
+	var appErr *apperrors.AppError
+	assert.True(t, errors.As(err, &appErr))
+	assert.Equal(t, apperrors.AlreadyExistsError, appErr.Type)
+	mockSubRepo.AssertExpectations(t)
 }

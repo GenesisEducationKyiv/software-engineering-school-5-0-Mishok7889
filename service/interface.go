@@ -6,26 +6,35 @@ import (
 	"weatherapi.app/models"
 )
 
-// WeatherServiceInterface defines the interface for the weather service
+// WeatherServiceInterface defines the interface for weather operations
 type WeatherServiceInterface interface {
 	GetWeather(city string) (*models.WeatherResponse, error)
 }
 
-// Ensure WeatherService implements WeatherServiceInterface
-var _ WeatherServiceInterface = (*WeatherService)(nil)
-
-// SubscriptionServiceInterface defines the interface for the subscription service
-type SubscriptionServiceInterface interface {
+// SubscriptionManagerInterface handles subscription creation and removal
+type SubscriptionManagerInterface interface {
 	Subscribe(req *models.SubscriptionRequest) error
-	ConfirmSubscription(token string) error
 	Unsubscribe(token string) error
+}
+
+// ConfirmationServiceInterface handles subscription confirmations
+type ConfirmationServiceInterface interface {
+	ConfirmSubscription(token string) error
+}
+
+// NotificationServiceInterface handles sending notifications
+type NotificationServiceInterface interface {
 	SendWeatherUpdate(frequency string) error
 }
 
-// Ensure SubscriptionService implements SubscriptionServiceInterface
-var _ SubscriptionServiceInterface = (*SubscriptionService)(nil)
+// Combined interface for backward compatibility
+type SubscriptionServiceInterface interface {
+	SubscriptionManagerInterface
+	ConfirmationServiceInterface
+	NotificationServiceInterface
+}
 
-// EmailServiceInterface defines the interface for email service
+// EmailServiceInterface defines the interface for email operations
 type EmailServiceInterface interface {
 	SendConfirmationEmail(email, confirmURL, city string) error
 	SendWelcomeEmail(email, city, frequency, unsubscribeURL string) error
@@ -33,10 +42,7 @@ type EmailServiceInterface interface {
 	SendWeatherUpdateEmail(email, city string, weather *models.WeatherResponse, unsubscribeURL string) error
 }
 
-// Ensure EmailService implements EmailServiceInterface
-var _ EmailServiceInterface = (*EmailService)(nil)
-
-// SubscriptionRepositoryInterface defines the interface for subscription repository
+// SubscriptionRepositoryInterface defines the interface for subscription data operations
 type SubscriptionRepositoryInterface interface {
 	FindByEmail(email, city string) (*models.Subscription, error)
 	FindByID(id uint) (*models.Subscription, error)
@@ -46,12 +52,15 @@ type SubscriptionRepositoryInterface interface {
 	GetSubscriptionsForUpdates(frequency string) ([]models.Subscription, error)
 }
 
-// Ensure repository.SubscriptionRepository implements SubscriptionRepositoryInterface
-
-// TokenRepositoryInterface defines the interface for token repository
+// TokenRepositoryInterface defines the interface for token operations
 type TokenRepositoryInterface interface {
 	CreateToken(subscriptionID uint, tokenType string, expiresIn time.Duration) (*models.Token, error)
 	FindByToken(tokenStr string) (*models.Token, error)
 	DeleteToken(token *models.Token) error
 	DeleteExpiredTokens() error
 }
+
+// Ensure implementations satisfy interfaces
+var _ WeatherServiceInterface = (*WeatherService)(nil)
+var _ SubscriptionServiceInterface = (*SubscriptionService)(nil)
+var _ EmailServiceInterface = (*EmailService)(nil)
