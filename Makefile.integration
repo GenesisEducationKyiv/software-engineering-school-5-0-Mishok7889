@@ -1,0 +1,113 @@
+.PHONY: test-integration test-integration-setup test-integration-run test-integration-cleanup test-integration-services-up test-integration-services-down test-integration-wait
+
+DOCKER_COMPOSE_FILE := tests/docker/docker-compose.integration.yml
+PROJECT_NAME := weatherapi-integration-test
+TEST_PACKAGE := ./tests/integration/...
+
+test-integration: test-integration-setup test-integration-run test-integration-cleanup
+
+test-integration-setup:
+	@echo "Setting up integration test environment..."
+	@echo "Only affecting containers with project name '$(PROJECT_NAME)'"
+	@docker-compose -f $(DOCKER_COMPOSE_FILE) -p $(PROJECT_NAME) down --volumes
+	@docker-compose -f $(DOCKER_COMPOSE_FILE) -p $(PROJECT_NAME) build --no-cache
+	@docker-compose -f $(DOCKER_COMPOSE_FILE) -p $(PROJECT_NAME) up -d
+	@$(MAKE) test-integration-wait
+
+test-integration-wait:
+	@echo "Waiting for services to be ready..."
+	@timeout=60; \
+	while [ $timeout -gt 0 ]; do \
+		if docker-compose -f $(DOCKER_COMPOSE_FILE) -p $(PROJECT_NAME) ps | grep -q "Up (healthy)"; then \
+			if [ $(docker-compose -f $(DOCKER_COMPOSE_FILE) -p $(PROJECT_NAME) ps | grep -c "Up (healthy)") -eq 3 ]; then \
+				echo "All services are ready"; \
+				break; \
+			fi; \
+		fi; \
+		echo "Waiting for services... ($timeout seconds remaining)"; \
+		sleep 2; \
+		timeout=$((timeout-2)); \
+	done; \
+	if [ $timeout -le 0 ]; then \
+		echo "Services failed to start within timeout"; \
+		docker-compose -f $(DOCKER_COMPOSE_FILE) -p $(PROJECT_NAME) logs; \
+		exit 1; \
+	fi
+
+test-integration-run:
+	@echo "Running integration tests..."
+	@go test -v -timeout=10m $(TEST_PACKAGE)
+
+test-integration-cleanup:
+	@echo "Cleaning up integration test environment..."
+	@echo "Only removing containers with project name '$(PROJECT_NAME)'"
+	@docker-compose -f $(DOCKER_COMPOSE_FILE) -p $(PROJECT_NAME) down --volumes
+
+test-integration-services-up:
+	@echo "Starting integration test services..."
+	@docker-compose -f $(DOCKER_COMPOSE_FILE) -p $(PROJECT_NAME) up -d
+
+test-integration-services-down:
+	@echo "Stopping integration test services..."
+	@docker-compose -f $(DOCKER_COMPOSE_FILE) -p $(PROJECT_NAME) down --volumes
+
+test-integration-logs:
+	@echo "Showing integration test service logs..."
+	@docker-compose -f $(DOCKER_COMPOSE_FILE) -p $(PROJECT_NAME) logs
+
+test-integration-status:
+	@echo "Integration test services status:"
+	@docker-compose -f $(DOCKER_COMPOSE_FILE) -p $(PROJECT_NAME) ps
+
+test-integration-rebuild:
+	@echo "Rebuilding integration test services..."
+	@docker-compose -f $(DOCKER_COMPOSE_FILE) -p $(PROJECT_NAME) build --no-cache
+
+test-integration-shell:
+	@echo "Opening shell in postgres container..."
+	@docker-compose -f $(DOCKER_COMPOSE_FILE) -p $(PROJECT_NAME) exec postgres-test psql -U test_user -d weatherapi_test
+
+test-integration-reset-db:
+	@echo "Resetting integration test database..."
+	@docker-compose -f $(DOCKER_COMPOSE_FILE) -p $(PROJECT_NAME) exec postgres-test psql -U test_user -d weatherapi_test -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
+
+test-integration-emails:
+	@echo "Opening MailHog web interface..."
+	@echo "Visit http://localhost:8025 to see sent emails"
+
+test-integration-weather:
+	@echo "Testing mock weather API..."
+	@curl -s "http://localhost:8081/v1/current.json?key=test&q=London" | jq
+
+test-integration-quick:
+	@echo "Running integration tests with existing services..."
+	@go test -v -timeout=5m $(TEST_PACKAGE)
+
+test-integration-verbose:
+	@echo "Running integration tests with verbose output..."
+	@go test -v -timeout=10m -race $(TEST_PACKAGE)
+
+test-integration-coverage:
+	@echo "Running integration tests with coverage..."
+	@go test -v -timeout=10m -coverprofile=coverage-integration.out $(TEST_PACKAGE)
+	@go tool cover -html=coverage-integration.out -o coverage-integration.html
+	@echo "Coverage report generated: coverage-integration.html"
+
+test-integration-benchmark:
+	@echo "Running integration test benchmarks..."
+	@go test -v -timeout=10m -bench=. $(TEST_PACKAGE)
+
+help-integration:
+	@echo "Integration Test Commands:"
+	@echo "  test-integration          - Run full integration test suite"
+	@echo "  test-integration-setup    - Set up test environment"
+	@echo "  test-integration-run      - Run tests only"
+	@echo "  test-integration-cleanup  - Clean up test environment"
+	@echo "  test-integration-quick    - Run tests with existing services"
+	@echo "  test-integration-verbose  - Run tests with race detection"
+	@echo "  test-integration-coverage - Run tests with coverage report"
+	@echo "  test-integration-logs     - Show service logs"
+	@echo "  test-integration-status   - Show service status"
+	@echo "  test-integration-shell    - Open database shell"
+	@echo "  test-integration-emails   - Open email interface"
+	@echo "  test-integration-weather  - Test weather API"
