@@ -14,7 +14,7 @@ COPY . .
 RUN go build -o mock-weather-server .
 
 FROM alpine:latest
-RUN apk --no-cache add ca-certificates wget
+RUN apk --no-cache add ca-certificates curl
 WORKDIR /root/
 
 COPY --from=builder /app/mock-weather-server .

@@ -40,7 +40,11 @@ func (p *SMTPEmailProvider) SendEmail(to, subject, body string, isHTML bool) err
 		return errors.NewValidationError("email subject cannot be empty")
 	}
 
-	auth := smtp.PlainAuth("", p.smtpUsername, p.smtpPassword, p.smtpHost)
+	// Only use authentication if username and password are provided
+	var auth smtp.Auth
+	if p.smtpUsername != "" && p.smtpPassword != "" {
+		auth = smtp.PlainAuth("", p.smtpUsername, p.smtpPassword, p.smtpHost)
+	}
 
 	mimeHeaders := "MIME-Version: 1.0\r\n"
 	contentType := "Content-Type: text/plain; charset=UTF-8\r\n"

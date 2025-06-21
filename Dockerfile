@@ -14,6 +14,8 @@ RUN go test -v ./... || true
 
 FROM alpine:latest
 
+RUN apk --no-cache add curl
+
 WORKDIR /app
 
 COPY --from=builder /app/weatherapi .
