@@ -6,9 +6,16 @@ import (
 	"weatherapi.app/models"
 )
 
+// WeatherProviderManagerInterface defines the interface for weather provider management
+type WeatherProviderManagerInterface interface {
+	GetWeather(city string) (*models.WeatherResponse, error)
+	GetProviderInfo() map[string]interface{}
+}
+
 // WeatherServiceInterface defines the interface for weather operations
 type WeatherServiceInterface interface {
 	GetWeather(city string) (*models.WeatherResponse, error)
+	GetProviderInfo() map[string]interface{}
 }
 
 // SubscriptionManagerInterface handles subscription creation and removal
@@ -56,6 +63,7 @@ type SubscriptionRepositoryInterface interface {
 type TokenRepositoryInterface interface {
 	CreateToken(subscriptionID uint, tokenType string, expiresIn time.Duration) (*models.Token, error)
 	FindByToken(tokenStr string) (*models.Token, error)
+	FindBySubscriptionIDAndType(subscriptionID uint, tokenType string) (*models.Token, error)
 	DeleteToken(token *models.Token) error
 	DeleteExpiredTokens() error
 }

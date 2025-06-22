@@ -28,6 +28,11 @@ func (m *MockWeatherService) GetWeather(city string) (*models.WeatherResponse, e
 	return args.Get(0).(*models.WeatherResponse), args.Error(1)
 }
 
+func (m *MockWeatherService) GetProviderInfo() map[string]interface{} {
+	args := m.Called()
+	return args.Get(0).(map[string]interface{})
+}
+
 // MockSubscriptionService for testing
 type MockSubscriptionService struct {
 	mock.Mock

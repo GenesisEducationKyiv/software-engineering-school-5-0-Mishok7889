@@ -79,10 +79,24 @@ func (s *IntegrationTestSuite) SetupSuite() {
 	err = database.RunMigrations(db)
 	s.Require().NoError(err)
 
-	weatherProvider := providers.NewWeatherAPIProvider(&testConfig.Weather)
+	// Create provider manager instead of individual provider
+	providerConfig := &providers.ProviderConfiguration{
+		WeatherAPIKey:     testConfig.Weather.APIKey,
+		OpenWeatherMapKey: "",
+		AccuWeatherKey:    "",
+		CacheTTL:          5 * time.Minute,
+		LogFilePath:       "test.log",
+		EnableCache:       false, // Disable cache for testing
+		EnableLogging:     false, // Disable logging for testing
+		ProviderOrder:     []string{"weatherapi"},
+	}
+
+	providerManager, err := providers.NewProviderManager(providerConfig)
+	s.Require().NoError(err)
+
 	emailProvider := providers.NewSMTPEmailProvider(&testConfig.Email)
 
-	weatherService := service.NewWeatherService(weatherProvider)
+	weatherService := service.NewWeatherService(providerManager)
 	emailService := service.NewEmailService(emailProvider)
 
 	subscriptionRepo := repository.NewSubscriptionRepository(db)

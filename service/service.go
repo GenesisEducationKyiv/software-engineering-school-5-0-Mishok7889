@@ -9,22 +9,23 @@ import (
 	"weatherapi.app/config"
 	"weatherapi.app/errors"
 	"weatherapi.app/models"
-	"weatherapi.app/providers"
 )
 
-// WeatherService handles weather-related operations
+// WeatherService handles weather-related operations using provider manager
+// Follows Facade pattern: simple interface to complex provider chain
 type WeatherService struct {
-	provider providers.WeatherProvider
+	providerManager WeatherProviderManagerInterface
 }
 
-// NewWeatherService creates a new weather service with the specified provider
-func NewWeatherService(provider providers.WeatherProvider) *WeatherService {
+// NewWeatherService creates a new weather service with the specified provider manager
+func NewWeatherService(providerManager WeatherProviderManagerInterface) *WeatherService {
 	return &WeatherService{
-		provider: provider,
+		providerManager: providerManager,
 	}
 }
 
 // GetWeather retrieves current weather information for a specific city
+// Uses chain of responsibility with caching and logging
 func (s *WeatherService) GetWeather(city string) (*models.WeatherResponse, error) {
 	log.Printf("[DEBUG] WeatherService.GetWeather called for city: %s\n", city)
 
@@ -32,14 +33,19 @@ func (s *WeatherService) GetWeather(city string) (*models.WeatherResponse, error
 		return nil, errors.NewValidationError("city cannot be empty")
 	}
 
-	weather, err := s.provider.GetCurrentWeather(city)
+	weather, err := s.providerManager.GetWeather(city)
 	if err != nil {
-		log.Printf("[ERROR] Weather provider error: %v\n", err)
+		log.Printf("[ERROR] Weather provider manager error: %v\n", err)
 		return nil, err
 	}
 
 	log.Printf("[DEBUG] Weather data retrieved: %+v\n", weather)
 	return weather, nil
+}
+
+// GetProviderInfo returns information about configured providers
+func (s *WeatherService) GetProviderInfo() map[string]interface{} {
+	return s.providerManager.GetProviderInfo()
 }
 
 // SubscriptionService handles subscription-related business logic
@@ -314,20 +320,38 @@ func (s *SubscriptionService) SendWeatherUpdate(frequency string) error {
 }
 
 func (s *SubscriptionService) sendWeatherUpdateToSubscriber(subscription models.Subscription) error {
+	log.Printf("[DEBUG] Sending weather update to subscriber: %s for city: %s\n", subscription.Email, subscription.City)
+
 	weather, err := s.weatherService.GetWeather(subscription.City)
 	if err != nil {
+		log.Printf("[ERROR] Failed to get weather for %s: %v\n", subscription.City, err)
 		return fmt.Errorf("failed to get weather for %s: %w", subscription.City, err)
 	}
+	log.Printf("[DEBUG] Retrieved weather data: %+v\n", weather)
 
-	token, err := s.tokenRepo.FindByToken(fmt.Sprintf("%d", subscription.ID))
+	// Try to find existing unsubscribe token
+	token, err := s.tokenRepo.FindBySubscriptionIDAndType(subscription.ID, "unsubscribe")
 	if err != nil {
+		log.Printf("[DEBUG] No existing unsubscribe token found for subscription %d, creating new one\n", subscription.ID)
+		// If no existing token found, create a new one
 		token, err = s.tokenRepo.CreateToken(subscription.ID, "unsubscribe", 365*24*time.Hour)
 		if err != nil {
+			log.Printf("[ERROR] Failed to create unsubscribe token for subscription %d: %v\n", subscription.ID, err)
 			return fmt.Errorf("failed to create unsubscribe token: %w", err)
 		}
+	} else {
+		log.Printf("[DEBUG] Found existing unsubscribe token: %s\n", token.Token)
 	}
 
 	unsubscribeURL := fmt.Sprintf("%s/api/unsubscribe/%s", s.config.AppBaseURL, token.Token)
+	log.Printf("[DEBUG] Sending weather update email to %s with unsubscribe URL: %s\n", subscription.Email, unsubscribeURL)
 
-	return s.emailService.SendWeatherUpdateEmail(subscription.Email, subscription.City, weather, unsubscribeURL)
+	err = s.emailService.SendWeatherUpdateEmail(subscription.Email, subscription.City, weather, unsubscribeURL)
+	if err != nil {
+		log.Printf("[ERROR] Failed to send weather update email to %s: %v\n", subscription.Email, err)
+		return err
+	}
+
+	log.Printf("[DEBUG] Successfully sent weather update email to %s\n", subscription.Email)
+	return nil
 }

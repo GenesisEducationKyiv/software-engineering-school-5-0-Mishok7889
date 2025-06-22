@@ -39,10 +39,22 @@ func (c DatabaseConfig) GetDSN() string {
 		c.Host, c.Port, c.User, c.Password, c.Name, c.SSLMode)
 }
 
-// WeatherConfig contains settings for the weather API service
+// WeatherConfig contains settings for weather API services
 type WeatherConfig struct {
+	// Primary WeatherAPI.com settings (existing)
 	APIKey  string `envconfig:"WEATHER_API_KEY" required:"true"`
 	BaseURL string `envconfig:"WEATHER_API_BASE_URL" default:"https://api.weatherapi.com/v1"`
+
+	// Additional provider settings
+	OpenWeatherMapKey string `envconfig:"OPENWEATHERMAP_API_KEY"`
+	AccuWeatherKey    string `envconfig:"ACCUWEATHER_API_KEY"`
+
+	// Provider ordering and features
+	ProviderOrder   []string `envconfig:"WEATHER_PROVIDER_ORDER" default:"weatherapi,openweathermap,accuweather"`
+	EnableCache     bool     `envconfig:"WEATHER_ENABLE_CACHE" default:"true"`
+	EnableLogging   bool     `envconfig:"WEATHER_ENABLE_LOGGING" default:"true"`
+	CacheTTLMinutes int      `envconfig:"WEATHER_CACHE_TTL_MINUTES" default:"10"`
+	LogFilePath     string   `envconfig:"WEATHER_LOG_FILE_PATH" default:"logs/weather_providers.log"`
 }
 
 // EmailConfig contains email server and sending settings
@@ -147,15 +159,39 @@ func (d *DatabaseConfig) Validate() error {
 
 // Validate checks weather API configuration
 func (w *WeatherConfig) Validate() error {
-	if w.APIKey == "" {
-		return errors.NewConfigurationError("WEATHER_API_KEY is required", nil)
+	// At least one weather provider must be configured
+	if w.APIKey == "" && w.OpenWeatherMapKey == "" && w.AccuWeatherKey == "" {
+		return errors.NewConfigurationError("at least one weather provider API key must be configured", nil)
 	}
-	if w.BaseURL == "" {
-		return errors.NewConfigurationError("WEATHER_API_BASE_URL cannot be empty", nil)
+
+	// Validate primary WeatherAPI settings if configured
+	if w.APIKey != "" {
+		if w.BaseURL == "" {
+			return errors.NewConfigurationError("WEATHER_API_BASE_URL cannot be empty when WEATHER_API_KEY is set", nil)
+		}
+		if !strings.HasPrefix(w.BaseURL, "http://") && !strings.HasPrefix(w.BaseURL, "https://") {
+			return errors.NewConfigurationError("WEATHER_API_BASE_URL must start with http:// or https://", nil)
+		}
 	}
-	if !strings.HasPrefix(w.BaseURL, "http://") && !strings.HasPrefix(w.BaseURL, "https://") {
-		return errors.NewConfigurationError("WEATHER_API_BASE_URL must start with http:// or https://", nil)
+
+	// Validate cache TTL
+	if w.CacheTTLMinutes < 1 || w.CacheTTLMinutes > 1440 {
+		return errors.NewConfigurationError("WEATHER_CACHE_TTL_MINUTES must be between 1 and 1440 minutes", nil)
 	}
+
+	// Validate provider order contains valid providers
+	validProviders := map[string]bool{
+		"weatherapi":     true,
+		"openweathermap": true,
+		"accuweather":    true,
+	}
+
+	for _, provider := range w.ProviderOrder {
+		if !validProviders[provider] {
+			return errors.NewConfigurationError(fmt.Sprintf("invalid weather provider in order: %s", provider), nil)
+		}
+	}
+
 	return nil
 }
 

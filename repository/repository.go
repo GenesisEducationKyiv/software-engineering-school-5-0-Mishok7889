@@ -223,6 +223,31 @@ func (r *TokenRepository) DeleteToken(token *models.Token) error {
 	return nil
 }
 
+// FindBySubscriptionIDAndType retrieves a token by subscription ID and type
+func (r *TokenRepository) FindBySubscriptionIDAndType(subscriptionID uint, tokenType string) (*models.Token, error) {
+	log.Printf("[DEBUG] TokenRepository.FindBySubscriptionIDAndType: subscriptionID=%d, type=%s\n", subscriptionID, tokenType)
+
+	if subscriptionID == 0 {
+		return nil, errors.NewValidationError("subscription ID cannot be zero")
+	}
+	if tokenType == "" {
+		return nil, errors.NewValidationError("token type cannot be empty")
+	}
+
+	var token models.Token
+	result := r.db.Where("subscription_id = ? AND type = ? AND expires_at > ?", subscriptionID, tokenType, time.Now()).First(&token)
+	if result.Error != nil {
+		if result.Error == gorm.ErrRecordNotFound {
+			return nil, errors.NewNotFoundError("token not found or expired")
+		}
+		log.Printf("[ERROR] Database error when finding token by subscription ID and type: %v\n", result.Error)
+		return nil, errors.NewDatabaseError("failed to find token", result.Error)
+	}
+
+	log.Printf("[DEBUG] Found token: %+v\n", token)
+	return &token, nil
+}
+
 // DeleteExpiredTokens removes all expired tokens from the database
 func (r *TokenRepository) DeleteExpiredTokens() error {
 	log.Println("[DEBUG] TokenRepository.DeleteExpiredTokens called")

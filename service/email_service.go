@@ -126,5 +126,13 @@ func (s *EmailService) SendWeatherUpdateEmail(email, city string, weather *model
 		city, weather.Temperature, weather.Humidity, weather.Description, unsubscribeURL,
 	)
 
-	return s.provider.SendEmail(email, subject, htmlContent, true)
+	log.Printf("[DEBUG] Sending email with subject: %s to: %s\n", subject, email)
+	err := s.provider.SendEmail(email, subject, htmlContent, true)
+	if err != nil {
+		log.Printf("[ERROR] Failed to send weather update email: %v\n", err)
+		return err
+	}
+
+	log.Printf("[DEBUG] Successfully sent weather update email to: %s\n", email)
+	return nil
 }

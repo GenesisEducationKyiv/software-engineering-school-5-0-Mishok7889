@@ -207,10 +207,24 @@ func (s *IntegrationTestSuite) TestErrorRecoveryWorkflow() {
 }
 
 func (s *IntegrationTestSuite) getSubscriptionService() service.SubscriptionServiceInterface {
-	weatherProvider := providers.NewWeatherAPIProvider(&s.config.Weather)
+	// Create provider manager instead of individual provider
+	providerConfig := &providers.ProviderConfiguration{
+		WeatherAPIKey:     s.config.Weather.APIKey,
+		OpenWeatherMapKey: "",
+		AccuWeatherKey:    "",
+		CacheTTL:          5 * time.Minute,
+		LogFilePath:       "test.log",
+		EnableCache:       false, // Disable cache for testing
+		EnableLogging:     false, // Disable logging for testing
+		ProviderOrder:     []string{"weatherapi"},
+	}
+
+	providerManager, err := providers.NewProviderManager(providerConfig)
+	s.Require().NoError(err)
+
 	emailProvider := providers.NewSMTPEmailProvider(&s.config.Email)
 
-	weatherService := service.NewWeatherService(weatherProvider)
+	weatherService := service.NewWeatherService(providerManager)
 	emailService := service.NewEmailService(emailProvider)
 
 	subscriptionRepo := repository.NewSubscriptionRepository(s.db)

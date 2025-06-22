@@ -1,7 +1,9 @@
 package app
 
 import (
+	"fmt"
 	"log"
+	"time"
 
 	"gorm.io/gorm"
 	"weatherapi.app/api"
@@ -76,15 +78,24 @@ func (app *Application) initializeDatabase() error {
 func (app *Application) initializeServices() error {
 	log.Println("[INFO] Initializing services...")
 
-	weatherProvider := providers.NewWeatherAPIProvider(&app.config.Weather)
+	// Create provider manager with all patterns
+	providerManager, err := app.createProviderManager()
+	if err != nil {
+		return fmt.Errorf("failed to create provider manager: %w", err)
+	}
+
+	// Create email provider
 	emailProvider := providers.NewSMTPEmailProvider(&app.config.Email)
 
-	weatherService := service.NewWeatherService(weatherProvider)
+	// Create services
+	weatherService := service.NewWeatherService(providerManager)
 	emailService := service.NewEmailService(emailProvider)
 
+	// Create repositories
 	subscriptionRepo := repository.NewSubscriptionRepository(app.db)
 	tokenRepo := repository.NewTokenRepository(app.db)
 
+	// Create subscription service
 	subscriptionService := service.NewSubscriptionService(
 		app.db,
 		subscriptionRepo,
@@ -94,11 +105,40 @@ func (app *Application) initializeServices() error {
 		app.config,
 	)
 
+	// Create server and scheduler
 	app.server = api.NewServer(app.db, app.config, weatherService, subscriptionService)
 	app.scheduler = scheduler.NewScheduler(app.db, app.config, subscriptionService)
 
 	log.Println("[INFO] Services initialized successfully")
 	return nil
+}
+
+// createProviderManager creates and configures the weather provider manager
+// Follows Factory Method pattern: creates complex configured object
+func (app *Application) createProviderManager() (*providers.ProviderManager, error) {
+	log.Println("[INFO] Creating weather provider manager...")
+
+	// Convert config to provider configuration
+	providerConfig := &providers.ProviderConfiguration{
+		WeatherAPIKey:     app.config.Weather.APIKey,
+		WeatherAPIBaseURL: app.config.Weather.BaseURL,
+		OpenWeatherMapKey: app.config.Weather.OpenWeatherMapKey,
+		AccuWeatherKey:    app.config.Weather.AccuWeatherKey,
+		CacheTTL:          time.Duration(app.config.Weather.CacheTTLMinutes) * time.Minute,
+		LogFilePath:       app.config.Weather.LogFilePath,
+		EnableCache:       app.config.Weather.EnableCache,
+		EnableLogging:     app.config.Weather.EnableLogging,
+		ProviderOrder:     app.config.Weather.ProviderOrder,
+	}
+
+	// Create provider manager
+	providerManager, err := providers.NewProviderManager(providerConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	log.Printf("[INFO] Provider manager created with configuration: %+v\n", providerManager.GetProviderInfo())
+	return providerManager, nil
 }
 
 // Start starts the application
