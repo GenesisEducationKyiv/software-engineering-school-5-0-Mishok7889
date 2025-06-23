@@ -567,7 +567,7 @@ func TestProviderManager_ChainOfResponsibility_Complete(t *testing.T) {
 
 					assert.Contains(t, logContent, "London")
 					assert.Contains(t, logContent, "response")
-					assert.Contains(t, logContent, "WeatherChain")
+					assert.Contains(t, logContent, "AccuWeather")
 				}
 			}
 		})

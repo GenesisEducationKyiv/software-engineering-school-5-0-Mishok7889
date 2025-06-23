@@ -13,7 +13,7 @@ func (s *IntegrationTestSuite) TestDebugWeatherConfig() {
 	s.router.ServeHTTP(w, req)
 
 	s.Equal(http.StatusOK, w.Code)
-	
+
 	// Print the response for debugging
 	s.T().Logf("Debug response: %s", w.Body.String())
 }

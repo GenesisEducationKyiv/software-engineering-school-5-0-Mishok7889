@@ -1,4 +1,8 @@
 version: "2"
+
+run:
+  tests: true
+
 linters:
   enable:
     - gocyclo
@@ -8,19 +12,12 @@ linters:
       rules:
         - name: package-comments
           disabled: true
-  exclusions:
-    generated: lax
-    paths:
-      - third_party$
-      - builtin$
-      - examples$
+
 formatters:
   enable:
     - gofmt
     - goimports
-  exclusions:
-    generated: lax
-    paths:
-      - third_party$
-      - builtin$
-      - examples$
+
+issues:
+  max-same-issues: 0  # Show all duplicate issues
+  max-issues-per-linter: 0  # Show all issues per linter
