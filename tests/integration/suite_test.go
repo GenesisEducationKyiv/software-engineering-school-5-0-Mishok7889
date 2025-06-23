@@ -82,6 +82,7 @@ func (s *IntegrationTestSuite) SetupSuite() {
 	// Create provider manager instead of individual provider
 	providerConfig := &providers.ProviderConfiguration{
 		WeatherAPIKey:     testConfig.Weather.APIKey,
+		WeatherAPIBaseURL: testConfig.Weather.BaseURL, // Use mock API URL
 		OpenWeatherMapKey: "",
 		AccuWeatherKey:    "",
 		CacheTTL:          5 * time.Minute,

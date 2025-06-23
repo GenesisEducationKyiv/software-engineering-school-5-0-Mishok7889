@@ -210,6 +210,7 @@ func (s *IntegrationTestSuite) getSubscriptionService() service.SubscriptionServ
 	// Create provider manager instead of individual provider
 	providerConfig := &providers.ProviderConfiguration{
 		WeatherAPIKey:     s.config.Weather.APIKey,
+		WeatherAPIBaseURL: s.config.Weather.BaseURL, // Use mock API URL
 		OpenWeatherMapKey: "",
 		AccuWeatherKey:    "",
 		CacheTTL:          5 * time.Minute,

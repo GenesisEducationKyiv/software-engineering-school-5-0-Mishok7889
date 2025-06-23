@@ -73,6 +73,11 @@ func main() {
 			return
 		}
 
+		if city == "nonexistentcity" {
+			c.JSON(http.StatusNotFound, gin.H{"error": "City not found"})
+			return
+		}
+
 		if city == "timeout" {
 			c.Header("Connection", "close")
 			c.AbortWithStatus(http.StatusRequestTimeout)

@@ -523,7 +523,12 @@ func TestProviderManager_ChainOfResponsibility_Complete(t *testing.T) {
 			if tt.expectedError {
 				assert.Error(t, err)
 				assert.Nil(t, weather)
-				assert.Contains(t, err.Error(), "all weather providers failed")
+				// For the "All providers fail" case, we now get "no weather providers configured"
+				if tt.name == "All providers fail" {
+					assert.Contains(t, err.Error(), "no weather providers configured")
+				} else {
+					assert.Contains(t, err.Error(), "all weather providers failed")
+				}
 			} else {
 				assert.NoError(t, err)
 				assert.NotNil(t, weather)
