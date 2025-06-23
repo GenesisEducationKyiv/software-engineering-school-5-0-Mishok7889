@@ -10,16 +10,23 @@ This service enables users to:
 - Confirm subscriptions via email
 - Unsubscribe from updates when no longer needed
 
-Weather data is fetched from WeatherAPI.com and delivered to subscribers via email according to their preferred frequency.
+Weather data is fetched from multiple providers with automatic failover and delivered to subscribers via email according to their preferred frequency.
 
 ## Technologies Used
 
 - Go with Gin framework for API handling
 - PostgreSQL for data storage
 - GORM as ORM
-- WeatherAPI.com for weather data
+- Multiple weather providers (WeatherAPI.com, OpenWeatherMap, AccuWeather) with automatic failover
 - Gmail SMTP for email delivery
 - Docker and Docker Compose for containerization
+
+## Architecture
+
+The application implements Gang of Four design patterns:
+- **Chain of Responsibility**: Automatic failover between weather providers
+- **Proxy Pattern**: Response caching to reduce API calls
+- **Decorator Pattern**: Request/response logging
 
 ## Setup and Installation
 
