@@ -7,7 +7,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	apperrors "weatherapi.app/errors"
+	weathererr "weatherapi.app/errors"
 )
 
 func TestLoadConfig(t *testing.T) {
@@ -20,9 +20,9 @@ func TestLoadConfig(t *testing.T) {
 		assert.Error(t, err)
 		assert.Nil(t, config)
 
-		var appErr *apperrors.AppError
+		var appErr *weathererr.AppError
 		assert.True(t, errors.As(err, &appErr))
-		assert.Equal(t, apperrors.ConfigurationError, appErr.Type)
+		assert.Equal(t, weathererr.ConfigurationError, appErr.Type)
 	})
 
 	// Test case 2: Default values with required fields set
@@ -122,9 +122,9 @@ func TestConfigValidation(t *testing.T) {
 		err := config.Validate()
 
 		assert.Error(t, err)
-		var appErr *apperrors.AppError
+		var appErr *weathererr.AppError
 		assert.True(t, errors.As(err, &appErr))
-		assert.Equal(t, apperrors.ConfigurationError, appErr.Type)
+		assert.Equal(t, weathererr.ConfigurationError, appErr.Type)
 		assert.Contains(t, appErr.Message, "SERVER_PORT must be between 1 and 65535")
 	})
 
@@ -133,9 +133,9 @@ func TestConfigValidation(t *testing.T) {
 		err := config.Validate()
 
 		assert.Error(t, err)
-		var appErr *apperrors.AppError
+		var appErr *weathererr.AppError
 		assert.True(t, errors.As(err, &appErr))
-		assert.Equal(t, apperrors.ConfigurationError, appErr.Type)
+		assert.Equal(t, weathererr.ConfigurationError, appErr.Type)
 		assert.Contains(t, appErr.Message, "DB_HOST cannot be empty")
 	})
 
@@ -144,9 +144,9 @@ func TestConfigValidation(t *testing.T) {
 		err := config.Validate()
 
 		assert.Error(t, err)
-		var appErr *apperrors.AppError
+		var appErr *weathererr.AppError
 		assert.True(t, errors.As(err, &appErr))
-		assert.Equal(t, apperrors.ConfigurationError, appErr.Type)
+		assert.Equal(t, weathererr.ConfigurationError, appErr.Type)
 		assert.Contains(t, appErr.Message, "DB_SSL_MODE must be one of")
 	})
 
@@ -155,9 +155,9 @@ func TestConfigValidation(t *testing.T) {
 		err := config.Validate()
 
 		assert.Error(t, err)
-		var appErr *apperrors.AppError
+		var appErr *weathererr.AppError
 		assert.True(t, errors.As(err, &appErr))
-		assert.Equal(t, apperrors.ConfigurationError, appErr.Type)
+		assert.Equal(t, weathererr.ConfigurationError, appErr.Type)
 		assert.Contains(t, appErr.Message, "WEATHER_API_KEY is required")
 	})
 
@@ -166,9 +166,9 @@ func TestConfigValidation(t *testing.T) {
 		err := config.Validate()
 
 		assert.Error(t, err)
-		var appErr *apperrors.AppError
+		var appErr *weathererr.AppError
 		assert.True(t, errors.As(err, &appErr))
-		assert.Equal(t, apperrors.ConfigurationError, appErr.Type)
+		assert.Equal(t, weathererr.ConfigurationError, appErr.Type)
 		assert.Contains(t, appErr.Message, "WEATHER_API_BASE_URL must start with http:// or https://")
 	})
 
@@ -184,9 +184,9 @@ func TestConfigValidation(t *testing.T) {
 		err := config.Validate()
 
 		assert.Error(t, err)
-		var appErr *apperrors.AppError
+		var appErr *weathererr.AppError
 		assert.True(t, errors.As(err, &appErr))
-		assert.Equal(t, apperrors.ConfigurationError, appErr.Type)
+		assert.Equal(t, weathererr.ConfigurationError, appErr.Type)
 		assert.Contains(t, appErr.Message, "EMAIL_FROM_ADDRESS must be a valid email address")
 	})
 
@@ -195,9 +195,9 @@ func TestConfigValidation(t *testing.T) {
 		err := config.Validate()
 
 		assert.Error(t, err)
-		var appErr *apperrors.AppError
+		var appErr *weathererr.AppError
 		assert.True(t, errors.As(err, &appErr))
-		assert.Equal(t, apperrors.ConfigurationError, appErr.Type)
+		assert.Equal(t, weathererr.ConfigurationError, appErr.Type)
 		assert.Contains(t, appErr.Message, "HOURLY_INTERVAL must be at least 1 minute")
 	})
 
@@ -206,9 +206,9 @@ func TestConfigValidation(t *testing.T) {
 		err := config.validateAppBaseURL()
 
 		assert.Error(t, err)
-		var appErr *apperrors.AppError
+		var appErr *weathererr.AppError
 		assert.True(t, errors.As(err, &appErr))
-		assert.Equal(t, apperrors.ConfigurationError, appErr.Type)
+		assert.Equal(t, weathererr.ConfigurationError, appErr.Type)
 		assert.Contains(t, appErr.Message, "APP_URL must start with http:// or https://")
 	})
 

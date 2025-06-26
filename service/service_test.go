@@ -13,7 +13,7 @@ import (
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"weatherapi.app/config"
-	apperrors "weatherapi.app/errors"
+	weathererr "weatherapi.app/errors"
 	"weatherapi.app/models"
 	"weatherapi.app/providers"
 )
@@ -70,16 +70,16 @@ func TestWeatherService_GetWeather_EmptyCity(t *testing.T) {
 	assert.Error(t, err)
 	assert.Nil(t, weather)
 
-	var appErr *apperrors.AppError
+	var appErr *weathererr.AppError
 	assert.True(t, errors.As(err, &appErr))
-	assert.Equal(t, apperrors.ValidationError, appErr.Type)
+	assert.Equal(t, weathererr.ValidationError, appErr.Type)
 }
 
 func TestWeatherService_GetWeather_ProviderError(t *testing.T) {
 	mockProvider := new(mockWeatherProvider)
 	weatherService := NewWeatherService(mockProvider)
 
-	mockProvider.On("GetCurrentWeather", "InvalidCity").Return(nil, apperrors.NewNotFoundError("city not found"))
+	mockProvider.On("GetCurrentWeather", "InvalidCity").Return(nil, weathererr.NewNotFoundError("city not found"))
 
 	weather, err := weatherService.GetWeather("InvalidCity")
 
@@ -109,9 +109,9 @@ func TestEmailService_SendConfirmationEmail_EmptyEmail(t *testing.T) {
 
 	assert.Error(t, err)
 
-	var appErr *apperrors.AppError
+	var appErr *weathererr.AppError
 	assert.True(t, errors.As(err, &appErr))
-	assert.Equal(t, apperrors.ValidationError, appErr.Type)
+	assert.Equal(t, weathererr.ValidationError, appErr.Type)
 }
 
 // Test WeatherAPIProvider with real HTTP server
@@ -167,9 +167,9 @@ func TestWeatherAPIProvider_GetCurrentWeather_NotFound(t *testing.T) {
 	assert.Error(t, err)
 	assert.Nil(t, weather)
 
-	var appErr *apperrors.AppError
+	var appErr *weathererr.AppError
 	assert.True(t, errors.As(err, &appErr))
-	assert.Equal(t, apperrors.NotFoundError, appErr.Type)
+	assert.Equal(t, weathererr.NotFoundError, appErr.Type)
 }
 
 // Mock implementations for SubscriptionService tests
@@ -347,9 +347,9 @@ func TestSubscriptionService_Subscribe_ValidationError(t *testing.T) {
 
 	assert.Error(t, err)
 
-	var appErr *apperrors.AppError
+	var appErr *weathererr.AppError
 	assert.True(t, errors.As(err, &appErr))
-	assert.Equal(t, apperrors.ValidationError, appErr.Type)
+	assert.Equal(t, weathererr.ValidationError, appErr.Type)
 	assert.Contains(t, appErr.Message, "email is required")
 }
 
@@ -380,8 +380,8 @@ func TestSubscriptionService_Subscribe_AlreadyExists(t *testing.T) {
 
 	assert.Error(t, err)
 
-	var appErr *apperrors.AppError
+	var appErr *weathererr.AppError
 	assert.True(t, errors.As(err, &appErr))
-	assert.Equal(t, apperrors.AlreadyExistsError, appErr.Type)
+	assert.Equal(t, weathererr.AlreadyExistsError, appErr.Type)
 	mockSubRepo.AssertExpectations(t)
 }

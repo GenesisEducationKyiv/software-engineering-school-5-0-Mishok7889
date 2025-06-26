@@ -9,7 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 	"weatherapi.app/config"
-	apperrors "weatherapi.app/errors"
+	weathererr "weatherapi.app/errors"
 	"weatherapi.app/models"
 	"weatherapi.app/service"
 )
@@ -70,7 +70,7 @@ func (s *Server) GetRouter() *gin.Engine {
 func (s *Server) getWeather(c *gin.Context) {
 	city := c.Query("city")
 	if city == "" {
-		s.handleError(c, apperrors.NewValidationError("city parameter is required"))
+		s.handleError(c, weathererr.NewValidationError("city parameter is required"))
 		return
 	}
 
@@ -92,7 +92,7 @@ func (s *Server) subscribe(c *gin.Context) {
 
 	if err := c.ShouldBind(&req); err != nil {
 		slog.Error("Request binding error", "error", err)
-		s.handleError(c, apperrors.NewValidationError("invalid request format"))
+		s.handleError(c, weathererr.NewValidationError("invalid request format"))
 		return
 	}
 
@@ -111,7 +111,7 @@ func (s *Server) subscribe(c *gin.Context) {
 func (s *Server) confirmSubscription(c *gin.Context) {
 	token := c.Param("token")
 	if token == "" {
-		s.handleError(c, apperrors.NewValidationError("token parameter is required"))
+		s.handleError(c, weathererr.NewValidationError("token parameter is required"))
 		return
 	}
 
@@ -130,7 +130,7 @@ func (s *Server) confirmSubscription(c *gin.Context) {
 func (s *Server) unsubscribe(c *gin.Context) {
 	token := c.Param("token")
 	if token == "" {
-		s.handleError(c, apperrors.NewValidationError("token parameter is required"))
+		s.handleError(c, weathererr.NewValidationError("token parameter is required"))
 		return
 	}
 
@@ -184,31 +184,31 @@ func (s *Server) debugEndpoint(c *gin.Context) {
 
 // handleError handles different types of application errors
 func (s *Server) handleError(c *gin.Context, err error) {
-	var appErr *apperrors.AppError
+	var appErr *weathererr.AppError
 	var statusCode int
 	var message string
 
 	if errors.As(err, &appErr) {
 		switch appErr.Type {
-		case apperrors.ValidationError:
+		case weathererr.ValidationError:
 			statusCode = http.StatusBadRequest
 			message = appErr.Message
-		case apperrors.NotFoundError:
+		case weathererr.NotFoundError:
 			statusCode = http.StatusNotFound
 			message = appErr.Message
-		case apperrors.AlreadyExistsError:
+		case weathererr.AlreadyExistsError:
 			statusCode = http.StatusConflict
 			message = appErr.Message
-		case apperrors.ExternalAPIError:
+		case weathererr.ExternalAPIError:
 			statusCode = http.StatusServiceUnavailable
 			message = "External service unavailable"
-		case apperrors.DatabaseError:
+		case weathererr.DatabaseError:
 			statusCode = http.StatusInternalServerError
 			message = "Internal server error"
-		case apperrors.EmailError:
+		case weathererr.EmailError:
 			statusCode = http.StatusServiceUnavailable
 			message = "Unable to send email"
-		case apperrors.TokenError:
+		case weathererr.TokenError:
 			statusCode = http.StatusBadRequest
 			message = appErr.Message
 		default:
