@@ -188,34 +188,36 @@ func (s *Server) handleError(c *gin.Context, err error) {
 	var statusCode int
 	var message string
 
-	if errors.As(err, &appErr) {
-		switch appErr.Type {
-		case weathererr.ValidationError:
-			statusCode = http.StatusBadRequest
-			message = appErr.Message
-		case weathererr.NotFoundError:
-			statusCode = http.StatusNotFound
-			message = appErr.Message
-		case weathererr.AlreadyExistsError:
-			statusCode = http.StatusConflict
-			message = appErr.Message
-		case weathererr.ExternalAPIError:
-			statusCode = http.StatusServiceUnavailable
-			message = "External service unavailable"
-		case weathererr.DatabaseError:
-			statusCode = http.StatusInternalServerError
-			message = "Internal server error"
-		case weathererr.EmailError:
-			statusCode = http.StatusServiceUnavailable
-			message = "Unable to send email"
-		case weathererr.TokenError:
-			statusCode = http.StatusBadRequest
-			message = appErr.Message
-		default:
-			statusCode = http.StatusInternalServerError
-			message = "Internal server error"
-		}
-	} else {
+	if !errors.As(err, &appErr) {
+		statusCode = http.StatusInternalServerError
+		message = "Internal server error"
+		c.JSON(statusCode, models.ErrorResponse{Error: message})
+		return
+	}
+
+	switch appErr.Type {
+	case weathererr.ValidationError:
+		statusCode = http.StatusBadRequest
+		message = appErr.Message
+	case weathererr.NotFoundError:
+		statusCode = http.StatusNotFound
+		message = appErr.Message
+	case weathererr.AlreadyExistsError:
+		statusCode = http.StatusConflict
+		message = appErr.Message
+	case weathererr.ExternalAPIError:
+		statusCode = http.StatusServiceUnavailable
+		message = "External service unavailable"
+	case weathererr.DatabaseError:
+		statusCode = http.StatusInternalServerError
+		message = "Internal server error"
+	case weathererr.EmailError:
+		statusCode = http.StatusServiceUnavailable
+		message = "Unable to send email"
+	case weathererr.TokenError:
+		statusCode = http.StatusBadRequest
+		message = appErr.Message
+	default:
 		statusCode = http.StatusInternalServerError
 		message = "Internal server error"
 	}

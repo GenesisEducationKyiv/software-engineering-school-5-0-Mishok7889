@@ -15,17 +15,23 @@ func TestNewApplication(t *testing.T) {
 		// Restore original environment
 		os.Clearenv()
 		for _, env := range originalEnv {
-			if len(env) > 0 && len(env) > 1 {
-				for i, c := range env {
-					if c == '=' {
-						key := env[:i]
-						value := env[i+1:]
-						if key != "" {
-							_ = os.Setenv(key, value) // Ignore error in cleanup
-						}
-						break
-					}
+			if len(env) == 0 {
+				continue
+			}
+
+			for i, c := range env {
+				if c != '=' {
+					continue
 				}
+
+				key := env[:i]
+				value := env[i+1:]
+				if key == "" {
+					break
+				}
+
+				_ = os.Setenv(key, value) // Ignore error in cleanup
+				break
 			}
 		}
 	}()

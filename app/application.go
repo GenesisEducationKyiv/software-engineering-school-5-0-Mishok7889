@@ -1,6 +1,7 @@
 package app
 
 import (
+	"fmt"
 	"log/slog"
 
 	"gorm.io/gorm"
@@ -46,7 +47,7 @@ func (app *Application) loadConfiguration() error {
 	cfg, err := config.LoadConfig()
 	if err != nil {
 		slog.Error("Failed to load configuration", "error", err)
-		return err
+		return fmt.Errorf("load application configuration: %w", err)
 	}
 
 	app.config = cfg
@@ -60,12 +61,12 @@ func (app *Application) initializeDatabase() error {
 	db, err := database.InitDB(app.config.Database)
 	if err != nil {
 		slog.Error("Failed to initialize database", "error", err)
-		return err
+		return fmt.Errorf("initialize database connection: %w", err)
 	}
 
 	if err := database.RunMigrations(db); err != nil {
 		slog.Error("Failed to run database migrations", "error", err)
-		return err
+		return fmt.Errorf("run database migrations: %w", err)
 	}
 
 	app.db = db
