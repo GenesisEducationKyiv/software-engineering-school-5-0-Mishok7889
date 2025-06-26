@@ -1,7 +1,7 @@
 package repository
 
 import (
-	"log"
+	"log/slog"
 	"time"
 
 	"github.com/google/uuid"
@@ -22,7 +22,7 @@ func NewSubscriptionRepository(db *gorm.DB) *SubscriptionRepository {
 
 // FindByEmail retrieves a subscription by email and city
 func (r *SubscriptionRepository) FindByEmail(email, city string) (*models.Subscription, error) {
-	log.Printf("[DEBUG] SubscriptionRepository.FindByEmail: email=%s, city=%s\n", email, city)
+	slog.Debug("Finding subscription by email and city", "email", email, "city", city)
 
 	if email == "" {
 		return nil, errors.NewValidationError("email cannot be empty")
@@ -35,20 +35,20 @@ func (r *SubscriptionRepository) FindByEmail(email, city string) (*models.Subscr
 	result := r.db.Where("email = ? AND city = ?", email, city).First(&subscription)
 	if result.Error != nil {
 		if result.Error == gorm.ErrRecordNotFound {
-			log.Println("[DEBUG] No subscription found")
+			slog.Debug("No subscription found", "email", email, "city", city)
 			return nil, nil
 		}
-		log.Printf("[ERROR] Database error when finding subscription: %v\n", result.Error)
+		slog.Error("Database error when finding subscription", "error", result.Error, "email", email, "city", city)
 		return nil, errors.NewDatabaseError("failed to find subscription", result.Error)
 	}
 
-	log.Printf("[DEBUG] Found subscription: %+v\n", subscription)
+	slog.Debug("Found subscription", "id", subscription.ID, "email", email, "city", city)
 	return &subscription, nil
 }
 
 // FindByID retrieves a subscription by its ID
 func (r *SubscriptionRepository) FindByID(id uint) (*models.Subscription, error) {
-	log.Printf("[DEBUG] SubscriptionRepository.FindByID: id=%d\n", id)
+	slog.Debug("Finding subscription by ID", "id", id)
 
 	if id == 0 {
 		return nil, errors.NewValidationError("subscription ID cannot be zero")
@@ -60,71 +60,71 @@ func (r *SubscriptionRepository) FindByID(id uint) (*models.Subscription, error)
 		if result.Error == gorm.ErrRecordNotFound {
 			return nil, errors.NewNotFoundError("subscription not found")
 		}
-		log.Printf("[ERROR] Database error when finding subscription by ID: %v\n", result.Error)
+		slog.Error("Database error when finding subscription by ID", "error", result.Error, "id", id)
 		return nil, errors.NewDatabaseError("failed to find subscription by ID", result.Error)
 	}
 
-	log.Printf("[DEBUG] Found subscription: %+v\n", subscription)
+	slog.Debug("Found subscription by ID", "id", subscription.ID, "email", subscription.Email, "city", subscription.City)
 	return &subscription, nil
 }
 
 // Create persists a new subscription to the database
 func (r *SubscriptionRepository) Create(subscription *models.Subscription) error {
-	log.Printf("[DEBUG] SubscriptionRepository.Create: %+v\n", subscription)
-
 	if subscription == nil {
 		return errors.NewValidationError("subscription cannot be nil")
 	}
 
+	slog.Debug("Creating subscription", "email", subscription.Email, "city", subscription.City)
+
 	result := r.db.Create(subscription)
 	if result.Error != nil {
-		log.Printf("[ERROR] Database error when creating subscription: %v\n", result.Error)
+		slog.Error("Database error when creating subscription", "error", result.Error, "email", subscription.Email)
 		return errors.NewDatabaseError("failed to create subscription", result.Error)
 	}
 
-	log.Printf("[DEBUG] Created subscription with ID: %d\n", subscription.ID)
+	slog.Debug("Created subscription", "id", subscription.ID, "email", subscription.Email, "city", subscription.City)
 	return nil
 }
 
 // Update modifies an existing subscription
 func (r *SubscriptionRepository) Update(subscription *models.Subscription) error {
-	log.Printf("[DEBUG] SubscriptionRepository.Update: %+v\n", subscription)
-
 	if subscription == nil {
 		return errors.NewValidationError("subscription cannot be nil")
 	}
 
+	slog.Debug("Updating subscription", "id", subscription.ID, "email", subscription.Email, "city", subscription.City)
+
 	result := r.db.Save(subscription)
 	if result.Error != nil {
-		log.Printf("[ERROR] Database error when updating subscription: %v\n", result.Error)
+		slog.Error("Database error when updating subscription", "error", result.Error, "id", subscription.ID)
 		return errors.NewDatabaseError("failed to update subscription", result.Error)
 	}
 
-	log.Println("[DEBUG] Updated subscription successfully")
+	slog.Debug("Updated subscription successfully", "id", subscription.ID)
 	return nil
 }
 
 // Delete removes a subscription from the database
 func (r *SubscriptionRepository) Delete(subscription *models.Subscription) error {
-	log.Printf("[DEBUG] SubscriptionRepository.Delete: %+v\n", subscription)
-
 	if subscription == nil {
 		return errors.NewValidationError("subscription cannot be nil")
 	}
 
+	slog.Debug("Deleting subscription", "id", subscription.ID, "email", subscription.Email, "city", subscription.City)
+
 	result := r.db.Delete(subscription)
 	if result.Error != nil {
-		log.Printf("[ERROR] Database error when deleting subscription: %v\n", result.Error)
+		slog.Error("Database error when deleting subscription", "error", result.Error, "id", subscription.ID)
 		return errors.NewDatabaseError("failed to delete subscription", result.Error)
 	}
 
-	log.Println("[DEBUG] Deleted subscription successfully")
+	slog.Debug("Deleted subscription successfully", "id", subscription.ID)
 	return nil
 }
 
 // GetSubscriptionsForUpdates retrieves all confirmed subscriptions for a specific frequency
 func (r *SubscriptionRepository) GetSubscriptionsForUpdates(frequency string) ([]models.Subscription, error) {
-	log.Printf("[DEBUG] SubscriptionRepository.GetSubscriptionsForUpdates: frequency=%s\n", frequency)
+	slog.Debug("Getting subscriptions for updates", "frequency", frequency)
 
 	if frequency == "" {
 		return nil, errors.NewValidationError("frequency cannot be empty")
@@ -133,11 +133,11 @@ func (r *SubscriptionRepository) GetSubscriptionsForUpdates(frequency string) ([
 	var subscriptions []models.Subscription
 	result := r.db.Where("frequency = ? AND confirmed = ?", frequency, true).Find(&subscriptions)
 	if result.Error != nil {
-		log.Printf("[ERROR] Database error when getting subscriptions for updates: %v\n", result.Error)
+		slog.Error("Database error when getting subscriptions for updates", "error", result.Error, "frequency", frequency)
 		return nil, errors.NewDatabaseError("failed to get subscriptions for updates", result.Error)
 	}
 
-	log.Printf("[DEBUG] Found %d subscriptions for frequency: %s\n", len(subscriptions), frequency)
+	slog.Debug("Found subscriptions for updates", "count", len(subscriptions), "frequency", frequency)
 	return subscriptions, nil
 }
 
@@ -153,8 +153,7 @@ func NewTokenRepository(db *gorm.DB) *TokenRepository {
 
 // CreateToken generates and stores a new token for a subscription
 func (r *TokenRepository) CreateToken(subscriptionID uint, tokenType string, expiresIn time.Duration) (*models.Token, error) {
-	log.Printf("[DEBUG] TokenRepository.CreateToken: subscriptionID=%d, type=%s, expiresIn=%v\n",
-		subscriptionID, tokenType, expiresIn)
+	slog.Debug("Creating token", "subscriptionID", subscriptionID, "type", tokenType, "expiresIn", expiresIn)
 
 	if subscriptionID == 0 {
 		return nil, errors.NewValidationError("subscription ID cannot be zero")
@@ -175,17 +174,17 @@ func (r *TokenRepository) CreateToken(subscriptionID uint, tokenType string, exp
 
 	result := r.db.Create(token)
 	if result.Error != nil {
-		log.Printf("[ERROR] Database error when creating token: %v\n", result.Error)
+		slog.Error("Database error when creating token", "error", result.Error, "subscriptionID", subscriptionID)
 		return nil, errors.NewDatabaseError("failed to create token", result.Error)
 	}
 
-	log.Printf("[DEBUG] Created token: %s, ID: %d\n", token.Token, token.ID)
+	slog.Debug("Created token", "tokenID", token.ID, "type", token.Type, "subscriptionID", subscriptionID)
 	return token, nil
 }
 
 // FindByToken retrieves a token by its string value
 func (r *TokenRepository) FindByToken(tokenStr string) (*models.Token, error) {
-	log.Printf("[DEBUG] TokenRepository.FindByToken: token=%s\n", tokenStr)
+	slog.Debug("Finding token by value", "token", tokenStr)
 
 	if tokenStr == "" {
 		return nil, errors.NewValidationError("token cannot be empty")
@@ -197,42 +196,42 @@ func (r *TokenRepository) FindByToken(tokenStr string) (*models.Token, error) {
 		if result.Error == gorm.ErrRecordNotFound {
 			return nil, errors.NewNotFoundError("token not found or expired")
 		}
-		log.Printf("[ERROR] Database error when finding token: %v\n", result.Error)
+		slog.Error("Database error when finding token", "error", result.Error, "token", tokenStr)
 		return nil, errors.NewDatabaseError("failed to find token", result.Error)
 	}
 
-	log.Printf("[DEBUG] Found token: %+v\n", token)
+	slog.Debug("Found token", "tokenID", token.ID, "type", token.Type, "subscriptionID", token.SubscriptionID)
 	return &token, nil
 }
 
 // DeleteToken removes a token from the database
 func (r *TokenRepository) DeleteToken(token *models.Token) error {
-	log.Printf("[DEBUG] TokenRepository.DeleteToken: %+v\n", token)
-
 	if token == nil {
 		return errors.NewValidationError("token cannot be nil")
 	}
 
+	slog.Debug("Deleting token", "tokenID", token.ID, "type", token.Type, "subscriptionID", token.SubscriptionID)
+
 	result := r.db.Delete(token)
 	if result.Error != nil {
-		log.Printf("[ERROR] Database error when deleting token: %v\n", result.Error)
+		slog.Error("Database error when deleting token", "error", result.Error, "tokenID", token.ID)
 		return errors.NewDatabaseError("failed to delete token", result.Error)
 	}
 
-	log.Println("[DEBUG] Deleted token successfully")
+	slog.Debug("Deleted token successfully", "tokenID", token.ID)
 	return nil
 }
 
 // DeleteExpiredTokens removes all expired tokens from the database
 func (r *TokenRepository) DeleteExpiredTokens() error {
-	log.Println("[DEBUG] TokenRepository.DeleteExpiredTokens called")
+	slog.Debug("Deleting expired tokens")
 
 	result := r.db.Where("expires_at < ?", time.Now()).Delete(&models.Token{})
 	if result.Error != nil {
-		log.Printf("[ERROR] Database error when deleting expired tokens: %v\n", result.Error)
+		slog.Error("Database error when deleting expired tokens", "error", result.Error)
 		return errors.NewDatabaseError("failed to delete expired tokens", result.Error)
 	}
 
-	log.Printf("[DEBUG] Deleted %d expired tokens\n", result.RowsAffected)
+	slog.Debug("Deleted expired tokens", "count", result.RowsAffected)
 	return nil
 }

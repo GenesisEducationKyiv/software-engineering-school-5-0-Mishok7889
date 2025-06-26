@@ -2,7 +2,7 @@ package service
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 
 	"weatherapi.app/errors"
 	"weatherapi.app/models"
@@ -23,7 +23,7 @@ func NewEmailService(provider providers.EmailProvider) *EmailService {
 
 // SendConfirmationEmail sends an email with a confirmation link
 func (s *EmailService) SendConfirmationEmail(email, confirmURL, city string) error {
-	log.Printf("[DEBUG] SendConfirmationEmail called for: %s, city: %s\n", email, city)
+	slog.Debug("Sending confirmation email", "email", email, "city", city)
 
 	if email == "" {
 		return errors.NewValidationError("email cannot be empty")
@@ -48,7 +48,7 @@ func (s *EmailService) SendConfirmationEmail(email, confirmURL, city string) err
 
 // SendWelcomeEmail sends a welcome email after subscription confirmation
 func (s *EmailService) SendWelcomeEmail(email, city, frequency, unsubscribeURL string) error {
-	log.Printf("[DEBUG] SendWelcomeEmail called for: %s, city: %s, frequency: %s\n", email, city, frequency)
+	slog.Debug("Sending welcome email", "email", email, "city", city, "frequency", frequency)
 
 	if email == "" {
 		return errors.NewValidationError("email cannot be empty")
@@ -81,7 +81,7 @@ func (s *EmailService) SendWelcomeEmail(email, city, frequency, unsubscribeURL s
 
 // SendUnsubscribeConfirmationEmail sends a confirmation after unsubscribing
 func (s *EmailService) SendUnsubscribeConfirmationEmail(email, city string) error {
-	log.Printf("[DEBUG] SendUnsubscribeConfirmationEmail called for: %s, city: %s\n", email, city)
+	slog.Debug("Sending unsubscribe confirmation email", "email", email, "city", city)
 
 	if email == "" {
 		return errors.NewValidationError("email cannot be empty")
@@ -101,7 +101,7 @@ func (s *EmailService) SendUnsubscribeConfirmationEmail(email, city string) erro
 
 // SendWeatherUpdateEmail sends a weather update email to a subscriber
 func (s *EmailService) SendWeatherUpdateEmail(email, city string, weather *models.WeatherResponse, unsubscribeURL string) error {
-	log.Printf("[DEBUG] SendWeatherUpdateEmail called for: %s, city: %s\n", email, city)
+	slog.Debug("Sending weather update email", "email", email, "city", city, "temp", weather.Temperature)
 
 	if email == "" {
 		return errors.NewValidationError("email cannot be empty")

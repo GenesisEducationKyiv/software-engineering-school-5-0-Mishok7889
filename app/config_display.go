@@ -1,7 +1,7 @@
 package app
 
 import (
-	"log"
+	"log/slog"
 	"os"
 	"sort"
 	"strings"
@@ -19,43 +19,31 @@ func NewConfigDisplayer() *ConfigDisplayer {
 
 // PrintConfig prints all fields in the configuration
 func (cd *ConfigDisplayer) PrintConfig(cfg *config.Config) {
-	log.Println("==== APPLICATION CONFIGURATION ====")
-
-	log.Printf("SERVER:\n")
-	log.Printf("  Port: %d\n", cfg.Server.Port)
-
-	log.Printf("\nDATABASE:\n")
-	log.Printf("  Host: %s\n", cfg.Database.Host)
-	log.Printf("  Port: %d\n", cfg.Database.Port)
-	log.Printf("  User: %s\n", cfg.Database.User)
-	log.Printf("  Password: %s\n", cd.maskString(cfg.Database.Password))
-	log.Printf("  Name: %s\n", cfg.Database.Name)
-	log.Printf("  SSLMode: %s\n", cfg.Database.SSLMode)
-
-	log.Printf("\nWEATHER API:\n")
-	log.Printf("  API Key: %s\n", cd.maskString(cfg.Weather.APIKey))
-	log.Printf("  Base URL: %s\n", cfg.Weather.BaseURL)
-
-	log.Printf("\nEMAIL:\n")
-	log.Printf("  SMTP Host: %s\n", cfg.Email.SMTPHost)
-	log.Printf("  SMTP Port: %d\n", cfg.Email.SMTPPort)
-	log.Printf("  SMTP Username: %s\n", cfg.Email.SMTPUsername)
-	log.Printf("  SMTP Password: %s\n", cd.maskString(cfg.Email.SMTPPassword))
-	log.Printf("  From Name: %s\n", cfg.Email.FromName)
-	log.Printf("  From Address: %s\n", cfg.Email.FromAddress)
-
-	log.Printf("\nSCHEDULER:\n")
-	log.Printf("  Hourly Interval: %d minutes\n", cfg.Scheduler.HourlyInterval)
-	log.Printf("  Daily Interval: %d minutes\n", cfg.Scheduler.DailyInterval)
-
-	log.Printf("\nAPP BASE URL: %s\n", cfg.AppBaseURL)
-
-	log.Println("===================================")
+	slog.Info("Application Configuration",
+		"server_port", cfg.Server.Port,
+		"db_host", cfg.Database.Host,
+		"db_port", cfg.Database.Port,
+		"db_user", cfg.Database.User,
+		"db_password", cd.maskString(cfg.Database.Password),
+		"db_name", cfg.Database.Name,
+		"db_ssl_mode", cfg.Database.SSLMode,
+		"weather_api_key", cd.maskString(cfg.Weather.APIKey),
+		"weather_base_url", cfg.Weather.BaseURL,
+		"email_smtp_host", cfg.Email.SMTPHost,
+		"email_smtp_port", cfg.Email.SMTPPort,
+		"email_smtp_username", cfg.Email.SMTPUsername,
+		"email_smtp_password", cd.maskString(cfg.Email.SMTPPassword),
+		"email_from_name", cfg.Email.FromName,
+		"email_from_address", cfg.Email.FromAddress,
+		"scheduler_hourly_interval", cfg.Scheduler.HourlyInterval,
+		"scheduler_daily_interval", cfg.Scheduler.DailyInterval,
+		"app_base_url", cfg.AppBaseURL,
+	)
 }
 
 // PrintAllEnvVars prints all environment variables available to the application
 func (cd *ConfigDisplayer) PrintAllEnvVars() {
-	log.Println("==== ENVIRONMENT VARIABLES ====")
+	slog.Debug("Environment Variables")
 
 	envVars := os.Environ()
 	sort.Strings(envVars)
@@ -73,10 +61,8 @@ func (cd *ConfigDisplayer) PrintAllEnvVars() {
 			value = cd.maskString(value)
 		}
 
-		log.Printf("%s=%s\n", key, value)
+		slog.Debug("Environment variable", "key", key, "value", value)
 	}
-
-	log.Println("===============================")
 }
 
 // maskString masks sensitive information like passwords and API keys

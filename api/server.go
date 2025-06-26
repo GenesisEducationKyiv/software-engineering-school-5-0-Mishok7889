@@ -3,7 +3,7 @@ package api
 import (
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -74,37 +74,37 @@ func (s *Server) getWeather(c *gin.Context) {
 		return
 	}
 
-	log.Printf("[DEBUG] Getting weather for city: %s\n", city)
+	slog.Debug("Getting weather for city", "city", city)
 	weather, err := s.weatherService.GetWeather(city)
 	if err != nil {
-		log.Printf("[ERROR] Weather service error: %v\n", err)
+		slog.Error("Weather service error", "error", err, "city", city)
 		s.handleError(c, err)
 		return
 	}
 
-	log.Printf("[DEBUG] Weather result: %+v\n", weather)
+	slog.Debug("Weather result", "weather", weather, "city", city)
 	c.JSON(http.StatusOK, weather)
 }
 
 func (s *Server) subscribe(c *gin.Context) {
 	var req models.SubscriptionRequest
-	log.Println("[DEBUG] Handling subscription request")
+	slog.Debug("Handling subscription request")
 
 	if err := c.ShouldBind(&req); err != nil {
-		log.Printf("[ERROR] Binding error: %v\n", err)
+		slog.Error("Request binding error", "error", err)
 		s.handleError(c, apperrors.NewValidationError("invalid request format"))
 		return
 	}
 
-	log.Printf("[DEBUG] Subscription request received: %+v\n", req)
+	slog.Debug("Subscription request received", "email", req.Email, "city", req.City, "frequency", req.Frequency)
 
 	if err := s.subscriptionService.Subscribe(&req); err != nil {
-		log.Printf("[ERROR] Subscription error: %v\n", err)
+		slog.Error("Subscription error", "error", err, "email", req.Email, "city", req.City)
 		s.handleError(c, err)
 		return
 	}
 
-	log.Println("[DEBUG] Subscription created successfully")
+	slog.Debug("Subscription created successfully", "email", req.Email, "city", req.City)
 	c.JSON(http.StatusOK, gin.H{"message": "Subscription successful. Confirmation email sent."})
 }
 
@@ -115,15 +115,15 @@ func (s *Server) confirmSubscription(c *gin.Context) {
 		return
 	}
 
-	log.Printf("[DEBUG] Confirming subscription with token: %s\n", token)
+	slog.Debug("Confirming subscription", "token", token)
 
 	if err := s.subscriptionService.ConfirmSubscription(token); err != nil {
-		log.Printf("[ERROR] Confirmation error: %v\n", err)
+		slog.Error("Confirmation error", "error", err, "token", token)
 		s.handleError(c, err)
 		return
 	}
 
-	log.Println("[DEBUG] Subscription confirmed successfully")
+	slog.Debug("Subscription confirmed successfully", "token", token)
 	c.JSON(http.StatusOK, gin.H{"message": "Subscription confirmed successfully"})
 }
 
@@ -134,20 +134,20 @@ func (s *Server) unsubscribe(c *gin.Context) {
 		return
 	}
 
-	log.Printf("[DEBUG] Unsubscribing with token: %s\n", token)
+	slog.Debug("Unsubscribing", "token", token)
 
 	if err := s.subscriptionService.Unsubscribe(token); err != nil {
-		log.Printf("[ERROR] Unsubscribe error: %v\n", err)
+		slog.Error("Unsubscribe error", "error", err, "token", token)
 		s.handleError(c, err)
 		return
 	}
 
-	log.Println("[DEBUG] Unsubscribed successfully")
+	slog.Debug("Unsubscribed successfully", "token", token)
 	c.JSON(http.StatusOK, gin.H{"message": "Unsubscribed successfully"})
 }
 
 func (s *Server) debugEndpoint(c *gin.Context) {
-	log.Println("[DEBUG] Debug endpoint called")
+	slog.Debug("Debug endpoint called")
 
 	var subscriptionCount int64
 	dbErr := s.db.Model(&models.Subscription{}).Count(&subscriptionCount).Error

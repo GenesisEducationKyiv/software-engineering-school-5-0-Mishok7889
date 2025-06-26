@@ -2,7 +2,7 @@ package service
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"time"
 
 	"gorm.io/gorm"
@@ -26,7 +26,7 @@ func NewWeatherService(provider providers.WeatherProvider) *WeatherService {
 
 // GetWeather retrieves current weather information for a specific city
 func (s *WeatherService) GetWeather(city string) (*models.WeatherResponse, error) {
-	log.Printf("[DEBUG] WeatherService.GetWeather called for city: %s\n", city)
+	slog.Debug("Getting weather", "city", city)
 
 	if city == "" {
 		return nil, errors.NewValidationError("city cannot be empty")
@@ -34,11 +34,11 @@ func (s *WeatherService) GetWeather(city string) (*models.WeatherResponse, error
 
 	weather, err := s.provider.GetCurrentWeather(city)
 	if err != nil {
-		log.Printf("[ERROR] Weather provider error: %v\n", err)
+		slog.Error("Weather provider error", "error", err, "city", city)
 		return nil, err
 	}
 
-	log.Printf("[DEBUG] Weather data retrieved: %+v\n", weather)
+	slog.Debug("Weather data retrieved", "city", city, "temp", weather.Temperature, "description", weather.Description)
 	return weather, nil
 }
 
@@ -73,7 +73,7 @@ func NewSubscriptionService(
 
 // Subscribe creates a new weather subscription or updates an existing one
 func (s *SubscriptionService) Subscribe(req *models.SubscriptionRequest) error {
-	log.Printf("[DEBUG] SubscriptionService.Subscribe called with: %+v\n", req)
+	slog.Debug("Processing subscription", "email", req.Email, "city", req.City, "frequency", req.Frequency)
 
 	if err := s.validateSubscriptionRequest(req); err != nil {
 		return err
@@ -165,7 +165,7 @@ func (s *SubscriptionService) sendConfirmationEmail(subscription *models.Subscri
 
 // ConfirmSubscription validates and confirms a subscription using a token
 func (s *SubscriptionService) ConfirmSubscription(tokenStr string) error {
-	log.Printf("[DEBUG] ConfirmSubscription called with token: %s\n", tokenStr)
+	slog.Debug("Confirming subscription", "token", tokenStr)
 
 	if tokenStr == "" {
 		return errors.NewValidationError("token cannot be empty")
@@ -224,7 +224,7 @@ func (s *SubscriptionService) processConfirmation(subscription *models.Subscript
 
 	// Try to send welcome email but don't fail if it doesn't work
 	if err := s.emailService.SendWelcomeEmail(subscription.Email, subscription.City, subscription.Frequency, unsubscribeURL); err != nil {
-		log.Printf("[WARNING] Failed to send welcome email: %v\n", err)
+		slog.Warn("Failed to send welcome email", "error", err, "email", subscription.Email)
 	}
 
 	return nil
@@ -232,7 +232,7 @@ func (s *SubscriptionService) processConfirmation(subscription *models.Subscript
 
 // Unsubscribe removes a subscription using an unsubscribe token
 func (s *SubscriptionService) Unsubscribe(tokenStr string) error {
-	log.Printf("[DEBUG] Unsubscribe called with token: %s\n", tokenStr)
+	slog.Debug("Processing unsubscribe", "token", tokenStr)
 
 	if tokenStr == "" {
 		return errors.NewValidationError("token cannot be empty")
@@ -282,7 +282,7 @@ func (s *SubscriptionService) processUnsubscription(subscription *models.Subscri
 
 	// Try to send confirmation email but don't fail if it doesn't work
 	if err := s.emailService.SendUnsubscribeConfirmationEmail(subscription.Email, subscription.City); err != nil {
-		log.Printf("[WARNING] Failed to send unsubscribe confirmation email: %v\n", err)
+		slog.Warn("Failed to send unsubscribe confirmation email", "error", err, "email", subscription.Email)
 	}
 
 	return nil
@@ -290,7 +290,7 @@ func (s *SubscriptionService) processUnsubscription(subscription *models.Subscri
 
 // SendWeatherUpdate sends weather updates to all subscribers of the specified frequency
 func (s *SubscriptionService) SendWeatherUpdate(frequency string) error {
-	log.Printf("[DEBUG] SendWeatherUpdate called for frequency: %s\n", frequency)
+	slog.Debug("Sending weather updates", "frequency", frequency)
 
 	if frequency != "hourly" && frequency != "daily" {
 		return errors.NewValidationError("frequency must be either 'hourly' or 'daily'")
@@ -301,11 +301,11 @@ func (s *SubscriptionService) SendWeatherUpdate(frequency string) error {
 		return errors.NewDatabaseError("failed to get subscriptions for updates", err)
 	}
 
-	log.Printf("[DEBUG] Found %d subscriptions for frequency: %s\n", len(subscriptions), frequency)
+	slog.Debug("Found subscriptions for updates", "count", len(subscriptions), "frequency", frequency)
 
 	for _, subscription := range subscriptions {
 		if err := s.sendWeatherUpdateToSubscriber(subscription); err != nil {
-			log.Printf("[WARNING] Failed to send weather update to %s: %v\n", subscription.Email, err)
+			slog.Warn("Failed to send weather update", "error", err, "email", subscription.Email, "city", subscription.City)
 			continue
 		}
 	}
