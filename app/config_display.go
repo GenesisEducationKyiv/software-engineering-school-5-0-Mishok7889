@@ -9,6 +9,11 @@ import (
 	"weatherapi.app/config"
 )
 
+const (
+	// MinVisibleChars defines the minimum number of characters to show when masking
+	MinVisibleChars = 4
+)
+
 // ConfigDisplayer handles configuration and environment variable display
 type ConfigDisplayer struct{}
 
@@ -67,10 +72,10 @@ func (cd *ConfigDisplayer) PrintAllEnvVars() {
 
 // maskString masks sensitive information like passwords and API keys
 func (cd *ConfigDisplayer) maskString(s string) string {
-	if len(s) <= 4 {
+	if len(s) <= MinVisibleChars {
 		return "****"
 	}
-	visible := len(s) / 4
+	visible := len(s) / MinVisibleChars
 	return s[:visible] + strings.Repeat("*", len(s)-visible)
 }
 

@@ -11,6 +11,11 @@ import (
 	"weatherapi.app/models"
 )
 
+const (
+	// DefaultHTTPTimeout defines the default timeout for HTTP requests to external APIs
+	DefaultHTTPTimeout = 10 * time.Second
+)
+
 // WeatherAPIProvider implements WeatherProvider for WeatherAPI.com
 type WeatherAPIProvider struct {
 	apiKey  string
@@ -23,7 +28,7 @@ func NewWeatherAPIProvider(config *config.WeatherConfig) *WeatherAPIProvider {
 	return &WeatherAPIProvider{
 		apiKey:  config.APIKey,
 		baseURL: config.BaseURL,
-		client:  &http.Client{Timeout: 10 * time.Second},
+		client:  &http.Client{Timeout: DefaultHTTPTimeout},
 	}
 }
 
