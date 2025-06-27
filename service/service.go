@@ -156,7 +156,13 @@ func (s *SubscriptionService) sendConfirmationEmail(subscription *models.Subscri
 
 	confirmURL := fmt.Sprintf("%s/api/confirm/%s", s.config.AppBaseURL, token.Token)
 
-	if err := s.emailService.SendConfirmationEmail(subscription.Email, confirmURL, subscription.City); err != nil {
+	params := ConfirmationEmailParams{
+		Email:      subscription.Email,
+		ConfirmURL: confirmURL,
+		City:       subscription.City,
+	}
+
+	if err := s.emailService.SendConfirmationEmailWithParams(params); err != nil {
 		return err
 	}
 
@@ -223,7 +229,14 @@ func (s *SubscriptionService) processConfirmation(subscription *models.Subscript
 	unsubscribeURL := fmt.Sprintf("%s/api/unsubscribe/%s", s.config.AppBaseURL, unsubscribeToken.Token)
 
 	// Try to send welcome email but don't fail if it doesn't work
-	if err := s.emailService.SendWelcomeEmail(subscription.Email, subscription.City, subscription.Frequency, unsubscribeURL); err != nil {
+	params := WelcomeEmailParams{
+		Email:          subscription.Email,
+		City:           subscription.City,
+		Frequency:      subscription.Frequency,
+		UnsubscribeURL: unsubscribeURL,
+	}
+
+	if err := s.emailService.SendWelcomeEmailWithParams(params); err != nil {
 		slog.Warn("Failed to send welcome email", "error", err, "email", subscription.Email)
 	}
 
@@ -281,7 +294,12 @@ func (s *SubscriptionService) processUnsubscription(subscription *models.Subscri
 	}
 
 	// Try to send confirmation email but don't fail if it doesn't work
-	if err := s.emailService.SendUnsubscribeConfirmationEmail(subscription.Email, subscription.City); err != nil {
+	params := UnsubscribeEmailParams{
+		Email: subscription.Email,
+		City:  subscription.City,
+	}
+
+	if err := s.emailService.SendUnsubscribeConfirmationEmailWithParams(params); err != nil {
 		slog.Warn("Failed to send unsubscribe confirmation email", "error", err, "email", subscription.Email)
 	}
 
@@ -329,5 +347,12 @@ func (s *SubscriptionService) sendWeatherUpdateToSubscriber(subscription models.
 
 	unsubscribeURL := fmt.Sprintf("%s/api/unsubscribe/%s", s.config.AppBaseURL, token.Token)
 
-	return s.emailService.SendWeatherUpdateEmail(subscription.Email, subscription.City, weather, unsubscribeURL)
+	params := WeatherUpdateEmailParams{
+		Email:          subscription.Email,
+		City:           subscription.City,
+		Weather:        weather,
+		UnsubscribeURL: unsubscribeURL,
+	}
+
+	return s.emailService.SendWeatherUpdateEmailWithParams(params)
 }

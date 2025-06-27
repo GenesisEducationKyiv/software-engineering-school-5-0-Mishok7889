@@ -109,31 +109,6 @@ func (s *EmailService) validateWeatherUpdateEmailParams(params WeatherUpdateEmai
 	return nil
 }
 
-// SendConfirmationEmail sends an email with a confirmation link
-func (s *EmailService) SendConfirmationEmail(email, confirmURL, city string) error {
-	slog.Debug("Sending confirmation email", "email", email, "city", city)
-
-	params := ConfirmationEmailParams{
-		Email:      email,
-		ConfirmURL: confirmURL,
-		City:       city,
-	}
-
-	if err := s.validateConfirmationEmailParams(params); err != nil {
-		return err
-	}
-
-	subject := fmt.Sprintf("Confirm your weather subscription for %s", city)
-	htmlContent := fmt.Sprintf(
-		"<p>Please confirm your subscription to weather updates for %s by clicking the following link:</p>"+
-			"<p><a href=\"%s\">Confirm Subscription</a></p>"+
-			"<p>This link will expire in 24 hours.</p>",
-		city, confirmURL,
-	)
-
-	return s.provider.SendEmail(email, subject, htmlContent, true)
-}
-
 // SendConfirmationEmailWithParams sends a confirmation email using parameter struct
 func (s *EmailService) SendConfirmationEmailWithParams(params ConfirmationEmailParams) error {
 	slog.Debug("Sending confirmation email", "email", params.Email, "city", params.City)
@@ -151,37 +126,6 @@ func (s *EmailService) SendConfirmationEmailWithParams(params ConfirmationEmailP
 	)
 
 	return s.provider.SendEmail(params.Email, subject, htmlContent, true)
-}
-
-// SendWelcomeEmail sends a welcome email after subscription confirmation
-func (s *EmailService) SendWelcomeEmail(email, city, frequency, unsubscribeURL string) error {
-	slog.Debug("Sending welcome email", "email", email, "city", city, "frequency", frequency)
-
-	params := WelcomeEmailParams{
-		Email:          email,
-		City:           city,
-		Frequency:      frequency,
-		UnsubscribeURL: unsubscribeURL,
-	}
-
-	if err := s.validateWelcomeEmailParams(params); err != nil {
-		return err
-	}
-
-	subject := fmt.Sprintf("Welcome to Weather Updates for %s", city)
-	frequencyText := "every hour"
-	if frequency == "daily" {
-		frequencyText = "every day"
-	}
-
-	htmlContent := fmt.Sprintf(
-		"<p>Thank you for subscribing to %s weather updates for %s.</p>"+
-			"<p>You will receive updates %s.</p>"+
-			"<p>To unsubscribe, <a href=\"%s\">click here</a>.</p>",
-		frequency, city, frequencyText, unsubscribeURL,
-	)
-
-	return s.provider.SendEmail(email, subject, htmlContent, true)
 }
 
 // SendWelcomeEmailWithParams sends a welcome email using parameter struct
@@ -208,28 +152,6 @@ func (s *EmailService) SendWelcomeEmailWithParams(params WelcomeEmailParams) err
 	return s.provider.SendEmail(params.Email, subject, htmlContent, true)
 }
 
-// SendUnsubscribeConfirmationEmail sends a confirmation after unsubscribing
-func (s *EmailService) SendUnsubscribeConfirmationEmail(email, city string) error {
-	slog.Debug("Sending unsubscribe confirmation email", "email", email, "city", city)
-
-	params := UnsubscribeEmailParams{
-		Email: email,
-		City:  city,
-	}
-
-	if err := s.validateUnsubscribeEmailParams(params); err != nil {
-		return err
-	}
-
-	subject := fmt.Sprintf("You have unsubscribed from weather updates for %s", city)
-	htmlContent := fmt.Sprintf(
-		"<p>You have successfully unsubscribed from weather updates for %s.</p>",
-		city,
-	)
-
-	return s.provider.SendEmail(email, subject, htmlContent, true)
-}
-
 // SendUnsubscribeConfirmationEmailWithParams sends unsubscribe confirmation using parameter struct
 func (s *EmailService) SendUnsubscribeConfirmationEmailWithParams(params UnsubscribeEmailParams) error {
 	slog.Debug("Sending unsubscribe confirmation email", "email", params.Email, "city", params.City)
@@ -245,34 +167,6 @@ func (s *EmailService) SendUnsubscribeConfirmationEmailWithParams(params Unsubsc
 	)
 
 	return s.provider.SendEmail(params.Email, subject, htmlContent, true)
-}
-
-// SendWeatherUpdateEmail sends a weather update email to a subscriber
-func (s *EmailService) SendWeatherUpdateEmail(email, city string, weather *models.WeatherResponse, unsubscribeURL string) error {
-	slog.Debug("Sending weather update email", "email", email, "city", city, "temp", weather.Temperature)
-
-	params := WeatherUpdateEmailParams{
-		Email:          email,
-		City:           city,
-		Weather:        weather,
-		UnsubscribeURL: unsubscribeURL,
-	}
-
-	if err := s.validateWeatherUpdateEmailParams(params); err != nil {
-		return err
-	}
-
-	subject := fmt.Sprintf("Weather Update for %s", city)
-	htmlContent := fmt.Sprintf(
-		"<h2>Current weather for %s</h2>"+
-			"<p><strong>Temperature:</strong> %.1f°C</p>"+
-			"<p><strong>Humidity:</strong> %.1f%%</p>"+
-			"<p><strong>Description:</strong> %s</p>"+
-			"<p>To unsubscribe, <a href=\"%s\">click here</a>.</p>",
-		city, weather.Temperature, weather.Humidity, weather.Description, unsubscribeURL,
-	)
-
-	return s.provider.SendEmail(email, subject, htmlContent, true)
 }
 
 // SendWeatherUpdateEmailWithParams sends weather update email using parameter struct

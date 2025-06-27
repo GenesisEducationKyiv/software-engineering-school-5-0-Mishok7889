@@ -89,23 +89,35 @@ func TestWeatherService_GetWeather_ProviderError(t *testing.T) {
 }
 
 // Test EmailService with provider
-func TestEmailService_SendConfirmationEmail(t *testing.T) {
+func TestEmailService_SendConfirmationEmailWithParams(t *testing.T) {
 	mockProvider := new(mockEmailProvider)
 	emailService := NewEmailService(mockProvider)
 
 	mockProvider.On("SendEmail", "test@example.com", "Confirm your weather subscription for London", mock.AnythingOfType("string"), true).Return(nil)
 
-	err := emailService.SendConfirmationEmail("test@example.com", "http://example.com/confirm/token", "London")
+	params := ConfirmationEmailParams{
+		Email:      "test@example.com",
+		ConfirmURL: "http://example.com/confirm/token",
+		City:       "London",
+	}
+
+	err := emailService.SendConfirmationEmailWithParams(params)
 
 	assert.NoError(t, err)
 	mockProvider.AssertExpectations(t)
 }
 
-func TestEmailService_SendConfirmationEmail_EmptyEmail(t *testing.T) {
+func TestEmailService_SendConfirmationEmailWithParams_EmptyEmail(t *testing.T) {
 	mockProvider := new(mockEmailProvider)
 	emailService := NewEmailService(mockProvider)
 
-	err := emailService.SendConfirmationEmail("", "http://example.com/confirm/token", "London")
+	params := ConfirmationEmailParams{
+		Email:      "",
+		ConfirmURL: "http://example.com/confirm/token",
+		City:       "London",
+	}
+
+	err := emailService.SendConfirmationEmailWithParams(params)
 
 	assert.Error(t, err)
 
@@ -251,23 +263,23 @@ type mockEmailService struct {
 	mock.Mock
 }
 
-func (m *mockEmailService) SendConfirmationEmail(email, confirmURL, city string) error {
-	args := m.Called(email, confirmURL, city)
+func (m *mockEmailService) SendConfirmationEmailWithParams(params ConfirmationEmailParams) error {
+	args := m.Called(params)
 	return args.Error(0)
 }
 
-func (m *mockEmailService) SendWelcomeEmail(email, city, frequency, unsubscribeURL string) error {
-	args := m.Called(email, city, frequency, unsubscribeURL)
+func (m *mockEmailService) SendWelcomeEmailWithParams(params WelcomeEmailParams) error {
+	args := m.Called(params)
 	return args.Error(0)
 }
 
-func (m *mockEmailService) SendUnsubscribeConfirmationEmail(email, city string) error {
-	args := m.Called(email, city)
+func (m *mockEmailService) SendUnsubscribeConfirmationEmailWithParams(params UnsubscribeEmailParams) error {
+	args := m.Called(params)
 	return args.Error(0)
 }
 
-func (m *mockEmailService) SendWeatherUpdateEmail(email, city string, weather *models.WeatherResponse, unsubscribeURL string) error {
-	args := m.Called(email, city, weather, unsubscribeURL)
+func (m *mockEmailService) SendWeatherUpdateEmailWithParams(params WeatherUpdateEmailParams) error {
+	args := m.Called(params)
 	return args.Error(0)
 }
 
@@ -321,7 +333,11 @@ func TestSubscriptionService_Subscribe_Success(t *testing.T) {
 		ID:    1,
 		Token: "test-token",
 	}, nil)
-	mockEmailService.On("SendConfirmationEmail", "test@example.com", "http://localhost:8080/api/confirm/test-token", "London").Return(nil)
+	mockEmailService.On("SendConfirmationEmailWithParams", ConfirmationEmailParams{
+		Email:      "test@example.com",
+		ConfirmURL: "http://localhost:8080/api/confirm/test-token",
+		City:       "London",
+	}).Return(nil)
 
 	err = service.Subscribe(req)
 
