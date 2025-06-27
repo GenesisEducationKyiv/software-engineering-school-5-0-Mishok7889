@@ -117,102 +117,323 @@ func TestLoadConfig(t *testing.T) {
 }
 
 func TestConfigValidation(t *testing.T) {
-	t.Run("InvalidServerPort", func(t *testing.T) {
-		config := &ServerConfig{Port: 0}
-		err := config.Validate()
-
-		assert.Error(t, err)
-		var appErr *weathererr.AppError
-		assert.True(t, errors.As(err, &appErr))
-		assert.Equal(t, weathererr.ConfigurationError, appErr.Type)
-		assert.Contains(t, appErr.Message, "SERVER_PORT must be between 1 and 65535")
-	})
-
-	t.Run("InvalidDatabaseHost", func(t *testing.T) {
-		config := &DatabaseConfig{Host: "", Port: 5432, User: "user", Name: "db", SSLMode: "disable"}
-		err := config.Validate()
-
-		assert.Error(t, err)
-		var appErr *weathererr.AppError
-		assert.True(t, errors.As(err, &appErr))
-		assert.Equal(t, weathererr.ConfigurationError, appErr.Type)
-		assert.Contains(t, appErr.Message, "DB_HOST cannot be empty")
-	})
-
-	t.Run("InvalidSSLMode", func(t *testing.T) {
-		config := &DatabaseConfig{Host: "host", Port: 5432, User: "user", Name: "db", SSLMode: "invalid"}
-		err := config.Validate()
-
-		assert.Error(t, err)
-		var appErr *weathererr.AppError
-		assert.True(t, errors.As(err, &appErr))
-		assert.Equal(t, weathererr.ConfigurationError, appErr.Type)
-		assert.Contains(t, appErr.Message, "DB_SSL_MODE must be one of")
-	})
-
-	t.Run("EmptyWeatherAPIKey", func(t *testing.T) {
-		config := &WeatherConfig{APIKey: "", BaseURL: "https://api.example.com"}
-		err := config.Validate()
-
-		assert.Error(t, err)
-		var appErr *weathererr.AppError
-		assert.True(t, errors.As(err, &appErr))
-		assert.Equal(t, weathererr.ConfigurationError, appErr.Type)
-		assert.Contains(t, appErr.Message, "WEATHER_API_KEY is required")
-	})
-
-	t.Run("InvalidWeatherBaseURL", func(t *testing.T) {
-		config := &WeatherConfig{APIKey: "key", BaseURL: "invalid-url"}
-		err := config.Validate()
-
-		assert.Error(t, err)
-		var appErr *weathererr.AppError
-		assert.True(t, errors.As(err, &appErr))
-		assert.Equal(t, weathererr.ConfigurationError, appErr.Type)
-		assert.Contains(t, appErr.Message, "WEATHER_API_BASE_URL must start with http:// or https://")
-	})
-
-	t.Run("InvalidEmailAddress", func(t *testing.T) {
-		config := &EmailConfig{
-			SMTPHost:     "smtp.example.com",
-			SMTPPort:     587,
-			SMTPUsername: "user",
-			SMTPPassword: "pass",
-			FromName:     "Test",
-			FromAddress:  "invalid-email",
+	t.Run("ServerConfig", func(t *testing.T) {
+		tests := []struct {
+			name      string
+			port      int
+			wantErr   bool
+			errorType weathererr.ErrorType
+			errorMsg  string
+		}{
+			{
+				name:    "ValidPort",
+				port:    8080,
+				wantErr: false,
+			},
+			{
+				name:      "InvalidPortZero",
+				port:      0,
+				wantErr:   true,
+				errorType: weathererr.ConfigurationError,
+				errorMsg:  "SERVER_PORT must be between 1 and 65535",
+			},
+			{
+				name:      "InvalidPortNegative",
+				port:      -1,
+				wantErr:   true,
+				errorType: weathererr.ConfigurationError,
+				errorMsg:  "SERVER_PORT must be between 1 and 65535",
+			},
+			{
+				name:      "InvalidPortTooHigh",
+				port:      65536,
+				wantErr:   true,
+				errorType: weathererr.ConfigurationError,
+				errorMsg:  "SERVER_PORT must be between 1 and 65535",
+			},
 		}
-		err := config.Validate()
 
-		assert.Error(t, err)
-		var appErr *weathererr.AppError
-		assert.True(t, errors.As(err, &appErr))
-		assert.Equal(t, weathererr.ConfigurationError, appErr.Type)
-		assert.Contains(t, appErr.Message, "EMAIL_FROM_ADDRESS must be a valid email address")
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				config := &ServerConfig{Port: tt.port}
+				err := config.Validate()
+
+				if tt.wantErr {
+					assert.Error(t, err)
+					var appErr *weathererr.AppError
+					assert.True(t, errors.As(err, &appErr))
+					assert.Equal(t, tt.errorType, appErr.Type)
+					assert.Contains(t, appErr.Message, tt.errorMsg)
+				} else {
+					assert.NoError(t, err)
+				}
+			})
+		}
 	})
 
-	t.Run("InvalidSchedulerInterval", func(t *testing.T) {
-		config := &SchedulerConfig{HourlyInterval: 0, DailyInterval: 1440}
-		err := config.Validate()
+	t.Run("DatabaseConfig", func(t *testing.T) {
+		tests := []struct {
+			name      string
+			config    DatabaseConfig
+			wantErr   bool
+			errorType weathererr.ErrorType
+			errorMsg  string
+		}{
+			{
+				name: "ValidConfig",
+				config: DatabaseConfig{
+					Host:    "localhost",
+					Port:    5432,
+					User:    "user",
+					Name:    "db",
+					SSLMode: "disable",
+				},
+				wantErr: false,
+			},
+			{
+				name: "EmptyHost",
+				config: DatabaseConfig{
+					Host:    "",
+					Port:    5432,
+					User:    "user",
+					Name:    "db",
+					SSLMode: "disable",
+				},
+				wantErr:   true,
+				errorType: weathererr.ConfigurationError,
+				errorMsg:  "DB_HOST cannot be empty",
+			},
+			{
+				name: "InvalidSSLMode",
+				config: DatabaseConfig{
+					Host:    "localhost",
+					Port:    5432,
+					User:    "user",
+					Name:    "db",
+					SSLMode: "invalid",
+				},
+				wantErr:   true,
+				errorType: weathererr.ConfigurationError,
+				errorMsg:  "DB_SSL_MODE must be one of",
+			},
+		}
 
-		assert.Error(t, err)
-		var appErr *weathererr.AppError
-		assert.True(t, errors.As(err, &appErr))
-		assert.Equal(t, weathererr.ConfigurationError, appErr.Type)
-		assert.Contains(t, appErr.Message, "HOURLY_INTERVAL must be at least 1 minute")
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				err := tt.config.Validate()
+
+				if tt.wantErr {
+					assert.Error(t, err)
+					var appErr *weathererr.AppError
+					assert.True(t, errors.As(err, &appErr))
+					assert.Equal(t, tt.errorType, appErr.Type)
+					assert.Contains(t, appErr.Message, tt.errorMsg)
+				} else {
+					assert.NoError(t, err)
+				}
+			})
+		}
 	})
 
-	t.Run("InvalidAppBaseURL", func(t *testing.T) {
-		config := &Config{AppBaseURL: "invalid-url"}
-		err := config.validateAppBaseURL()
+	t.Run("WeatherConfig", func(t *testing.T) {
+		tests := []struct {
+			name      string
+			config    WeatherConfig
+			wantErr   bool
+			errorType weathererr.ErrorType
+			errorMsg  string
+		}{
+			{
+				name: "ValidConfig",
+				config: WeatherConfig{
+					APIKey:  "test-key",
+					BaseURL: "https://api.example.com",
+				},
+				wantErr: false,
+			},
+			{
+				name: "EmptyAPIKey",
+				config: WeatherConfig{
+					APIKey:  "",
+					BaseURL: "https://api.example.com",
+				},
+				wantErr:   true,
+				errorType: weathererr.ConfigurationError,
+				errorMsg:  "WEATHER_API_KEY is required",
+			},
+			{
+				name: "InvalidBaseURL",
+				config: WeatherConfig{
+					APIKey:  "key",
+					BaseURL: "invalid-url",
+				},
+				wantErr:   true,
+				errorType: weathererr.ConfigurationError,
+				errorMsg:  "WEATHER_API_BASE_URL must start with http:// or https://",
+			},
+		}
 
-		assert.Error(t, err)
-		var appErr *weathererr.AppError
-		assert.True(t, errors.As(err, &appErr))
-		assert.Equal(t, weathererr.ConfigurationError, appErr.Type)
-		assert.Contains(t, appErr.Message, "APP_URL must start with http:// or https://")
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				err := tt.config.Validate()
+
+				if tt.wantErr {
+					assert.Error(t, err)
+					var appErr *weathererr.AppError
+					assert.True(t, errors.As(err, &appErr))
+					assert.Equal(t, tt.errorType, appErr.Type)
+					assert.Contains(t, appErr.Message, tt.errorMsg)
+				} else {
+					assert.NoError(t, err)
+				}
+			})
+		}
 	})
 
-	t.Run("ValidConfig", func(t *testing.T) {
+	t.Run("EmailConfig", func(t *testing.T) {
+		tests := []struct {
+			name      string
+			config    EmailConfig
+			wantErr   bool
+			errorType weathererr.ErrorType
+			errorMsg  string
+		}{
+			{
+				name: "ValidConfig",
+				config: EmailConfig{
+					SMTPHost:     "smtp.example.com",
+					SMTPPort:     587,
+					SMTPUsername: "user",
+					SMTPPassword: "pass",
+					FromName:     "Test",
+					FromAddress:  "test@example.com",
+				},
+				wantErr: false,
+			},
+			{
+				name: "InvalidEmailAddress",
+				config: EmailConfig{
+					SMTPHost:     "smtp.example.com",
+					SMTPPort:     587,
+					SMTPUsername: "user",
+					SMTPPassword: "pass",
+					FromName:     "Test",
+					FromAddress:  "invalid-email",
+				},
+				wantErr:   true,
+				errorType: weathererr.ConfigurationError,
+				errorMsg:  "EMAIL_FROM_ADDRESS must be a valid email address",
+			},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				err := tt.config.Validate()
+
+				if tt.wantErr {
+					assert.Error(t, err)
+					var appErr *weathererr.AppError
+					assert.True(t, errors.As(err, &appErr))
+					assert.Equal(t, tt.errorType, appErr.Type)
+					assert.Contains(t, appErr.Message, tt.errorMsg)
+				} else {
+					assert.NoError(t, err)
+				}
+			})
+		}
+	})
+
+	t.Run("SchedulerConfig", func(t *testing.T) {
+		tests := []struct {
+			name      string
+			config    SchedulerConfig
+			wantErr   bool
+			errorType weathererr.ErrorType
+			errorMsg  string
+		}{
+			{
+				name: "ValidConfig",
+				config: SchedulerConfig{
+					HourlyInterval: 60,
+					DailyInterval:  1440,
+				},
+				wantErr: false,
+			},
+			{
+				name: "InvalidHourlyInterval",
+				config: SchedulerConfig{
+					HourlyInterval: 0,
+					DailyInterval:  1440,
+				},
+				wantErr:   true,
+				errorType: weathererr.ConfigurationError,
+				errorMsg:  "HOURLY_INTERVAL must be at least 1 minute",
+			},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				err := tt.config.Validate()
+
+				if tt.wantErr {
+					assert.Error(t, err)
+					var appErr *weathererr.AppError
+					assert.True(t, errors.As(err, &appErr))
+					assert.Equal(t, tt.errorType, appErr.Type)
+					assert.Contains(t, appErr.Message, tt.errorMsg)
+				} else {
+					assert.NoError(t, err)
+				}
+			})
+		}
+	})
+
+	t.Run("AppBaseURL", func(t *testing.T) {
+		tests := []struct {
+			name      string
+			baseURL   string
+			wantErr   bool
+			errorType weathererr.ErrorType
+			errorMsg  string
+		}{
+			{
+				name:    "ValidHTTPURL",
+				baseURL: "http://localhost:8080",
+				wantErr: false,
+			},
+			{
+				name:    "ValidHTTPSURL",
+				baseURL: "https://example.com",
+				wantErr: false,
+			},
+			{
+				name:      "InvalidURL",
+				baseURL:   "invalid-url",
+				wantErr:   true,
+				errorType: weathererr.ConfigurationError,
+				errorMsg:  "APP_URL must start with http:// or https://",
+			},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				config := &Config{AppBaseURL: tt.baseURL}
+				err := config.validateAppBaseURL()
+
+				if tt.wantErr {
+					assert.Error(t, err)
+					var appErr *weathererr.AppError
+					assert.True(t, errors.As(err, &appErr))
+					assert.Equal(t, tt.errorType, appErr.Type)
+					assert.Contains(t, appErr.Message, tt.errorMsg)
+				} else {
+					assert.NoError(t, err)
+				}
+			})
+		}
+	})
+
+	t.Run("CompleteConfigValidation", func(t *testing.T) {
 		config := &Config{
 			Server: ServerConfig{Port: 8080},
 			Database: DatabaseConfig{
