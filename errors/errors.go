@@ -2,19 +2,28 @@ package errors
 
 import "fmt"
 
-// Domain-specific error types for better error handling
+// Application error types organized by category for better error handling
 
 type ErrorType string
 
+// Domain/Business Logic Errors - errors related to business rules and validation
 const (
 	ValidationError    ErrorType = "VALIDATION_ERROR"
 	NotFoundError      ErrorType = "NOT_FOUND_ERROR"
 	AlreadyExistsError ErrorType = "ALREADY_EXISTS_ERROR"
-	ExternalAPIError   ErrorType = "EXTERNAL_API_ERROR"
-	DatabaseError      ErrorType = "DATABASE_ERROR"
-	ConfigurationError ErrorType = "CONFIGURATION_ERROR"
-	EmailError         ErrorType = "EMAIL_ERROR"
 	TokenError         ErrorType = "TOKEN_ERROR"
+)
+
+// Infrastructure Errors - errors related to external systems and services
+const (
+	DatabaseError    ErrorType = "DATABASE_ERROR"
+	ExternalAPIError ErrorType = "EXTERNAL_API_ERROR"
+	EmailError       ErrorType = "EMAIL_ERROR"
+)
+
+// System/Configuration Errors - errors related to system setup and configuration
+const (
+	ConfigurationError ErrorType = "CONFIGURATION_ERROR"
 )
 
 type AppError struct {
@@ -49,7 +58,7 @@ func Wrap(errorType ErrorType, message string, cause error) *AppError {
 	}
 }
 
-// Specific error constructors
+// Domain/Business Logic Error Constructors
 func NewValidationError(message string) *AppError {
 	return New(ValidationError, message)
 }
@@ -62,22 +71,24 @@ func NewAlreadyExistsError(message string) *AppError {
 	return New(AlreadyExistsError, message)
 }
 
-func NewExternalAPIError(message string, cause error) *AppError {
-	return Wrap(ExternalAPIError, message, cause)
+func NewTokenError(message string) *AppError {
+	return New(TokenError, message)
 }
 
+// Infrastructure Error Constructors
 func NewDatabaseError(message string, cause error) *AppError {
 	return Wrap(DatabaseError, message, cause)
 }
 
-func NewConfigurationError(message string, cause error) *AppError {
-	return Wrap(ConfigurationError, message, cause)
+func NewExternalAPIError(message string, cause error) *AppError {
+	return Wrap(ExternalAPIError, message, cause)
 }
 
 func NewEmailError(message string, cause error) *AppError {
 	return Wrap(EmailError, message, cause)
 }
 
-func NewTokenError(message string) *AppError {
-	return New(TokenError, message)
+// System/Configuration Error Constructors
+func NewConfigurationError(message string, cause error) *AppError {
+	return Wrap(ConfigurationError, message, cause)
 }

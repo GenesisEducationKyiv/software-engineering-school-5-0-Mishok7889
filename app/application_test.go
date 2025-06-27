@@ -15,17 +15,23 @@ func TestNewApplication(t *testing.T) {
 		// Restore original environment
 		os.Clearenv()
 		for _, env := range originalEnv {
-			if len(env) > 0 && len(env) > 1 {
-				for i, c := range env {
-					if c == '=' {
-						key := env[:i]
-						value := env[i+1:]
-						if key != "" {
-							_ = os.Setenv(key, value) // Ignore error in cleanup
-						}
-						break
-					}
+			if len(env) == 0 {
+				continue
+			}
+
+			for i, c := range env {
+				if c != '=' {
+					continue
 				}
+
+				key := env[:i]
+				value := env[i+1:]
+				if key == "" {
+					break
+				}
+
+				_ = os.Setenv(key, value) // Ignore error in cleanup
+				break
 			}
 		}
 	}()
@@ -68,38 +74,87 @@ func TestConfigDisplayer(t *testing.T) {
 	t.Run("MaskString", func(t *testing.T) {
 		displayer := NewConfigDisplayer()
 
-		// Test short strings
-		assert.Equal(t, "****", displayer.maskString("abc"))
-		assert.Equal(t, "****", displayer.maskString("a"))
-		assert.Equal(t, "****", displayer.maskString(""))
+		tests := []struct {
+			name     string
+			input    string
+			expected string
+		}{
+			{
+				name:     "EmptyString",
+				input:    "",
+				expected: "****",
+			},
+			{
+				name:     "SingleCharacter",
+				input:    "a",
+				expected: "****",
+			},
+			{
+				name:     "ShortString",
+				input:    "abc",
+				expected: "****",
+			},
+			{
+				name:     "SixteenCharacters",
+				input:    "verylongpassword", // 16 chars, should show first 4
+				expected: "very************",
+			},
+			{
+				name:     "EightCharacters",
+				input:    "password", // 8 chars, should show first 2
+				expected: "pa******",
+			},
+		}
 
-		// Test longer strings
-		masked := displayer.maskString("verylongpassword")
-		assert.Contains(t, masked, "*")
-		assert.True(t, len(masked) == len("verylongpassword"))
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				result := displayer.maskString(tt.input)
+				assert.Equal(t, tt.expected, result)
 
-		// Should show first quarter of characters
-		longString := "verylongpassword" // 16 chars, should show first 4
-		masked = displayer.maskString(longString)
-		assert.Equal(t, "very************", masked)
+				// Additional validation for longer strings
+				if len(tt.input) > 4 {
+					assert.Contains(t, result, "*")
+					assert.Equal(t, len(tt.input), len(result))
+				}
+			})
+		}
 	})
 
 	t.Run("IsSensitive", func(t *testing.T) {
 		displayer := NewConfigDisplayer()
 
-		// Test sensitive keys
-		assert.True(t, displayer.isSensitive("API_KEY"))
-		assert.True(t, displayer.isSensitive("PASSWORD"))
-		assert.True(t, displayer.isSensitive("SECRET"))
-		assert.True(t, displayer.isSensitive("TOKEN"))
-		assert.True(t, displayer.isSensitive("email_smtp_password"))
-		assert.True(t, displayer.isSensitive("WEATHER_API_KEY"))
+		tests := []struct {
+			name      string
+			key       string
+			sensitive bool
+		}{
+			// Sensitive keys
+			{"APIKey", "API_KEY", true},
+			{"Password", "PASSWORD", true},
+			{"Secret", "SECRET", true},
+			{"Token", "TOKEN", true},
+			{"EmailSMTPPassword", "email_smtp_password", true},
+			{"WeatherAPIKey", "WEATHER_API_KEY", true},
+			{"MixedCasePassword", "My_Password", true},
+			{"LowercaseSecret", "secret_key", true},
 
-		// Test non-sensitive keys
-		assert.False(t, displayer.isSensitive("PORT"))
-		assert.False(t, displayer.isSensitive("HOST"))
-		assert.False(t, displayer.isSensitive("DATABASE"))
-		assert.False(t, displayer.isSensitive("EMAIL"))
+			// Non-sensitive keys
+			{"Port", "PORT", false},
+			{"Host", "HOST", false},
+			{"Database", "DATABASE", false},
+			{"Email", "EMAIL", false},
+			{"Username", "USERNAME", false},
+			{"Config", "CONFIG", false},
+			{"URL", "URL", false},
+			{"Name", "NAME", false},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				result := displayer.isSensitive(tt.key)
+				assert.Equal(t, tt.sensitive, result)
+			})
+		}
 	})
 
 	t.Run("PrintAllEnvVars", func(t *testing.T) {
@@ -122,25 +177,56 @@ func TestConfigDisplayer(t *testing.T) {
 }
 
 func TestApplicationLifecycle(t *testing.T) {
-	t.Run("ShutdownWithNilDB", func(t *testing.T) {
-		app := &Application{
-			config: nil,
-			db:     nil,
-		}
+	tests := []struct {
+		name      string
+		setupApp  func() *Application
+		operation func(*Application) error
+		wantErr   bool
+	}{
+		{
+			name: "ShutdownWithNilDB",
+			setupApp: func() *Application {
+				return &Application{
+					config: nil,
+					db:     nil,
+				}
+			},
+			operation: func(app *Application) error {
+				return app.Shutdown()
+			},
+			wantErr: false,
+		},
+		{
+			name: "ConfigGetterWithNilConfig",
+			setupApp: func() *Application {
+				return &Application{
+					config: nil,
+				}
+			},
+			operation: func(app *Application) error {
+				config := app.Config()
+				if config != nil {
+					return assert.AnError // Should be nil
+				}
+				return nil
+			},
+			wantErr: false,
+		},
+	}
 
-		// Should not panic when shutting down with nil DB
-		assert.NotPanics(t, func() {
-			err := app.Shutdown()
-			assert.NoError(t, err)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			app := tt.setupApp()
+
+			// Should not panic
+			assert.NotPanics(t, func() {
+				err := tt.operation(app)
+				if tt.wantErr {
+					assert.Error(t, err)
+				} else {
+					assert.NoError(t, err)
+				}
+			})
 		})
-	})
-
-	t.Run("ConfigGetter", func(t *testing.T) {
-		app := &Application{
-			config: nil,
-		}
-
-		config := app.Config()
-		assert.Nil(t, config)
-	})
+	}
 }

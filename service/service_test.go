@@ -13,7 +13,7 @@ import (
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"weatherapi.app/config"
-	apperrors "weatherapi.app/errors"
+	weathererr "weatherapi.app/errors"
 	"weatherapi.app/models"
 	"weatherapi.app/providers"
 )
@@ -70,16 +70,16 @@ func TestWeatherService_GetWeather_EmptyCity(t *testing.T) {
 	assert.Error(t, err)
 	assert.Nil(t, weather)
 
-	var appErr *apperrors.AppError
+	var appErr *weathererr.AppError
 	assert.True(t, errors.As(err, &appErr))
-	assert.Equal(t, apperrors.ValidationError, appErr.Type)
+	assert.Equal(t, weathererr.ValidationError, appErr.Type)
 }
 
 func TestWeatherService_GetWeather_ProviderError(t *testing.T) {
 	mockProvider := new(mockWeatherProvider)
 	weatherService := NewWeatherService(mockProvider)
 
-	mockProvider.On("GetCurrentWeather", "InvalidCity").Return(nil, apperrors.NewNotFoundError("city not found"))
+	mockProvider.On("GetCurrentWeather", "InvalidCity").Return(nil, weathererr.NewNotFoundError("city not found"))
 
 	weather, err := weatherService.GetWeather("InvalidCity")
 
@@ -89,29 +89,41 @@ func TestWeatherService_GetWeather_ProviderError(t *testing.T) {
 }
 
 // Test EmailService with provider
-func TestEmailService_SendConfirmationEmail(t *testing.T) {
+func TestEmailService_SendConfirmationEmailWithParams(t *testing.T) {
 	mockProvider := new(mockEmailProvider)
 	emailService := NewEmailService(mockProvider)
 
 	mockProvider.On("SendEmail", "test@example.com", "Confirm your weather subscription for London", mock.AnythingOfType("string"), true).Return(nil)
 
-	err := emailService.SendConfirmationEmail("test@example.com", "http://example.com/confirm/token", "London")
+	params := ConfirmationEmailParams{
+		Email:      "test@example.com",
+		ConfirmURL: "http://example.com/confirm/token",
+		City:       "London",
+	}
+
+	err := emailService.SendConfirmationEmailWithParams(params)
 
 	assert.NoError(t, err)
 	mockProvider.AssertExpectations(t)
 }
 
-func TestEmailService_SendConfirmationEmail_EmptyEmail(t *testing.T) {
+func TestEmailService_SendConfirmationEmailWithParams_EmptyEmail(t *testing.T) {
 	mockProvider := new(mockEmailProvider)
 	emailService := NewEmailService(mockProvider)
 
-	err := emailService.SendConfirmationEmail("", "http://example.com/confirm/token", "London")
+	params := ConfirmationEmailParams{
+		Email:      "",
+		ConfirmURL: "http://example.com/confirm/token",
+		City:       "London",
+	}
+
+	err := emailService.SendConfirmationEmailWithParams(params)
 
 	assert.Error(t, err)
 
-	var appErr *apperrors.AppError
+	var appErr *weathererr.AppError
 	assert.True(t, errors.As(err, &appErr))
-	assert.Equal(t, apperrors.ValidationError, appErr.Type)
+	assert.Equal(t, weathererr.ValidationError, appErr.Type)
 }
 
 // Test WeatherAPIProvider with real HTTP server
@@ -167,9 +179,9 @@ func TestWeatherAPIProvider_GetCurrentWeather_NotFound(t *testing.T) {
 	assert.Error(t, err)
 	assert.Nil(t, weather)
 
-	var appErr *apperrors.AppError
+	var appErr *weathererr.AppError
 	assert.True(t, errors.As(err, &appErr))
-	assert.Equal(t, apperrors.NotFoundError, appErr.Type)
+	assert.Equal(t, weathererr.NotFoundError, appErr.Type)
 }
 
 // Mock implementations for SubscriptionService tests
@@ -251,23 +263,23 @@ type mockEmailService struct {
 	mock.Mock
 }
 
-func (m *mockEmailService) SendConfirmationEmail(email, confirmURL, city string) error {
-	args := m.Called(email, confirmURL, city)
+func (m *mockEmailService) SendConfirmationEmailWithParams(params ConfirmationEmailParams) error {
+	args := m.Called(params)
 	return args.Error(0)
 }
 
-func (m *mockEmailService) SendWelcomeEmail(email, city, frequency, unsubscribeURL string) error {
-	args := m.Called(email, city, frequency, unsubscribeURL)
+func (m *mockEmailService) SendWelcomeEmailWithParams(params WelcomeEmailParams) error {
+	args := m.Called(params)
 	return args.Error(0)
 }
 
-func (m *mockEmailService) SendUnsubscribeConfirmationEmail(email, city string) error {
-	args := m.Called(email, city)
+func (m *mockEmailService) SendUnsubscribeConfirmationEmailWithParams(params UnsubscribeEmailParams) error {
+	args := m.Called(params)
 	return args.Error(0)
 }
 
-func (m *mockEmailService) SendWeatherUpdateEmail(email, city string, weather *models.WeatherResponse, unsubscribeURL string) error {
-	args := m.Called(email, city, weather, unsubscribeURL)
+func (m *mockEmailService) SendWeatherUpdateEmailWithParams(params WeatherUpdateEmailParams) error {
+	args := m.Called(params)
 	return args.Error(0)
 }
 
@@ -321,7 +333,11 @@ func TestSubscriptionService_Subscribe_Success(t *testing.T) {
 		ID:    1,
 		Token: "test-token",
 	}, nil)
-	mockEmailService.On("SendConfirmationEmail", "test@example.com", "http://localhost:8080/api/confirm/test-token", "London").Return(nil)
+	mockEmailService.On("SendConfirmationEmailWithParams", ConfirmationEmailParams{
+		Email:      "test@example.com",
+		ConfirmURL: "http://localhost:8080/api/confirm/test-token",
+		City:       "London",
+	}).Return(nil)
 
 	err = service.Subscribe(req)
 
@@ -347,9 +363,9 @@ func TestSubscriptionService_Subscribe_ValidationError(t *testing.T) {
 
 	assert.Error(t, err)
 
-	var appErr *apperrors.AppError
+	var appErr *weathererr.AppError
 	assert.True(t, errors.As(err, &appErr))
-	assert.Equal(t, apperrors.ValidationError, appErr.Type)
+	assert.Equal(t, weathererr.ValidationError, appErr.Type)
 	assert.Contains(t, appErr.Message, "email is required")
 }
 
@@ -380,8 +396,8 @@ func TestSubscriptionService_Subscribe_AlreadyExists(t *testing.T) {
 
 	assert.Error(t, err)
 
-	var appErr *apperrors.AppError
+	var appErr *weathererr.AppError
 	assert.True(t, errors.As(err, &appErr))
-	assert.Equal(t, apperrors.AlreadyExistsError, appErr.Type)
+	assert.Equal(t, weathererr.AlreadyExistsError, appErr.Type)
 	mockSubRepo.AssertExpectations(t)
 }

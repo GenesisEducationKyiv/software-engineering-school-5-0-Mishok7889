@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"weatherapi.app/config"
-	apperrors "weatherapi.app/errors"
+	weathererr "weatherapi.app/errors"
 )
 
 func TestWeatherAPIProvider_GetCurrentWeather(t *testing.T) {
@@ -61,9 +61,9 @@ func TestWeatherAPIProvider_GetCurrentWeather(t *testing.T) {
 		assert.Error(t, err)
 		assert.Nil(t, weather)
 
-		var appErr *apperrors.AppError
+		var appErr *weathererr.AppError
 		assert.True(t, errors.As(err, &appErr))
-		assert.Equal(t, apperrors.ValidationError, appErr.Type)
+		assert.Equal(t, weathererr.ValidationError, appErr.Type)
 		assert.Contains(t, appErr.Message, "city cannot be empty")
 	})
 
@@ -84,9 +84,9 @@ func TestWeatherAPIProvider_GetCurrentWeather(t *testing.T) {
 		assert.Error(t, err)
 		assert.Nil(t, weather)
 
-		var appErr *apperrors.AppError
+		var appErr *weathererr.AppError
 		assert.True(t, errors.As(err, &appErr))
-		assert.Equal(t, apperrors.NotFoundError, appErr.Type)
+		assert.Equal(t, weathererr.NotFoundError, appErr.Type)
 		assert.Contains(t, appErr.Message, "city not found")
 	})
 
@@ -107,9 +107,9 @@ func TestWeatherAPIProvider_GetCurrentWeather(t *testing.T) {
 		assert.Error(t, err)
 		assert.Nil(t, weather)
 
-		var appErr *apperrors.AppError
+		var appErr *weathererr.AppError
 		assert.True(t, errors.As(err, &appErr))
-		assert.Equal(t, apperrors.ExternalAPIError, appErr.Type)
+		assert.Equal(t, weathererr.ExternalAPIError, appErr.Type)
 	})
 
 	t.Run("InvalidJSONResponse", func(t *testing.T) {
@@ -132,9 +132,9 @@ func TestWeatherAPIProvider_GetCurrentWeather(t *testing.T) {
 		assert.Error(t, err)
 		assert.Nil(t, weather)
 
-		var appErr *apperrors.AppError
+		var appErr *weathererr.AppError
 		assert.True(t, errors.As(err, &appErr))
-		assert.Equal(t, apperrors.ExternalAPIError, appErr.Type)
+		assert.Equal(t, weathererr.ExternalAPIError, appErr.Type)
 		assert.Contains(t, appErr.Message, "failed to decode weather data")
 	})
 
@@ -158,9 +158,9 @@ func TestWeatherAPIProvider_GetCurrentWeather(t *testing.T) {
 		assert.Error(t, err)
 		assert.Nil(t, weather)
 
-		var appErr *apperrors.AppError
+		var appErr *weathererr.AppError
 		assert.True(t, errors.As(err, &appErr))
-		assert.Equal(t, apperrors.ExternalAPIError, appErr.Type)
+		assert.Equal(t, weathererr.ExternalAPIError, appErr.Type)
 		assert.Contains(t, appErr.Message, "missing current field")
 	})
 
@@ -189,9 +189,9 @@ func TestWeatherAPIProvider_GetCurrentWeather(t *testing.T) {
 		assert.Error(t, err)
 		assert.Nil(t, weather)
 
-		var appErr *apperrors.AppError
+		var appErr *weathererr.AppError
 		assert.True(t, errors.As(err, &appErr))
-		assert.Equal(t, apperrors.ExternalAPIError, appErr.Type)
+		assert.Equal(t, weathererr.ExternalAPIError, appErr.Type)
 		assert.Contains(t, appErr.Message, "missing condition field")
 	})
 }
@@ -214,9 +214,9 @@ func TestSMTPEmailProvider_SendEmail(t *testing.T) {
 		err := provider.SendEmail("", "Subject", "Body", false)
 		assert.Error(t, err)
 
-		var appErr *apperrors.AppError
+		var appErr *weathererr.AppError
 		assert.True(t, errors.As(err, &appErr))
-		assert.Equal(t, apperrors.ValidationError, appErr.Type)
+		assert.Equal(t, weathererr.ValidationError, appErr.Type)
 		assert.Contains(t, appErr.Message, "recipient email cannot be empty")
 	})
 
@@ -235,9 +235,9 @@ func TestSMTPEmailProvider_SendEmail(t *testing.T) {
 
 		assert.Error(t, err)
 
-		var appErr *apperrors.AppError
+		var appErr *weathererr.AppError
 		assert.True(t, errors.As(err, &appErr))
-		assert.Equal(t, apperrors.ValidationError, appErr.Type)
+		assert.Equal(t, weathererr.ValidationError, appErr.Type)
 		assert.Contains(t, appErr.Message, "recipient email cannot be empty")
 	})
 
@@ -256,9 +256,9 @@ func TestSMTPEmailProvider_SendEmail(t *testing.T) {
 
 		assert.Error(t, err)
 
-		var appErr *apperrors.AppError
+		var appErr *weathererr.AppError
 		assert.True(t, errors.As(err, &appErr))
-		assert.Equal(t, apperrors.ValidationError, appErr.Type)
+		assert.Equal(t, weathererr.ValidationError, appErr.Type)
 		assert.Contains(t, appErr.Message, "email subject cannot be empty")
 	})
 

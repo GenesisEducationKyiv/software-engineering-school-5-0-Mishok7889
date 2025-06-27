@@ -3,13 +3,13 @@ package api
 import (
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 	"weatherapi.app/config"
-	apperrors "weatherapi.app/errors"
+	weathererr "weatherapi.app/errors"
 	"weatherapi.app/models"
 	"weatherapi.app/service"
 )
@@ -70,84 +70,84 @@ func (s *Server) GetRouter() *gin.Engine {
 func (s *Server) getWeather(c *gin.Context) {
 	city := c.Query("city")
 	if city == "" {
-		s.handleError(c, apperrors.NewValidationError("city parameter is required"))
+		s.handleError(c, weathererr.NewValidationError("city parameter is required"))
 		return
 	}
 
-	log.Printf("[DEBUG] Getting weather for city: %s\n", city)
+	slog.Debug("Getting weather for city", "city", city)
 	weather, err := s.weatherService.GetWeather(city)
 	if err != nil {
-		log.Printf("[ERROR] Weather service error: %v\n", err)
+		slog.Error("Weather service error", "error", err, "city", city)
 		s.handleError(c, err)
 		return
 	}
 
-	log.Printf("[DEBUG] Weather result: %+v\n", weather)
+	slog.Debug("Weather result", "weather", weather, "city", city)
 	c.JSON(http.StatusOK, weather)
 }
 
 func (s *Server) subscribe(c *gin.Context) {
 	var req models.SubscriptionRequest
-	log.Println("[DEBUG] Handling subscription request")
+	slog.Debug("Handling subscription request")
 
 	if err := c.ShouldBind(&req); err != nil {
-		log.Printf("[ERROR] Binding error: %v\n", err)
-		s.handleError(c, apperrors.NewValidationError("invalid request format"))
+		slog.Error("Request binding error", "error", err)
+		s.handleError(c, weathererr.NewValidationError("invalid request format"))
 		return
 	}
 
-	log.Printf("[DEBUG] Subscription request received: %+v\n", req)
+	slog.Debug("Subscription request received", "email", req.Email, "city", req.City, "frequency", req.Frequency)
 
 	if err := s.subscriptionService.Subscribe(&req); err != nil {
-		log.Printf("[ERROR] Subscription error: %v\n", err)
+		slog.Error("Subscription error", "error", err, "email", req.Email, "city", req.City)
 		s.handleError(c, err)
 		return
 	}
 
-	log.Println("[DEBUG] Subscription created successfully")
+	slog.Debug("Subscription created successfully", "email", req.Email, "city", req.City)
 	c.JSON(http.StatusOK, gin.H{"message": "Subscription successful. Confirmation email sent."})
 }
 
 func (s *Server) confirmSubscription(c *gin.Context) {
 	token := c.Param("token")
 	if token == "" {
-		s.handleError(c, apperrors.NewValidationError("token parameter is required"))
+		s.handleError(c, weathererr.NewValidationError("token parameter is required"))
 		return
 	}
 
-	log.Printf("[DEBUG] Confirming subscription with token: %s\n", token)
+	slog.Debug("Confirming subscription", "token", token)
 
 	if err := s.subscriptionService.ConfirmSubscription(token); err != nil {
-		log.Printf("[ERROR] Confirmation error: %v\n", err)
+		slog.Error("Confirmation error", "error", err, "token", token)
 		s.handleError(c, err)
 		return
 	}
 
-	log.Println("[DEBUG] Subscription confirmed successfully")
+	slog.Debug("Subscription confirmed successfully", "token", token)
 	c.JSON(http.StatusOK, gin.H{"message": "Subscription confirmed successfully"})
 }
 
 func (s *Server) unsubscribe(c *gin.Context) {
 	token := c.Param("token")
 	if token == "" {
-		s.handleError(c, apperrors.NewValidationError("token parameter is required"))
+		s.handleError(c, weathererr.NewValidationError("token parameter is required"))
 		return
 	}
 
-	log.Printf("[DEBUG] Unsubscribing with token: %s\n", token)
+	slog.Debug("Unsubscribing", "token", token)
 
 	if err := s.subscriptionService.Unsubscribe(token); err != nil {
-		log.Printf("[ERROR] Unsubscribe error: %v\n", err)
+		slog.Error("Unsubscribe error", "error", err, "token", token)
 		s.handleError(c, err)
 		return
 	}
 
-	log.Println("[DEBUG] Unsubscribed successfully")
+	slog.Debug("Unsubscribed successfully", "token", token)
 	c.JSON(http.StatusOK, gin.H{"message": "Unsubscribed successfully"})
 }
 
 func (s *Server) debugEndpoint(c *gin.Context) {
-	log.Println("[DEBUG] Debug endpoint called")
+	slog.Debug("Debug endpoint called")
 
 	var subscriptionCount int64
 	dbErr := s.db.Model(&models.Subscription{}).Count(&subscriptionCount).Error
@@ -184,38 +184,40 @@ func (s *Server) debugEndpoint(c *gin.Context) {
 
 // handleError handles different types of application errors
 func (s *Server) handleError(c *gin.Context, err error) {
-	var appErr *apperrors.AppError
+	var appErr *weathererr.AppError
 	var statusCode int
 	var message string
 
-	if errors.As(err, &appErr) {
-		switch appErr.Type {
-		case apperrors.ValidationError:
-			statusCode = http.StatusBadRequest
-			message = appErr.Message
-		case apperrors.NotFoundError:
-			statusCode = http.StatusNotFound
-			message = appErr.Message
-		case apperrors.AlreadyExistsError:
-			statusCode = http.StatusConflict
-			message = appErr.Message
-		case apperrors.ExternalAPIError:
-			statusCode = http.StatusServiceUnavailable
-			message = "External service unavailable"
-		case apperrors.DatabaseError:
-			statusCode = http.StatusInternalServerError
-			message = "Internal server error"
-		case apperrors.EmailError:
-			statusCode = http.StatusServiceUnavailable
-			message = "Unable to send email"
-		case apperrors.TokenError:
-			statusCode = http.StatusBadRequest
-			message = appErr.Message
-		default:
-			statusCode = http.StatusInternalServerError
-			message = "Internal server error"
-		}
-	} else {
+	if !errors.As(err, &appErr) {
+		statusCode = http.StatusInternalServerError
+		message = "Internal server error"
+		c.JSON(statusCode, models.ErrorResponse{Error: message})
+		return
+	}
+
+	switch appErr.Type {
+	case weathererr.ValidationError:
+		statusCode = http.StatusBadRequest
+		message = appErr.Message
+	case weathererr.NotFoundError:
+		statusCode = http.StatusNotFound
+		message = appErr.Message
+	case weathererr.AlreadyExistsError:
+		statusCode = http.StatusConflict
+		message = appErr.Message
+	case weathererr.ExternalAPIError:
+		statusCode = http.StatusServiceUnavailable
+		message = "External service unavailable"
+	case weathererr.DatabaseError:
+		statusCode = http.StatusInternalServerError
+		message = "Internal server error"
+	case weathererr.EmailError:
+		statusCode = http.StatusServiceUnavailable
+		message = "Unable to send email"
+	case weathererr.TokenError:
+		statusCode = http.StatusBadRequest
+		message = appErr.Message
+	default:
 		statusCode = http.StatusInternalServerError
 		message = "Internal server error"
 	}
