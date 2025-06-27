@@ -20,15 +20,47 @@ func NewSubscriptionRepository(db *gorm.DB) *SubscriptionRepository {
 	return &SubscriptionRepository{db: db}
 }
 
+// validateEmailAndCity validates that both email and city are not empty
+func (r *SubscriptionRepository) validateEmailAndCity(email, city string) error {
+	if email == "" {
+		return errors.NewValidationError("email cannot be empty")
+	}
+	if city == "" {
+		return errors.NewValidationError("city cannot be empty")
+	}
+	return nil
+}
+
+// validateID validates that an ID is not zero
+func (r *SubscriptionRepository) validateID(id uint) error {
+	if id == 0 {
+		return errors.NewValidationError("subscription ID cannot be zero")
+	}
+	return nil
+}
+
+// validateSubscription validates that a subscription is not nil
+func (r *SubscriptionRepository) validateSubscription(subscription *models.Subscription) error {
+	if subscription == nil {
+		return errors.NewValidationError("subscription cannot be nil")
+	}
+	return nil
+}
+
+// validateFrequency validates that frequency is not empty
+func (r *SubscriptionRepository) validateFrequency(frequency string) error {
+	if frequency == "" {
+		return errors.NewValidationError("frequency cannot be empty")
+	}
+	return nil
+}
+
 // FindByEmail retrieves a subscription by email and city
 func (r *SubscriptionRepository) FindByEmail(email, city string) (*models.Subscription, error) {
 	slog.Debug("Finding subscription by email and city", "email", email, "city", city)
 
-	if email == "" {
-		return nil, errors.NewValidationError("email cannot be empty")
-	}
-	if city == "" {
-		return nil, errors.NewValidationError("city cannot be empty")
+	if err := r.validateEmailAndCity(email, city); err != nil {
+		return nil, err
 	}
 
 	var subscription models.Subscription
@@ -50,8 +82,8 @@ func (r *SubscriptionRepository) FindByEmail(email, city string) (*models.Subscr
 func (r *SubscriptionRepository) FindByID(id uint) (*models.Subscription, error) {
 	slog.Debug("Finding subscription by ID", "id", id)
 
-	if id == 0 {
-		return nil, errors.NewValidationError("subscription ID cannot be zero")
+	if err := r.validateID(id); err != nil {
+		return nil, err
 	}
 
 	var subscription models.Subscription
@@ -70,8 +102,8 @@ func (r *SubscriptionRepository) FindByID(id uint) (*models.Subscription, error)
 
 // Create persists a new subscription to the database
 func (r *SubscriptionRepository) Create(subscription *models.Subscription) error {
-	if subscription == nil {
-		return errors.NewValidationError("subscription cannot be nil")
+	if err := r.validateSubscription(subscription); err != nil {
+		return err
 	}
 
 	slog.Debug("Creating subscription", "email", subscription.Email, "city", subscription.City)
@@ -88,8 +120,8 @@ func (r *SubscriptionRepository) Create(subscription *models.Subscription) error
 
 // Update modifies an existing subscription
 func (r *SubscriptionRepository) Update(subscription *models.Subscription) error {
-	if subscription == nil {
-		return errors.NewValidationError("subscription cannot be nil")
+	if err := r.validateSubscription(subscription); err != nil {
+		return err
 	}
 
 	slog.Debug("Updating subscription", "id", subscription.ID, "email", subscription.Email, "city", subscription.City)
@@ -106,8 +138,8 @@ func (r *SubscriptionRepository) Update(subscription *models.Subscription) error
 
 // Delete removes a subscription from the database
 func (r *SubscriptionRepository) Delete(subscription *models.Subscription) error {
-	if subscription == nil {
-		return errors.NewValidationError("subscription cannot be nil")
+	if err := r.validateSubscription(subscription); err != nil {
+		return err
 	}
 
 	slog.Debug("Deleting subscription", "id", subscription.ID, "email", subscription.Email, "city", subscription.City)
@@ -126,8 +158,8 @@ func (r *SubscriptionRepository) Delete(subscription *models.Subscription) error
 func (r *SubscriptionRepository) GetSubscriptionsForUpdates(frequency string) ([]models.Subscription, error) {
 	slog.Debug("Getting subscriptions for updates", "frequency", frequency)
 
-	if frequency == "" {
-		return nil, errors.NewValidationError("frequency cannot be empty")
+	if err := r.validateFrequency(frequency); err != nil {
+		return nil, err
 	}
 
 	var subscriptions []models.Subscription
@@ -151,18 +183,55 @@ func NewTokenRepository(db *gorm.DB) *TokenRepository {
 	return &TokenRepository{db: db}
 }
 
+// CreateTokenParams holds parameters for creating a token
+type CreateTokenParams struct {
+	SubscriptionID uint
+	TokenType      string
+	ExpiresIn      time.Duration
+}
+
+// validateCreateTokenParams validates parameters for token creation
+func (r *TokenRepository) validateCreateTokenParams(params CreateTokenParams) error {
+	if params.SubscriptionID == 0 {
+		return errors.NewValidationError("subscription ID cannot be zero")
+	}
+	if params.TokenType == "" {
+		return errors.NewValidationError("token type cannot be empty")
+	}
+	if params.ExpiresIn <= 0 {
+		return errors.NewValidationError("expiration duration must be positive")
+	}
+	return nil
+}
+
+// validateTokenString validates that a token string is not empty
+func (r *TokenRepository) validateTokenString(tokenStr string) error {
+	if tokenStr == "" {
+		return errors.NewValidationError("token cannot be empty")
+	}
+	return nil
+}
+
+// validateToken validates that a token is not nil
+func (r *TokenRepository) validateToken(token *models.Token) error {
+	if token == nil {
+		return errors.NewValidationError("token cannot be nil")
+	}
+	return nil
+}
+
 // CreateToken generates and stores a new token for a subscription
 func (r *TokenRepository) CreateToken(subscriptionID uint, tokenType string, expiresIn time.Duration) (*models.Token, error) {
 	slog.Debug("Creating token", "subscriptionID", subscriptionID, "type", tokenType, "expiresIn", expiresIn)
 
-	if subscriptionID == 0 {
-		return nil, errors.NewValidationError("subscription ID cannot be zero")
+	params := CreateTokenParams{
+		SubscriptionID: subscriptionID,
+		TokenType:      tokenType,
+		ExpiresIn:      expiresIn,
 	}
-	if tokenType == "" {
-		return nil, errors.NewValidationError("token type cannot be empty")
-	}
-	if expiresIn <= 0 {
-		return nil, errors.NewValidationError("expiration duration must be positive")
+
+	if err := r.validateCreateTokenParams(params); err != nil {
+		return nil, err
 	}
 
 	token := &models.Token{
@@ -186,8 +255,8 @@ func (r *TokenRepository) CreateToken(subscriptionID uint, tokenType string, exp
 func (r *TokenRepository) FindByToken(tokenStr string) (*models.Token, error) {
 	slog.Debug("Finding token by value", "token", tokenStr)
 
-	if tokenStr == "" {
-		return nil, errors.NewValidationError("token cannot be empty")
+	if err := r.validateTokenString(tokenStr); err != nil {
+		return nil, err
 	}
 
 	var token models.Token
@@ -206,8 +275,8 @@ func (r *TokenRepository) FindByToken(tokenStr string) (*models.Token, error) {
 
 // DeleteToken removes a token from the database
 func (r *TokenRepository) DeleteToken(token *models.Token) error {
-	if token == nil {
-		return errors.NewValidationError("token cannot be nil")
+	if err := r.validateToken(token); err != nil {
+		return err
 	}
 
 	slog.Debug("Deleting token", "tokenID", token.ID, "type", token.Type, "subscriptionID", token.SubscriptionID)
