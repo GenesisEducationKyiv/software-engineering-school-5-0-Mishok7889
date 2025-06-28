@@ -1,8 +1,9 @@
 package main
 
 import (
-	"log"
+	"log/slog"
 	"net/http"
+	"os"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -88,8 +89,9 @@ func main() {
 		c.JSON(http.StatusOK, weather)
 	})
 
-	log.Println("Mock Weather API server starting on :8080")
+	slog.Info("Mock Weather API server starting on :8080")
 	if err := r.Run(":8080"); err != nil {
-		log.Fatal("Failed to start server:", err)
+		slog.Error("Failed to start server", "error", err)
+		os.Exit(1)
 	}
 }
