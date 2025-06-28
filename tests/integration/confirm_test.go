@@ -10,12 +10,23 @@ import (
 	"weatherapi.app/tests/integration/helpers"
 )
 
+const (
+	// Confirmation test constants
+	subscriptionConfirmed = "Subscription confirmed"
+	tokenTypeUnsubscribe  = "unsubscribe"
+	tokenTypeConfirmation = "confirmation"
+	welcomeEmailSubject   = "Welcome to Weather Updates"
+	tokenNotFoundError    = "token not found or expired"
+	invalidTokenTypeError = "invalid token type"
+	internalServerError   = "Internal server error"
+)
+
 func (s *IntegrationTestSuite) TestConfirmSubscription_Success() {
 	err := helpers.ClearEmails()
 	s.Require().NoError(err)
 
 	subscription := s.CreateTestSubscription("test@example.com", "London", "daily", false)
-	token := s.CreateTestToken(subscription.ID, "confirmation", 24*time.Hour)
+	token := s.CreateTestToken(subscription.ID, tokenTypeConfirmation, 24*time.Hour)
 
 	req := httptest.NewRequest("GET", "/api/confirm/"+token.Token, nil)
 	w := httptest.NewRecorder()
@@ -27,7 +38,7 @@ func (s *IntegrationTestSuite) TestConfirmSubscription_Success() {
 	var response map[string]string
 	err = json.Unmarshal(w.Body.Bytes(), &response)
 	s.NoError(err)
-	s.Contains(response["message"], "Subscription confirmed")
+	s.Contains(response["message"], subscriptionConfirmed)
 
 	var confirmedSubscription models.Subscription
 	err = s.db.First(&confirmedSubscription, subscription.ID).Error
@@ -38,10 +49,10 @@ func (s *IntegrationTestSuite) TestConfirmSubscription_Success() {
 	err = s.db.First(&deletedToken, token.ID).Error
 	s.Error(err)
 
-	s.AssertTokenExists(subscription.ID, "unsubscribe")
+	s.AssertTokenExists(subscription.ID, tokenTypeUnsubscribe)
 
 	time.Sleep(2 * time.Second)
-	s.AssertEmailSent("test@example.com", "Welcome to Weather Updates")
+	s.AssertEmailSent("test@example.com", welcomeEmailSubject)
 }
 
 func (s *IntegrationTestSuite) TestConfirmSubscription_InvalidToken() {
@@ -55,12 +66,12 @@ func (s *IntegrationTestSuite) TestConfirmSubscription_InvalidToken() {
 	var errorResponse models.ErrorResponse
 	err := json.Unmarshal(w.Body.Bytes(), &errorResponse)
 	s.NoError(err)
-	s.Equal("token not found or expired", errorResponse.Error)
+	s.Equal(tokenNotFoundError, errorResponse.Error)
 }
 
 func (s *IntegrationTestSuite) TestConfirmSubscription_ExpiredToken() {
 	subscription := s.CreateTestSubscription("test@example.com", "London", "daily", false)
-	token := s.CreateTestToken(subscription.ID, "confirmation", -1*time.Hour)
+	token := s.CreateTestToken(subscription.ID, tokenTypeConfirmation, -1*time.Hour)
 
 	req := httptest.NewRequest("GET", "/api/confirm/"+token.Token, nil)
 	w := httptest.NewRecorder()
@@ -72,12 +83,12 @@ func (s *IntegrationTestSuite) TestConfirmSubscription_ExpiredToken() {
 	var errorResponse models.ErrorResponse
 	err := json.Unmarshal(w.Body.Bytes(), &errorResponse)
 	s.NoError(err)
-	s.Equal("token not found or expired", errorResponse.Error)
+	s.Equal(tokenNotFoundError, errorResponse.Error)
 }
 
 func (s *IntegrationTestSuite) TestConfirmSubscription_WrongTokenType() {
 	subscription := s.CreateTestSubscription("test@example.com", "London", "daily", false)
-	token := s.CreateTestToken(subscription.ID, "unsubscribe", 24*time.Hour)
+	token := s.CreateTestToken(subscription.ID, tokenTypeUnsubscribe, 24*time.Hour)
 
 	req := httptest.NewRequest("GET", "/api/confirm/"+token.Token, nil)
 	w := httptest.NewRecorder()
@@ -89,13 +100,13 @@ func (s *IntegrationTestSuite) TestConfirmSubscription_WrongTokenType() {
 	var errorResponse models.ErrorResponse
 	err := json.Unmarshal(w.Body.Bytes(), &errorResponse)
 	s.NoError(err)
-	s.Equal("invalid token type", errorResponse.Error)
+	s.Equal(invalidTokenTypeError, errorResponse.Error)
 }
 
 func (s *IntegrationTestSuite) TestConfirmSubscription_SubscriptionNotFound() {
 	// Create a subscription first, then delete it to create an orphaned token scenario
 	subscription := s.CreateTestSubscription("orphan@example.com", "London", "daily", false)
-	token := s.CreateTestToken(subscription.ID, "confirmation", 24*time.Hour)
+	token := s.CreateTestToken(subscription.ID, tokenTypeConfirmation, 24*time.Hour)
 
 	// Now delete the subscription, leaving the token orphaned
 	err := s.db.Delete(&models.Subscription{}, subscription.ID).Error
@@ -111,7 +122,7 @@ func (s *IntegrationTestSuite) TestConfirmSubscription_SubscriptionNotFound() {
 	var errorResponse models.ErrorResponse
 	err = json.Unmarshal(w.Body.Bytes(), &errorResponse)
 	s.NoError(err)
-	s.Equal("Internal server error", errorResponse.Error)
+	s.Equal(internalServerError, errorResponse.Error)
 }
 
 func (s *IntegrationTestSuite) TestConfirmSubscription_AlreadyConfirmed() {
@@ -119,7 +130,7 @@ func (s *IntegrationTestSuite) TestConfirmSubscription_AlreadyConfirmed() {
 	s.Require().NoError(err)
 
 	subscription := s.CreateTestSubscription("test@example.com", "London", "daily", true)
-	token := s.CreateTestToken(subscription.ID, "confirmation", 24*time.Hour)
+	token := s.CreateTestToken(subscription.ID, tokenTypeConfirmation, 24*time.Hour)
 
 	req := httptest.NewRequest("GET", "/api/confirm/"+token.Token, nil)
 	w := httptest.NewRecorder()
@@ -131,10 +142,10 @@ func (s *IntegrationTestSuite) TestConfirmSubscription_AlreadyConfirmed() {
 	var response map[string]string
 	err = json.Unmarshal(w.Body.Bytes(), &response)
 	s.NoError(err)
-	s.Contains(response["message"], "Subscription confirmed")
+	s.Contains(response["message"], subscriptionConfirmed)
 
 	time.Sleep(2 * time.Second)
-	s.AssertEmailSent("test@example.com", "Welcome to Weather Updates")
+	s.AssertEmailSent("test@example.com", welcomeEmailSubject)
 }
 
 func (s *IntegrationTestSuite) TestConfirmSubscription_HourlyFrequency() {
@@ -142,7 +153,7 @@ func (s *IntegrationTestSuite) TestConfirmSubscription_HourlyFrequency() {
 	s.Require().NoError(err)
 
 	subscription := s.CreateTestSubscription("test@example.com", "Paris", "hourly", false)
-	token := s.CreateTestToken(subscription.ID, "confirmation", 24*time.Hour)
+	token := s.CreateTestToken(subscription.ID, tokenTypeConfirmation, 24*time.Hour)
 
 	req := httptest.NewRequest("GET", "/api/confirm/"+token.Token, nil)
 	w := httptest.NewRecorder()
@@ -158,5 +169,5 @@ func (s *IntegrationTestSuite) TestConfirmSubscription_HourlyFrequency() {
 	s.Equal("hourly", confirmedSubscription.Frequency)
 
 	time.Sleep(2 * time.Second)
-	s.AssertEmailSent("test@example.com", "Welcome to Weather Updates")
+	s.AssertEmailSent("test@example.com", welcomeEmailSubject)
 }
