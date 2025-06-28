@@ -586,9 +586,10 @@ func TestConfig_LoadWithMailHogCredentials(t *testing.T) {
 					break
 				}
 			}
-			if len(parts) == 2 && parts[0] != "" {
-				_ = os.Setenv(parts[0], parts[1])
+			if len(parts) != 2 || parts[0] == "" {
+				continue
 			}
+			_ = os.Setenv(parts[0], parts[1])
 		}
 	}()
 
