@@ -529,7 +529,18 @@ func TestProviderManager_ChainOfResponsibility_Complete(t *testing.T) {
 			}
 
 			manager, err := providers.NewProviderManager(tt.config)
+
+			// Handle the "All providers fail" case - now fails at creation time due to fail-fast
+			if tt.name == "All providers fail" {
+				assert.Error(t, err)
+				assert.Nil(t, manager)
+				assert.Contains(t, err.Error(), "no weather providers configured")
+				return // Exit early for this test case
+			}
+
+			// For all other cases, manager creation should succeed
 			assert.NoError(t, err)
+			assert.NotNil(t, manager)
 
 			weatherService := NewWeatherService(manager)
 
@@ -539,12 +550,7 @@ func TestProviderManager_ChainOfResponsibility_Complete(t *testing.T) {
 			if tt.expectedError {
 				assert.Error(t, err)
 				assert.Nil(t, weather)
-				// For the "All providers fail" case, we now get "no weather providers configured"
-				if tt.name == "All providers fail" {
-					assert.Contains(t, err.Error(), "no weather providers configured")
-				} else {
-					assert.Contains(t, err.Error(), "all weather providers failed")
-				}
+				assert.Contains(t, err.Error(), "all weather providers failed")
 			} else {
 				assert.NoError(t, err)
 				assert.NotNil(t, weather)

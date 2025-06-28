@@ -14,15 +14,22 @@ type AccuWeatherProvider struct {
 	httpClient *http.Client
 }
 
+// MetricTemperature represents temperature value in metric units
+type MetricTemperature struct {
+	Value float64 `json:"Value"`
+}
+
+// Temperature represents temperature data with metric information
+type Temperature struct {
+	Metric MetricTemperature `json:"Metric"`
+}
+
+// AccuWeatherResponse represents the response structure from AccuWeather API
 type AccuWeatherResponse struct {
-	Temperature struct {
-		Metric struct {
-			Value float64 `json:"Value"`
-		} `json:"Metric"`
-	} `json:"Temperature"`
-	RelativeHumidity float64 `json:"RelativeHumidity"`
-	WeatherText      string  `json:"WeatherText"`
-	Message          string  `json:"message,omitempty"`
+	Temperature      Temperature `json:"Temperature"`
+	RelativeHumidity float64     `json:"RelativeHumidity"`
+	WeatherText      string      `json:"WeatherText"`
+	Message          string      `json:"message,omitempty"`
 }
 
 func NewAccuWeatherProvider(apiKey string) WeatherProvider {
