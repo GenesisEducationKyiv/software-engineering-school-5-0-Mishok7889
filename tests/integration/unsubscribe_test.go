@@ -102,12 +102,12 @@ func (s *IntegrationTestSuite) TestUnsubscribe_SubscriptionNotFound() {
 
 	s.router.ServeHTTP(w, req)
 
-	s.Equal(http.StatusInternalServerError, w.Code)
+	s.Equal(http.StatusNotFound, w.Code)
 
 	var errorResponse models.ErrorResponse
 	err = json.Unmarshal(w.Body.Bytes(), &errorResponse)
 	s.NoError(err)
-	s.Equal("Internal server error", errorResponse.Error)
+	s.Equal("subscription not found", errorResponse.Error)
 }
 
 func (s *IntegrationTestSuite) TestUnsubscribe_DifferentCities() {

@@ -18,7 +18,7 @@ const (
 	welcomeEmailSubject   = "Welcome to Weather Updates"
 	tokenNotFoundError    = "token not found or expired"
 	invalidTokenTypeError = "invalid token type"
-	internalServerError   = "Internal server error"
+	subscriptionNotFoundError = "subscription not found"
 )
 
 func (s *IntegrationTestSuite) TestConfirmSubscription_Success() {
@@ -117,12 +117,12 @@ func (s *IntegrationTestSuite) TestConfirmSubscription_SubscriptionNotFound() {
 
 	s.router.ServeHTTP(w, req)
 
-	s.Equal(http.StatusInternalServerError, w.Code)
+	s.Equal(http.StatusNotFound, w.Code)
 
 	var errorResponse models.ErrorResponse
 	err = json.Unmarshal(w.Body.Bytes(), &errorResponse)
 	s.NoError(err)
-	s.Equal(internalServerError, errorResponse.Error)
+	s.Equal(subscriptionNotFoundError, errorResponse.Error)
 }
 
 func (s *IntegrationTestSuite) TestConfirmSubscription_AlreadyConfirmed() {
