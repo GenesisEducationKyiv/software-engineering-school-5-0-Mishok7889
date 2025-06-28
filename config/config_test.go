@@ -11,9 +11,13 @@ import (
 )
 
 func TestLoadConfig(t *testing.T) {
-	// Test case 1: Required fields - should return error when missing
+	// Test case 1: Required fields - should return error when no weather provider API keys are configured
 	t.Run("RequiredFieldsMissing", func(t *testing.T) {
 		os.Clearenv()
+
+		// Set required email fields but no weather API keys
+		require.NoError(t, os.Setenv("EMAIL_SMTP_USERNAME", "test-username"))
+		require.NoError(t, os.Setenv("EMAIL_SMTP_PASSWORD", "test-password"))
 
 		config, err := LoadConfig()
 
@@ -23,6 +27,7 @@ func TestLoadConfig(t *testing.T) {
 		var appErr *weathererr.AppError
 		assert.True(t, errors.As(err, &appErr))
 		assert.Equal(t, weathererr.ConfigurationError, appErr.Type)
+		assert.Contains(t, appErr.Message, "at least one weather provider API key must be configured")
 	})
 
 	// Test case 2: Default values with required fields set
@@ -44,6 +49,11 @@ func TestLoadConfig(t *testing.T) {
 		assert.Equal(t, "weatherapi", config.Database.Name)
 		assert.Equal(t, "disable", config.Database.SSLMode)
 		assert.Equal(t, "https://api.weatherapi.com/v1", config.Weather.BaseURL)
+		assert.Equal(t, []string{"weatherapi", "openweathermap", "accuweather"}, config.Weather.ProviderOrder)
+		assert.True(t, config.Weather.EnableCache)
+		assert.True(t, config.Weather.EnableLogging)
+		assert.Equal(t, 10, config.Weather.CacheTTLMinutes)
+		assert.Equal(t, "logs/weather_providers.log", config.Weather.LogFilePath)
 		assert.Equal(t, "smtp.gmail.com", config.Email.SMTPHost)
 		assert.Equal(t, 587, config.Email.SMTPPort)
 		assert.Equal(t, "Weather API", config.Email.FromName)
@@ -66,6 +76,13 @@ func TestLoadConfig(t *testing.T) {
 		require.NoError(t, os.Setenv("DB_SSL_MODE", "require"))
 		require.NoError(t, os.Setenv("WEATHER_API_KEY", "custom-api-key"))
 		require.NoError(t, os.Setenv("WEATHER_API_BASE_URL", "https://test-api.example.com"))
+		require.NoError(t, os.Setenv("OPENWEATHERMAP_API_KEY", "custom-openweather-key"))
+		require.NoError(t, os.Setenv("ACCUWEATHER_API_KEY", "custom-accuweather-key"))
+		require.NoError(t, os.Setenv("WEATHER_ENABLE_CACHE", "false"))
+		require.NoError(t, os.Setenv("WEATHER_ENABLE_LOGGING", "false"))
+		require.NoError(t, os.Setenv("WEATHER_CACHE_TTL_MINUTES", "30"))
+		require.NoError(t, os.Setenv("WEATHER_LOG_FILE_PATH", "/custom/weather.log"))
+		require.NoError(t, os.Setenv("WEATHER_PROVIDER_ORDER", "accuweather,openweathermap,weatherapi"))
 		require.NoError(t, os.Setenv("EMAIL_SMTP_HOST", "smtp.test.com"))
 		require.NoError(t, os.Setenv("EMAIL_SMTP_PORT", "465"))
 		require.NoError(t, os.Setenv("EMAIL_SMTP_USERNAME", "custom-username"))
@@ -89,6 +106,13 @@ func TestLoadConfig(t *testing.T) {
 		assert.Equal(t, "require", config.Database.SSLMode)
 		assert.Equal(t, "custom-api-key", config.Weather.APIKey)
 		assert.Equal(t, "https://test-api.example.com", config.Weather.BaseURL)
+		assert.Equal(t, "custom-openweather-key", config.Weather.OpenWeatherMapKey)
+		assert.Equal(t, "custom-accuweather-key", config.Weather.AccuWeatherKey)
+		assert.False(t, config.Weather.EnableCache)
+		assert.False(t, config.Weather.EnableLogging)
+		assert.Equal(t, 30, config.Weather.CacheTTLMinutes)
+		assert.Equal(t, "/custom/weather.log", config.Weather.LogFilePath)
+		assert.Equal(t, []string{"accuweather", "openweathermap", "weatherapi"}, config.Weather.ProviderOrder)
 		assert.Equal(t, "smtp.test.com", config.Email.SMTPHost)
 		assert.Equal(t, 465, config.Email.SMTPPort)
 		assert.Equal(t, "custom-username", config.Email.SMTPUsername)
@@ -244,32 +268,92 @@ func TestConfigValidation(t *testing.T) {
 			errorMsg  string
 		}{
 			{
-				name: "ValidConfig",
+				name: "ValidConfigWithWeatherAPI",
 				config: WeatherConfig{
-					APIKey:  "test-key",
-					BaseURL: "https://api.example.com",
+					APIKey:          "test-key",
+					BaseURL:         "https://api.example.com",
+					CacheTTLMinutes: 10,
+					ProviderOrder:   []string{"weatherapi"},
 				},
 				wantErr: false,
 			},
 			{
-				name: "EmptyAPIKey",
+				name: "ValidConfigWithOpenWeatherMap",
 				config: WeatherConfig{
-					APIKey:  "",
-					BaseURL: "https://api.example.com",
+					OpenWeatherMapKey: "openweather-key",
+					CacheTTLMinutes:   10,
+					ProviderOrder:     []string{"openweathermap"},
+				},
+				wantErr: false,
+			},
+			{
+				name: "ValidConfigWithAccuWeather",
+				config: WeatherConfig{
+					AccuWeatherKey:  "accuweather-key",
+					CacheTTLMinutes: 10,
+					ProviderOrder:   []string{"accuweather"},
+				},
+				wantErr: false,
+			},
+			{
+				name: "NoAPIKeysConfigured",
+				config: WeatherConfig{
+					BaseURL:         "https://api.example.com",
+					CacheTTLMinutes: 10,
+					ProviderOrder:   []string{"weatherapi"},
+					// All API keys are empty
 				},
 				wantErr:   true,
 				errorType: weathererr.ConfigurationError,
-				errorMsg:  "WEATHER_API_KEY is required",
+				errorMsg:  "at least one weather provider API key must be configured",
+			},
+			{
+				name: "WeatherAPIKeyWithoutBaseURL",
+				config: WeatherConfig{
+					APIKey:          "test-key",
+					BaseURL:         "", // Empty base URL
+					CacheTTLMinutes: 10,
+					ProviderOrder:   []string{"weatherapi"},
+				},
+				wantErr:   true,
+				errorType: weathererr.ConfigurationError,
+				errorMsg:  "WEATHER_API_BASE_URL cannot be empty when WEATHER_API_KEY is set",
 			},
 			{
 				name: "InvalidBaseURL",
 				config: WeatherConfig{
-					APIKey:  "key",
-					BaseURL: "invalid-url",
+					APIKey:          "key",
+					BaseURL:         "invalid-url",
+					CacheTTLMinutes: 10,
+					ProviderOrder:   []string{"weatherapi"},
 				},
 				wantErr:   true,
 				errorType: weathererr.ConfigurationError,
 				errorMsg:  "WEATHER_API_BASE_URL must start with http:// or https://",
+			},
+			{
+				name: "InvalidCacheTTL",
+				config: WeatherConfig{
+					APIKey:          "test-key",
+					BaseURL:         "https://api.example.com",
+					CacheTTLMinutes: 0, // Invalid cache TTL
+					ProviderOrder:   []string{"weatherapi"},
+				},
+				wantErr:   true,
+				errorType: weathererr.ConfigurationError,
+				errorMsg:  "WEATHER_CACHE_TTL_MINUTES must be between 1 and 1440 minutes",
+			},
+			{
+				name: "InvalidProviderOrder",
+				config: WeatherConfig{
+					APIKey:          "test-key",
+					BaseURL:         "https://api.example.com",
+					CacheTTLMinutes: 10,
+					ProviderOrder:   []string{"invalid-provider"},
+				},
+				wantErr:   true,
+				errorType: weathererr.ConfigurationError,
+				errorMsg:  "invalid weather provider in order: invalid-provider",
 			},
 		}
 
@@ -445,8 +529,13 @@ func TestConfigValidation(t *testing.T) {
 				SSLMode:  "disable",
 			},
 			Weather: WeatherConfig{
-				APIKey:  "test-key",
-				BaseURL: "https://api.example.com",
+				APIKey:          "test-key",
+				BaseURL:         "https://api.example.com",
+				CacheTTLMinutes: 10,
+				ProviderOrder:   []string{"weatherapi", "openweathermap", "accuweather"},
+				EnableCache:     true,
+				EnableLogging:   true,
+				LogFilePath:     "logs/weather.log",
 			},
 			Email: EmailConfig{
 				SMTPHost:     "smtp.example.com",

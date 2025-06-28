@@ -65,12 +65,9 @@ func (pm *ProviderManager) initializeComponents() error {
 func (pm *ProviderManager) buildProviderChain() error {
 	providers := pm.createProviders()
 
-	// Check if any providers are configured
+	// Fail fast if no providers are configured
 	if len(providers) == 0 {
-		// No providers configured - set chain to nil but don't return error
-		// This allows provider manager to be created but will fail at GetWeather() level
-		pm.primaryChain = nil
-		return nil
+		return fmt.Errorf("no weather providers configured - at least one API key must be provided (WEATHER_API_KEY, OPENWEATHERMAP_API_KEY, or ACCUWEATHER_API_KEY)")
 	}
 
 	chain := pm.buildChain(providers)
@@ -89,45 +86,74 @@ func (pm *ProviderManager) buildProviderChain() error {
 func (pm *ProviderManager) createProviders() map[string]WeatherProvider {
 	providers := make(map[string]WeatherProvider)
 
-	if pm.configuration.WeatherAPIKey != "" {
-		baseURL := pm.configuration.WeatherAPIBaseURL
-		if baseURL == "" {
-			baseURL = "https://api.weatherapi.com/v1" // Default to production API
-		}
-		weatherConfig := &config.WeatherConfig{
-			APIKey:  pm.configuration.WeatherAPIKey,
-			BaseURL: baseURL,
-		}
-		var provider WeatherProvider = NewWeatherAPIProvider(weatherConfig)
-
-		if pm.configuration.EnableLogging {
-			provider = NewWeatherLoggerDecorator(provider, pm.logger, "WeatherAPI")
-		}
-
-		providers["weatherapi"] = provider
+	if weatherProvider := pm.createWeatherAPIProvider(); weatherProvider != nil {
+		providers["weatherapi"] = weatherProvider
 	}
 
-	if pm.configuration.OpenWeatherMapKey != "" {
-		var provider = NewOpenWeatherMapProvider(pm.configuration.OpenWeatherMapKey)
-
-		if pm.configuration.EnableLogging {
-			provider = NewWeatherLoggerDecorator(provider, pm.logger, "OpenWeatherMap")
-		}
-
-		providers["openweathermap"] = provider
+	if openWeatherProvider := pm.createOpenWeatherProvider(); openWeatherProvider != nil {
+		providers["openweathermap"] = openWeatherProvider
 	}
 
-	if pm.configuration.AccuWeatherKey != "" {
-		var provider = NewAccuWeatherProvider(pm.configuration.AccuWeatherKey)
-
-		if pm.configuration.EnableLogging {
-			provider = NewWeatherLoggerDecorator(provider, pm.logger, "AccuWeather")
-		}
-
-		providers["accuweather"] = provider
+	if accuWeatherProvider := pm.createAccuWeatherProvider(); accuWeatherProvider != nil {
+		providers["accuweather"] = accuWeatherProvider
 	}
 
 	return providers
+}
+
+// createWeatherAPIProvider creates and configures WeatherAPI provider if API key is provided
+func (pm *ProviderManager) createWeatherAPIProvider() WeatherProvider {
+	if pm.configuration.WeatherAPIKey == "" {
+		return nil
+	}
+
+	baseURL := pm.configuration.WeatherAPIBaseURL
+	if baseURL == "" {
+		baseURL = "https://api.weatherapi.com/v1" // Default to production API
+	}
+
+	weatherConfig := &config.WeatherConfig{
+		APIKey:  pm.configuration.WeatherAPIKey,
+		BaseURL: baseURL,
+	}
+
+	var provider WeatherProvider = NewWeatherAPIProvider(weatherConfig)
+
+	if pm.configuration.EnableLogging {
+		provider = NewWeatherLoggerDecorator(provider, pm.logger, "WeatherAPI")
+	}
+
+	return provider
+}
+
+// createOpenWeatherProvider creates and configures OpenWeatherMap provider if API key is provided
+func (pm *ProviderManager) createOpenWeatherProvider() WeatherProvider {
+	if pm.configuration.OpenWeatherMapKey == "" {
+		return nil
+	}
+
+	var provider = NewOpenWeatherMapProvider(pm.configuration.OpenWeatherMapKey)
+
+	if pm.configuration.EnableLogging {
+		provider = NewWeatherLoggerDecorator(provider, pm.logger, "OpenWeatherMap")
+	}
+
+	return provider
+}
+
+// createAccuWeatherProvider creates and configures AccuWeather provider if API key is provided
+func (pm *ProviderManager) createAccuWeatherProvider() WeatherProvider {
+	if pm.configuration.AccuWeatherKey == "" {
+		return nil
+	}
+
+	var provider = NewAccuWeatherProvider(pm.configuration.AccuWeatherKey)
+
+	if pm.configuration.EnableLogging {
+		provider = NewWeatherLoggerDecorator(provider, pm.logger, "AccuWeather")
+	}
+
+	return provider
 }
 
 func (pm *ProviderManager) buildChain(providers map[string]WeatherProvider) WeatherProviderChain {
@@ -159,10 +185,6 @@ func (pm *ProviderManager) createHandler(providerName string, provider WeatherPr
 }
 
 func (pm *ProviderManager) GetWeather(city string) (*models.WeatherResponse, error) {
-	if pm.primaryChain == nil {
-		return nil, fmt.Errorf("no weather providers configured")
-	}
-
 	return pm.primaryChain.Handle(city)
 }
 
@@ -173,10 +195,7 @@ func (pm *ProviderManager) GetProviderInfo() map[string]interface{} {
 	info["logging_enabled"] = pm.configuration.EnableLogging
 	info["cache_ttl"] = pm.configuration.CacheTTL.String()
 	info["provider_order"] = pm.configuration.ProviderOrder
-
-	if pm.primaryChain != nil {
-		info["chain_name"] = pm.primaryChain.GetProviderName()
-	}
+	info["chain_name"] = pm.primaryChain.GetProviderName()
 
 	return info
 }
@@ -199,21 +218,6 @@ func NewProviderManagerBuilder() *ProviderManagerBuilder {
 	return &ProviderManagerBuilder{
 		config: DefaultProviderConfiguration(),
 	}
-}
-
-func (b *ProviderManagerBuilder) WithWeatherAPIKey(key string) *ProviderManagerBuilder {
-	b.config.WeatherAPIKey = key
-	return b
-}
-
-func (b *ProviderManagerBuilder) WithWeatherAPIBaseURL(baseURL string) *ProviderManagerBuilder {
-	b.config.WeatherAPIBaseURL = baseURL
-	return b
-}
-
-func (b *ProviderManagerBuilder) WithOpenWeatherMapKey(key string) *ProviderManagerBuilder {
-	b.config.OpenWeatherMapKey = key
-	return b
 }
 
 func (b *ProviderManagerBuilder) WithAccuWeatherKey(key string) *ProviderManagerBuilder {
@@ -247,5 +251,46 @@ func (b *ProviderManagerBuilder) WithProviderOrder(order []string) *ProviderMana
 }
 
 func (b *ProviderManagerBuilder) Build() (*ProviderManager, error) {
+	if err := b.validate(); err != nil {
+		return nil, fmt.Errorf("provider manager configuration validation failed: %w", err)
+	}
 	return NewProviderManager(b.config)
+}
+
+// validate ensures the builder configuration is valid before building
+func (b *ProviderManagerBuilder) validate() error {
+	// At least one weather provider must be configured
+	if b.config.WeatherAPIKey == "" && b.config.OpenWeatherMapKey == "" && b.config.AccuWeatherKey == "" {
+		return fmt.Errorf("at least one weather provider API key must be configured")
+	}
+
+	// Validate WeatherAPI configuration if provided
+	if b.config.WeatherAPIKey != "" && b.config.WeatherAPIBaseURL == "" {
+		return fmt.Errorf("WeatherAPI base URL is required when API key is provided")
+	}
+
+	// Validate cache TTL
+	if b.config.CacheTTL <= 0 {
+		return fmt.Errorf("cache TTL must be positive")
+	}
+
+	// Validate log file path if logging is enabled
+	if b.config.EnableLogging && b.config.LogFilePath == "" {
+		return fmt.Errorf("log file path is required when logging is enabled")
+	}
+
+	// Validate provider order contains valid providers
+	validProviders := map[string]bool{
+		"weatherapi":     true,
+		"openweathermap": true,
+		"accuweather":    true,
+	}
+
+	for _, provider := range b.config.ProviderOrder {
+		if !validProviders[provider] {
+			return fmt.Errorf("invalid weather provider in order: %s", provider)
+		}
+	}
+
+	return nil
 }

@@ -19,14 +19,37 @@ func TestProviderManager_NoProvidersConfigured(t *testing.T) {
 		ProviderOrder:     []string{"weatherapi", "openweathermap", "accuweather"},
 	}
 
-	// This should now succeed in creating the provider manager
+	// With fail-fast approach, provider manager creation should fail
+	manager, err := NewProviderManager(config)
+	assert.Error(t, err)
+	assert.Nil(t, manager)
+	assert.Contains(t, err.Error(), "no weather providers configured")
+	assert.Contains(t, err.Error(), "at least one API key must be provided")
+}
+
+func TestProviderManager_WithProvidersConfigured(t *testing.T) {
+	config := &ProviderConfiguration{
+		WeatherAPIKey:     "test-weather-api-key",
+		WeatherAPIBaseURL: "https://api.weatherapi.com/v1",
+		OpenWeatherMapKey: "",
+		AccuWeatherKey:    "",
+		CacheTTL:          5 * time.Minute,
+		LogFilePath:       "test.log",
+		EnableCache:       false,
+		EnableLogging:     false,
+		ProviderOrder:     []string{"weatherapi"},
+	}
+
+	// With at least one provider configured, creation should succeed
 	manager, err := NewProviderManager(config)
 	assert.NoError(t, err)
 	assert.NotNil(t, manager)
 
-	// But getting weather should fail with the appropriate error
-	weather, err := manager.GetWeather("London")
-	assert.Error(t, err)
-	assert.Nil(t, weather)
-	assert.Contains(t, err.Error(), "no weather providers configured")
+	// Check provider info
+	info := manager.GetProviderInfo()
+	assert.NotNil(t, info)
+	assert.Equal(t, false, info["cache_enabled"])
+	assert.Equal(t, false, info["logging_enabled"])
+	assert.Equal(t, "5m0s", info["cache_ttl"])
+	assert.NotEmpty(t, info["chain_name"])
 }

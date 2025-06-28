@@ -42,7 +42,7 @@ func (c DatabaseConfig) GetDSN() string {
 // WeatherConfig contains settings for weather API services
 type WeatherConfig struct {
 	// Primary WeatherAPI.com settings (existing)
-	APIKey  string `envconfig:"WEATHER_API_KEY" required:"true"`
+	APIKey  string `envconfig:"WEATHER_API_KEY"`
 	BaseURL string `envconfig:"WEATHER_API_BASE_URL" default:"https://api.weatherapi.com/v1"`
 
 	// Additional provider settings
