@@ -2,6 +2,7 @@ package providers
 
 import (
 	"fmt"
+	"log/slog"
 	"time"
 
 	"weatherapi.app/models"
@@ -25,11 +26,11 @@ func (p *WeatherCacheProxy) GetCurrentWeather(city string) (*models.WeatherRespo
 	cacheKey := p.generateCacheKey(city)
 
 	if cachedResponse, found := p.cache.Get(cacheKey); found {
-		fmt.Printf("[INFO] Cache HIT for city: %s\n", city)
+		slog.Info("cache hit", "city", city)
 		return cachedResponse, nil
 	}
 
-	fmt.Printf("[INFO] Cache MISS for city: %s\n", city)
+	slog.Info("cache miss", "city", city)
 
 	response, err := p.realProvider.GetCurrentWeather(city)
 	if err != nil {
@@ -62,24 +63,20 @@ func NewWeatherChainCacheProxy(realChain WeatherProviderChain, cache CacheInterf
 
 // Handle implements caching for the chain of responsibility
 func (p *WeatherChainCacheProxy) Handle(city string) (*models.WeatherResponse, error) {
-	// Generate cache key
 	cacheKey := p.generateCacheKey(city)
 
-	// Try to get from cache first
 	if cachedResponse, found := p.cache.Get(cacheKey); found {
-		fmt.Printf("[INFO] Chain Cache HIT for city: %s\n", city)
+		slog.Info("chain cache hit", "city", city)
 		return cachedResponse, nil
 	}
 
-	fmt.Printf("[INFO] Chain Cache MISS for city: %s\n", city)
+	slog.Info("chain cache miss", "city", city)
 
-	// Cache miss - get from real chain
 	response, err := p.realChain.Handle(city)
 	if err != nil {
 		return nil, err
 	}
 
-	// Store in cache for future requests
 	p.cache.Set(cacheKey, response, p.cacheTTL)
 
 	return response, nil
@@ -130,14 +127,12 @@ func (p *WeatherCacheProxyWithStats) GetCurrentWeather(city string) (*models.Wea
 
 	if cachedResponse, found := p.cache.Get(cacheKey); found {
 		p.stats.Hits++
-		fmt.Printf("[INFO] Cache HIT for city: %s (Hit Rate: %.2f%%)\n",
-			city, float64(p.stats.Hits)/float64(p.stats.Total)*100)
+		slog.Info("cache hit with stats", "city", city, "hit_rate_percent", float64(p.stats.Hits)/float64(p.stats.Total)*100)
 		return cachedResponse, nil
 	}
 
 	p.stats.Misses++
-	fmt.Printf("[INFO] Cache MISS for city: %s (Hit Rate: %.2f%%)\n",
-		city, float64(p.stats.Hits)/float64(p.stats.Total)*100)
+	slog.Info("cache miss with stats", "city", city, "hit_rate_percent", float64(p.stats.Hits)/float64(p.stats.Total)*100)
 
 	response, err := p.realProvider.GetCurrentWeather(city)
 	if err != nil {

@@ -3,7 +3,7 @@ package providers
 import (
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -46,7 +46,7 @@ func (p *OpenWeatherMapProvider) GetCurrentWeather(city string) (*models.Weather
 	}
 	defer func() {
 		if closeErr := resp.Body.Close(); closeErr != nil {
-			log.Printf("[WARNING] Failed to close response body: %v", closeErr)
+			slog.Warn("close response body", "error", closeErr)
 		}
 	}()
 
@@ -56,7 +56,7 @@ func (p *OpenWeatherMapProvider) GetCurrentWeather(city string) (*models.Weather
 
 	var apiResponse OpenWeatherMapResponse
 	if err := json.NewDecoder(resp.Body).Decode(&apiResponse); err != nil {
-		return nil, fmt.Errorf("failed to decode openweathermap response: %w", err)
+		return nil, fmt.Errorf("decode openweathermap response: %w", err)
 	}
 
 	return p.convertToWeatherResponse(&apiResponse), nil

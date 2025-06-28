@@ -3,7 +3,7 @@ package providers
 import (
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sync"
@@ -76,22 +76,22 @@ func (l *FileLoggerImpl) writeLog(entry map[string]interface{}) {
 
 	file, err := os.OpenFile(l.filePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 	if err != nil {
-		log.Printf("[ERROR] Failed to open log file: %v", err)
+		slog.Error("open log file", "error", err)
 		return
 	}
 	defer func() {
 		if closeErr := file.Close(); closeErr != nil {
-			log.Printf("[WARNING] Failed to close log file: %v", closeErr)
+			slog.Warn("close log file", "error", closeErr)
 		}
 	}()
 
 	jsonData, err := json.Marshal(entry)
 	if err != nil {
-		log.Printf("[ERROR] Failed to marshal log entry: %v", err)
+		slog.Error("marshal log entry", "error", err)
 		return
 	}
 
 	if _, err := file.WriteString(string(jsonData) + "\n"); err != nil {
-		log.Printf("[ERROR] Failed to write log entry: %v", err)
+		slog.Error("write log entry", "error", err)
 	}
 }

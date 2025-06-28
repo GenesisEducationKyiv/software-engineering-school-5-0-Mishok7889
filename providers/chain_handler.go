@@ -2,6 +2,7 @@ package providers
 
 import (
 	"fmt"
+	"log/slog"
 
 	"weatherapi.app/models"
 )
@@ -26,7 +27,7 @@ func (h *BaseWeatherHandler) Handle(city string) (*models.WeatherResponse, error
 			return response, nil
 		}
 
-		fmt.Printf("[INFO] %s failed for city %s: %v\n", h.providerName, city, err)
+		slog.Info("provider failed", "provider", h.providerName, "city", city, "error", err)
 
 		// If this is the last handler in the chain and no next handler, return the actual error
 		if h.next == nil {
