@@ -19,7 +19,7 @@ type FileLoggerImpl struct {
 
 func NewFileLogger(logPath string) (FileLogger, error) {
 	if err := os.MkdirAll(filepath.Dir(logPath), 0755); err != nil {
-		return nil, fmt.Errorf("failed to create log directory: %w", err)
+		return nil, fmt.Errorf("create log directory: %w", err)
 	}
 
 	return &FileLoggerImpl{

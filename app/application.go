@@ -81,7 +81,7 @@ func (app *Application) initializeServices() error {
 	// Create provider manager with all patterns
 	providerManager, err := app.createProviderManager()
 	if err != nil {
-		return fmt.Errorf("failed to create provider manager: %w", err)
+		return fmt.Errorf("create provider manager: %w", err)
 	}
 
 	// Create email provider

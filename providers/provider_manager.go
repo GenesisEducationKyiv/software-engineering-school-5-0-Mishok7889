@@ -35,12 +35,12 @@ func NewProviderManager(config *ProviderConfiguration) (*ProviderManager, error)
 
 	// Initialize components
 	if err := manager.initializeComponents(); err != nil {
-		return nil, fmt.Errorf("failed to initialize provider manager: %w", err)
+		return nil, fmt.Errorf("initialize provider manager: %w", err)
 	}
 
 	// Build the provider chain
 	if err := manager.buildProviderChain(); err != nil {
-		return nil, fmt.Errorf("failed to build provider chain: %w", err)
+		return nil, fmt.Errorf("build provider chain: %w", err)
 	}
 
 	return manager, nil
@@ -54,7 +54,7 @@ func (pm *ProviderManager) initializeComponents() error {
 	if pm.configuration.EnableLogging {
 		logger, err := NewFileLogger(pm.configuration.LogFilePath)
 		if err != nil {
-			return fmt.Errorf("failed to create logger: %w", err)
+			return fmt.Errorf("create logger: %w", err)
 		}
 		pm.logger = logger
 	}
@@ -75,7 +75,7 @@ func (pm *ProviderManager) buildProviderChain() error {
 
 	chain := pm.buildChain(providers)
 	if chain == nil {
-		return fmt.Errorf("failed to build provider chain")
+		return fmt.Errorf("build provider chain")
 	}
 
 	if pm.configuration.EnableCache {
