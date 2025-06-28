@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/stretchr/testify/require"
 	"weatherapi.app/models"
 	"weatherapi.app/tests/integration/helpers"
 )
@@ -42,8 +43,9 @@ func (s *IntegrationTestSuite) TestSubscribe_Success() {
 
 	s.AssertTokenExists(subscription.ID, tokenTypeConfirmation)
 
-	time.Sleep(2 * time.Second)
-	s.AssertEmailSent("test@example.com", confirmEmailSubject)
+	require.Eventually(s.T(), func() bool {
+		return helpers.CheckEmailSent("test@example.com", confirmEmailSubject)
+	}, 10*time.Second, 500*time.Millisecond)
 }
 
 func (s *IntegrationTestSuite) TestSubscribe_UpdateExisting() {
@@ -65,8 +67,9 @@ func (s *IntegrationTestSuite) TestSubscribe_UpdateExisting() {
 	s.NoError(err)
 	s.Equal("daily", updatedSubscription.Frequency)
 
-	time.Sleep(2 * time.Second)
-	s.AssertEmailSent("test@example.com", confirmEmailSubject)
+	require.Eventually(s.T(), func() bool {
+		return helpers.CheckEmailSent("test@example.com", confirmEmailSubject)
+	}, 10*time.Second, 500*time.Millisecond)
 }
 
 func (s *IntegrationTestSuite) TestSubscribe_AlreadyConfirmed() {
@@ -167,6 +170,7 @@ func (s *IntegrationTestSuite) TestSubscribe_JSONFormat() {
 	s.Equal("daily", subscription.Frequency)
 	s.False(subscription.Confirmed)
 
-	time.Sleep(2 * time.Second)
-	s.AssertEmailSent("test@example.com", confirmEmailSubject)
+	require.Eventually(s.T(), func() bool {
+		return helpers.CheckEmailSent("test@example.com", confirmEmailSubject)
+	}, 10*time.Second, 500*time.Millisecond)
 }

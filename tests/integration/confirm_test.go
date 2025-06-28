@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"time"
 
+	"github.com/stretchr/testify/require"
 	"weatherapi.app/models"
 	"weatherapi.app/tests/integration/helpers"
 )
@@ -51,8 +52,9 @@ func (s *IntegrationTestSuite) TestConfirmSubscription_Success() {
 
 	s.AssertTokenExists(subscription.ID, tokenTypeUnsubscribe)
 
-	time.Sleep(2 * time.Second)
-	s.AssertEmailSent("test@example.com", welcomeEmailSubject)
+	require.Eventually(s.T(), func() bool {
+		return helpers.CheckEmailSent("test@example.com", welcomeEmailSubject)
+	}, 10*time.Second, 500*time.Millisecond)
 }
 
 func (s *IntegrationTestSuite) TestConfirmSubscription_InvalidToken() {
@@ -144,8 +146,9 @@ func (s *IntegrationTestSuite) TestConfirmSubscription_AlreadyConfirmed() {
 	s.NoError(err)
 	s.Contains(response["message"], subscriptionConfirmed)
 
-	time.Sleep(2 * time.Second)
-	s.AssertEmailSent("test@example.com", welcomeEmailSubject)
+	require.Eventually(s.T(), func() bool {
+		return helpers.CheckEmailSent("test@example.com", welcomeEmailSubject)
+	}, 10*time.Second, 500*time.Millisecond)
 }
 
 func (s *IntegrationTestSuite) TestConfirmSubscription_HourlyFrequency() {
@@ -168,6 +171,7 @@ func (s *IntegrationTestSuite) TestConfirmSubscription_HourlyFrequency() {
 	s.True(confirmedSubscription.Confirmed)
 	s.Equal("hourly", confirmedSubscription.Frequency)
 
-	time.Sleep(2 * time.Second)
-	s.AssertEmailSent("test@example.com", welcomeEmailSubject)
+	require.Eventually(s.T(), func() bool {
+		return helpers.CheckEmailSent("test@example.com", welcomeEmailSubject)
+	}, 10*time.Second, 500*time.Millisecond)
 }
