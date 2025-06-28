@@ -2,7 +2,7 @@ package app
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"time"
 
 	"gorm.io/gorm"
@@ -43,40 +43,40 @@ func NewApplication() (*Application, error) {
 }
 
 func (app *Application) loadConfiguration() error {
-	log.Println("[INFO] Loading configuration...")
+	slog.Info("Loading configuration...")
 
 	cfg, err := config.LoadConfig()
 	if err != nil {
-		log.Printf("[ERROR] Failed to load configuration: %v\n", err)
-		return err
+		slog.Error("Failed to load configuration", "error", err)
+		return fmt.Errorf("load application configuration: %w", err)
 	}
 
 	app.config = cfg
-	log.Println("[INFO] Configuration loaded successfully")
+	slog.Info("Configuration loaded successfully")
 	return nil
 }
 
 func (app *Application) initializeDatabase() error {
-	log.Println("[INFO] Initializing database...")
+	slog.Info("Initializing database...")
 
 	db, err := database.InitDB(app.config.Database)
 	if err != nil {
-		log.Printf("[ERROR] Failed to initialize database: %v\n", err)
-		return err
+		slog.Error("Failed to initialize database", "error", err)
+		return fmt.Errorf("initialize database connection: %w", err)
 	}
 
 	if err := database.RunMigrations(db); err != nil {
-		log.Printf("[ERROR] Failed to run database migrations: %v\n", err)
-		return err
+		slog.Error("Failed to run database migrations", "error", err)
+		return fmt.Errorf("run database migrations: %w", err)
 	}
 
 	app.db = db
-	log.Println("[INFO] Database initialized successfully")
+	slog.Info("Database initialized successfully")
 	return nil
 }
 
 func (app *Application) initializeServices() error {
-	log.Println("[INFO] Initializing services...")
+	slog.Info("Initializing services...")
 
 	// Create provider manager with all patterns
 	providerManager, err := app.createProviderManager()
@@ -109,14 +109,14 @@ func (app *Application) initializeServices() error {
 	app.server = api.NewServer(app.db, app.config, weatherService, subscriptionService)
 	app.scheduler = scheduler.NewScheduler(app.db, app.config, subscriptionService)
 
-	log.Println("[INFO] Services initialized successfully")
+	slog.Info("Services initialized successfully")
 	return nil
 }
 
 // createProviderManager creates and configures the weather provider manager
 // Follows Factory Method pattern: creates complex configured object
 func (app *Application) createProviderManager() (*providers.ProviderManager, error) {
-	log.Println("[INFO] Creating weather provider manager...")
+	slog.Debug("Creating weather provider manager...")
 
 	// Convert config to provider configuration
 	providerConfig := &providers.ProviderConfiguration{
@@ -137,32 +137,32 @@ func (app *Application) createProviderManager() (*providers.ProviderManager, err
 		return nil, err
 	}
 
-	log.Printf("[INFO] Provider manager created with configuration: %+v\n", providerManager.GetProviderInfo())
+	slog.Debug("Provider manager created", "config", providerManager.GetProviderInfo())
 	return providerManager, nil
 }
 
 // Start starts the application
 func (app *Application) Start() error {
-	log.Println("[INFO] Starting application...")
+	slog.Info("Starting application...")
 
-	log.Println("[INFO] Starting scheduler...")
+	slog.Info("Starting scheduler...")
 	go app.scheduler.Start()
 
-	log.Printf("[INFO] Starting HTTP server on port %d...\n", app.config.Server.Port)
+	slog.Info("Starting HTTP server", "port", app.config.Server.Port)
 	return app.server.Start()
 }
 
 // Shutdown gracefully shuts down the application
 func (app *Application) Shutdown() error {
-	log.Println("[INFO] Shutting down application...")
+	slog.Info("Shutting down application...")
 
 	if app.db != nil {
 		if err := database.CloseDB(app.db); err != nil {
-			log.Printf("[WARNING] Error closing database: %v\n", err)
+			slog.Warn("Error closing database", "error", err)
 		}
 	}
 
-	log.Println("[INFO] Application shutdown complete")
+	slog.Info("Application shutdown complete")
 	return nil
 }
 

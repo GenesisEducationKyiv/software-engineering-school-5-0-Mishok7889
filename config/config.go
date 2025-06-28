@@ -128,6 +128,18 @@ func (s *ServerConfig) Validate() error {
 	return nil
 }
 
+// ValidateSSLMode validates the SSL mode configuration
+func (d *DatabaseConfig) ValidateSSLMode() error {
+	validSSLModes := []string{"disable", "require", "verify-ca", "verify-full"}
+	for _, mode := range validSSLModes {
+		if d.SSLMode == mode {
+			return nil
+		}
+	}
+	return errors.NewConfigurationError(
+		fmt.Sprintf("DB_SSL_MODE must be one of: %s", strings.Join(validSSLModes, ", ")), nil)
+}
+
 // Validate checks database configuration
 func (d *DatabaseConfig) Validate() error {
 	if d.Host == "" {
@@ -142,17 +154,8 @@ func (d *DatabaseConfig) Validate() error {
 	if d.Name == "" {
 		return errors.NewConfigurationError("DB_NAME cannot be empty", nil)
 	}
-	validSSLModes := []string{"disable", "require", "verify-ca", "verify-full"}
-	isValidSSLMode := false
-	for _, mode := range validSSLModes {
-		if d.SSLMode == mode {
-			isValidSSLMode = true
-			break
-		}
-	}
-	if !isValidSSLMode {
-		return errors.NewConfigurationError(
-			fmt.Sprintf("DB_SSL_MODE must be one of: %s", strings.Join(validSSLModes, ", ")), nil)
+	if err := d.ValidateSSLMode(); err != nil {
+		return err
 	}
 	return nil
 }

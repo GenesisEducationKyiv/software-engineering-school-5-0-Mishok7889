@@ -31,13 +31,21 @@ func NewSMTPEmailProvider(config *config.EmailConfig) *SMTPEmailProvider {
 	}
 }
 
-// SendEmail sends an email using SMTP
-func (p *SMTPEmailProvider) SendEmail(to, subject, body string, isHTML bool) error {
+// validateSendEmailParams validates the input parameters for sending an email
+func (p *SMTPEmailProvider) validateSendEmailParams(to, subject string) error {
 	if to == "" {
 		return errors.NewValidationError("recipient email cannot be empty")
 	}
 	if subject == "" {
 		return errors.NewValidationError("email subject cannot be empty")
+	}
+	return nil
+}
+
+// SendEmail sends an email using SMTP
+func (p *SMTPEmailProvider) SendEmail(to, subject, body string, isHTML bool) error {
+	if err := p.validateSendEmailParams(to, subject); err != nil {
+		return err
 	}
 
 	// Only use authentication if username and password are provided
@@ -52,8 +60,8 @@ func (p *SMTPEmailProvider) SendEmail(to, subject, body string, isHTML bool) err
 		contentType = "Content-Type: text/html; charset=UTF-8\r\n"
 	}
 
-	subject = strings.ReplaceAll(subject, "\r\n", "")
-	subject = strings.ReplaceAll(subject, "\n", "")
+	// Remove line breaks from subject to prevent header injection
+	subject = strings.ReplaceAll(strings.ReplaceAll(subject, "\r\n", ""), "\n", "")
 
 	from := fmt.Sprintf("%s <%s>", p.fromName, p.fromAddress)
 	headers := fmt.Sprintf("From: %s\r\nTo: %s\r\nSubject: %s\r\n%s%s\r\n",

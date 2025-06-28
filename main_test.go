@@ -16,17 +16,19 @@ func TestMain_ConfigurationLoading(t *testing.T) {
 		// Restore original environment
 		os.Clearenv()
 		for _, env := range originalEnv {
-			if len(env) > 0 {
-				parts := []string{"", ""}
-				for i, part := range []rune(env) {
-					if part == '=' {
-						parts = []string{string([]rune(env)[:i]), string([]rune(env)[i+1:])}
-						break
-					}
+			if len(env) <= 0 {
+				continue
+			}
+
+			parts := []string{"", ""}
+			for i, part := range []rune(env) {
+				if part == '=' {
+					parts = []string{string([]rune(env)[:i]), string([]rune(env)[i+1:])}
+					break
 				}
-				if len(parts) == 2 && parts[0] != "" {
-					_ = os.Setenv(parts[0], parts[1]) // Ignore error in cleanup
-				}
+			}
+			if len(parts) == 2 && parts[0] != "" {
+				_ = os.Setenv(parts[0], parts[1]) // Ignore error in cleanup
 			}
 		}
 	}()
@@ -48,17 +50,19 @@ func TestEnvironmentVariableHandling(t *testing.T) {
 	defer func() {
 		os.Clearenv()
 		for _, env := range originalEnv {
-			if len(env) > 0 {
-				parts := []string{"", ""}
-				for i, part := range []rune(env) {
-					if part == '=' {
-						parts = []string{string([]rune(env)[:i]), string([]rune(env)[i+1:])}
-						break
-					}
+			if len(env) <= 0 {
+				continue
+			}
+
+			parts := []string{"", ""}
+			for i, part := range []rune(env) {
+				if part == '=' {
+					parts = []string{string([]rune(env)[:i]), string([]rune(env)[i+1:])}
+					break
 				}
-				if len(parts) == 2 && parts[0] != "" {
-					_ = os.Setenv(parts[0], parts[1]) // Ignore error in cleanup
-				}
+			}
+			if len(parts) == 2 && parts[0] != "" {
+				_ = os.Setenv(parts[0], parts[1]) // Ignore error in cleanup
 			}
 		}
 	}()

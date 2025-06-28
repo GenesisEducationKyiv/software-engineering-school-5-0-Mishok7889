@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
-	apperrors "weatherapi.app/errors"
+	weathererr "weatherapi.app/errors"
 	"weatherapi.app/models"
 )
 
@@ -67,9 +67,9 @@ func TestSubscriptionRepository_FindByEmail(t *testing.T) {
 		assert.Error(t, err)
 		assert.Nil(t, sub)
 
-		var appErr *apperrors.AppError
+		var appErr *weathererr.AppError
 		assert.True(t, errors.As(err, &appErr))
-		assert.Equal(t, apperrors.ValidationError, appErr.Type)
+		assert.Equal(t, weathererr.ValidationError, appErr.Type)
 		assert.Contains(t, appErr.Message, "email cannot be empty")
 	})
 
@@ -78,9 +78,9 @@ func TestSubscriptionRepository_FindByEmail(t *testing.T) {
 		assert.Error(t, err)
 		assert.Nil(t, sub)
 
-		var appErr *apperrors.AppError
+		var appErr *weathererr.AppError
 		assert.True(t, errors.As(err, &appErr))
-		assert.Equal(t, apperrors.ValidationError, appErr.Type)
+		assert.Equal(t, weathererr.ValidationError, appErr.Type)
 		assert.Contains(t, appErr.Message, "city cannot be empty")
 	})
 }
@@ -113,9 +113,9 @@ func TestSubscriptionRepository_FindByID(t *testing.T) {
 		assert.Error(t, err)
 		assert.Nil(t, sub)
 
-		var appErr *apperrors.AppError
+		var appErr *weathererr.AppError
 		assert.True(t, errors.As(err, &appErr))
-		assert.Equal(t, apperrors.NotFoundError, appErr.Type)
+		assert.Equal(t, weathererr.NotFoundError, appErr.Type)
 	})
 
 	t.Run("ZeroID", func(t *testing.T) {
@@ -123,9 +123,9 @@ func TestSubscriptionRepository_FindByID(t *testing.T) {
 		assert.Error(t, err)
 		assert.Nil(t, sub)
 
-		var appErr *apperrors.AppError
+		var appErr *weathererr.AppError
 		assert.True(t, errors.As(err, &appErr))
-		assert.Equal(t, apperrors.ValidationError, appErr.Type)
+		assert.Equal(t, weathererr.ValidationError, appErr.Type)
 		assert.Contains(t, appErr.Message, "subscription ID cannot be zero")
 	})
 }
@@ -160,9 +160,9 @@ func TestSubscriptionRepository_Create(t *testing.T) {
 		err := repo.Create(nil)
 		assert.Error(t, err)
 
-		var appErr *apperrors.AppError
+		var appErr *weathererr.AppError
 		assert.True(t, errors.As(err, &appErr))
-		assert.Equal(t, apperrors.ValidationError, appErr.Type)
+		assert.Equal(t, weathererr.ValidationError, appErr.Type)
 		assert.Contains(t, appErr.Message, "subscription cannot be nil")
 	})
 }
@@ -200,9 +200,9 @@ func TestSubscriptionRepository_Update(t *testing.T) {
 		err := repo.Update(nil)
 		assert.Error(t, err)
 
-		var appErr *apperrors.AppError
+		var appErr *weathererr.AppError
 		assert.True(t, errors.As(err, &appErr))
-		assert.Equal(t, apperrors.ValidationError, appErr.Type)
+		assert.Equal(t, weathererr.ValidationError, appErr.Type)
 		assert.Contains(t, appErr.Message, "subscription cannot be nil")
 	})
 }
@@ -236,9 +236,9 @@ func TestSubscriptionRepository_Delete(t *testing.T) {
 		err := repo.Delete(nil)
 		assert.Error(t, err)
 
-		var appErr *apperrors.AppError
+		var appErr *weathererr.AppError
 		assert.True(t, errors.As(err, &appErr))
-		assert.Equal(t, apperrors.ValidationError, appErr.Type)
+		assert.Equal(t, weathererr.ValidationError, appErr.Type)
 		assert.Contains(t, appErr.Message, "subscription cannot be nil")
 	})
 }
@@ -279,9 +279,9 @@ func TestSubscriptionRepository_GetSubscriptionsForUpdates(t *testing.T) {
 		assert.Error(t, err)
 		assert.Nil(t, subs)
 
-		var appErr *apperrors.AppError
+		var appErr *weathererr.AppError
 		assert.True(t, errors.As(err, &appErr))
-		assert.Equal(t, apperrors.ValidationError, appErr.Type)
+		assert.Equal(t, weathererr.ValidationError, appErr.Type)
 		assert.Contains(t, appErr.Message, "frequency cannot be empty")
 	})
 }
@@ -321,9 +321,9 @@ func TestTokenRepository_CreateToken(t *testing.T) {
 		assert.Error(t, err)
 		assert.Nil(t, token)
 
-		var appErr *apperrors.AppError
+		var appErr *weathererr.AppError
 		assert.True(t, errors.As(err, &appErr))
-		assert.Equal(t, apperrors.ValidationError, appErr.Type)
+		assert.Equal(t, weathererr.ValidationError, appErr.Type)
 		assert.Contains(t, appErr.Message, "subscription ID cannot be zero")
 	})
 
@@ -332,9 +332,9 @@ func TestTokenRepository_CreateToken(t *testing.T) {
 		assert.Error(t, err)
 		assert.Nil(t, token)
 
-		var appErr *apperrors.AppError
+		var appErr *weathererr.AppError
 		assert.True(t, errors.As(err, &appErr))
-		assert.Equal(t, apperrors.ValidationError, appErr.Type)
+		assert.Equal(t, weathererr.ValidationError, appErr.Type)
 		assert.Contains(t, appErr.Message, "token type cannot be empty")
 	})
 
@@ -343,9 +343,9 @@ func TestTokenRepository_CreateToken(t *testing.T) {
 		assert.Error(t, err)
 		assert.Nil(t, token)
 
-		var appErr *apperrors.AppError
+		var appErr *weathererr.AppError
 		assert.True(t, errors.As(err, &appErr))
-		assert.Equal(t, apperrors.ValidationError, appErr.Type)
+		assert.Equal(t, weathererr.ValidationError, appErr.Type)
 		assert.Contains(t, appErr.Message, "expiration duration must be positive")
 	})
 }
@@ -389,9 +389,9 @@ func TestTokenRepository_FindByToken(t *testing.T) {
 		assert.Error(t, err)
 		assert.Nil(t, token)
 
-		var appErr *apperrors.AppError
+		var appErr *weathererr.AppError
 		assert.True(t, errors.As(err, &appErr))
-		assert.Equal(t, apperrors.NotFoundError, appErr.Type)
+		assert.Equal(t, weathererr.NotFoundError, appErr.Type)
 	})
 
 	t.Run("ExpiredToken", func(t *testing.T) {
@@ -410,9 +410,9 @@ func TestTokenRepository_FindByToken(t *testing.T) {
 		assert.Error(t, err)
 		assert.Nil(t, token)
 
-		var appErr *apperrors.AppError
+		var appErr *weathererr.AppError
 		assert.True(t, errors.As(err, &appErr))
-		assert.Equal(t, apperrors.NotFoundError, appErr.Type)
+		assert.Equal(t, weathererr.NotFoundError, appErr.Type)
 	})
 
 	t.Run("EmptyToken", func(t *testing.T) {
@@ -420,9 +420,9 @@ func TestTokenRepository_FindByToken(t *testing.T) {
 		assert.Error(t, err)
 		assert.Nil(t, token)
 
-		var appErr *apperrors.AppError
+		var appErr *weathererr.AppError
 		assert.True(t, errors.As(err, &appErr))
-		assert.Equal(t, apperrors.ValidationError, appErr.Type)
+		assert.Equal(t, weathererr.ValidationError, appErr.Type)
 		assert.Contains(t, appErr.Message, "token cannot be empty")
 	})
 }
@@ -465,9 +465,9 @@ func TestTokenRepository_DeleteToken(t *testing.T) {
 		err := repo.DeleteToken(nil)
 		assert.Error(t, err)
 
-		var appErr *apperrors.AppError
+		var appErr *weathererr.AppError
 		assert.True(t, errors.As(err, &appErr))
-		assert.Equal(t, apperrors.ValidationError, appErr.Type)
+		assert.Equal(t, weathererr.ValidationError, appErr.Type)
 		assert.Contains(t, appErr.Message, "token cannot be nil")
 	})
 }

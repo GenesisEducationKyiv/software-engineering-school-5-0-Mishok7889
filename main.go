@@ -1,7 +1,7 @@
 package main
 
 import (
-	"log"
+	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
@@ -13,7 +13,7 @@ import (
 func main() {
 	// Load environment variables from .env file if present
 	if err := godotenv.Load(); err != nil {
-		log.Println("[INFO] No .env file found or error loading it")
+		slog.Info("No .env file found or error loading it")
 	}
 
 	// Initialize configuration displayer for debugging (optional)
@@ -25,7 +25,8 @@ func main() {
 	// Create and initialize the application
 	application, err := app.NewApplication()
 	if err != nil {
-		log.Fatalf("[FATAL] Failed to initialize application: %v", err)
+		slog.Error("Failed to initialize application", "error", err)
+		os.Exit(1)
 	}
 
 	// Print configuration for debugging (optional)
@@ -35,9 +36,10 @@ func main() {
 	setupGracefulShutdown(application)
 
 	// Start the application
-	log.Println("[INFO] Starting Weather Forecast API...")
+	slog.Info("Starting Weather Forecast API...")
 	if err := application.Start(); err != nil {
-		log.Fatalf("[FATAL] Failed to start application: %v", err)
+		slog.Error("Failed to start application", "error", err)
+		os.Exit(1)
 	}
 }
 
@@ -47,9 +49,9 @@ func setupGracefulShutdown(app *app.Application) {
 
 	go func() {
 		<-c
-		log.Println("[INFO] Received shutdown signal...")
+		slog.Info("Received shutdown signal...")
 		if err := app.Shutdown(); err != nil {
-			log.Printf("[ERROR] Error during shutdown: %v\n", err)
+			slog.Error("Error during shutdown", "error", err)
 		}
 		os.Exit(0)
 	}()

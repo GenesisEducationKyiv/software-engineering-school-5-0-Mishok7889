@@ -2,6 +2,7 @@ package integration
 
 import (
 	"fmt"
+	"log/slog"
 	"net/http"
 	"testing"
 	"time"
@@ -128,7 +129,9 @@ func (s *IntegrationTestSuite) TearDownSuite() {
 	if s.db != nil {
 		sqlDB, err := s.db.DB()
 		if err == nil {
-			_ = sqlDB.Close()
+			if closeErr := sqlDB.Close(); closeErr != nil {
+				slog.Warn("Failed to close database connection", "error", closeErr)
+			}
 		}
 	}
 }
@@ -161,11 +164,15 @@ func (s *IntegrationTestSuite) waitForServices() {
 			if sqlDB != nil {
 				err = sqlDB.Ping()
 				if err == nil {
-					_ = sqlDB.Close()
+					if closeErr := sqlDB.Close(); closeErr != nil {
+						slog.Warn("Failed to close database connection", "error", closeErr)
+					}
 					postgresReady = true
 					break
 				}
-				_ = sqlDB.Close()
+				if closeErr := sqlDB.Close(); closeErr != nil {
+					slog.Warn("Failed to close database connection", "error", closeErr)
+				}
 			}
 		}
 		fmt.Printf("Waiting for PostgreSQL... (%d/%d)\n", i+1, maxRetries)
@@ -181,12 +188,16 @@ func (s *IntegrationTestSuite) waitForServices() {
 	for i := 0; i < maxRetries; i++ {
 		resp, err := http.Get("http://localhost:8081/health")
 		if err == nil && resp.StatusCode == http.StatusOK {
-			_ = resp.Body.Close() // Explicitly ignore close error
+			if closeErr := resp.Body.Close(); closeErr != nil {
+				slog.Warn("Failed to close response body", "error", closeErr)
+			}
 			weatherReady = true
 			break
 		}
 		if resp != nil {
-			_ = resp.Body.Close() // Explicitly ignore close error
+			if closeErr := resp.Body.Close(); closeErr != nil {
+				slog.Warn("Failed to close response body", "error", closeErr)
+			}
 		}
 		time.Sleep(retryDelay)
 	}
@@ -200,12 +211,16 @@ func (s *IntegrationTestSuite) waitForServices() {
 	for i := 0; i < maxRetries; i++ {
 		resp, err := http.Get("http://localhost:8025")
 		if err == nil && resp.StatusCode == http.StatusOK {
-			_ = resp.Body.Close() // Explicitly ignore close error
+			if closeErr := resp.Body.Close(); closeErr != nil {
+				slog.Warn("Failed to close response body", "error", closeErr)
+			}
 			mailReady = true
 			break
 		}
 		if resp != nil {
-			_ = resp.Body.Close() // Explicitly ignore close error
+			if closeErr := resp.Body.Close(); closeErr != nil {
+				slog.Warn("Failed to close response body", "error", closeErr)
+			}
 		}
 		time.Sleep(retryDelay)
 	}

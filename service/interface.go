@@ -43,10 +43,10 @@ type SubscriptionServiceInterface interface {
 
 // EmailServiceInterface defines the interface for email operations
 type EmailServiceInterface interface {
-	SendConfirmationEmail(email, confirmURL, city string) error
-	SendWelcomeEmail(email, city, frequency, unsubscribeURL string) error
-	SendUnsubscribeConfirmationEmail(email, city string) error
-	SendWeatherUpdateEmail(email, city string, weather *models.WeatherResponse, unsubscribeURL string) error
+	SendConfirmationEmailWithParams(params ConfirmationEmailParams) error
+	SendWelcomeEmailWithParams(params WelcomeEmailParams) error
+	SendUnsubscribeConfirmationEmailWithParams(params UnsubscribeEmailParams) error
+	SendWeatherUpdateEmailWithParams(params WeatherUpdateEmailParams) error
 }
 
 // SubscriptionRepositoryInterface defines the interface for subscription data operations

@@ -59,13 +59,18 @@ func CheckEmailSent(to, subjectContains string) bool {
 	for _, message := range mailHogResp.Items {
 		for _, recipient := range message.To {
 			recipientEmail := fmt.Sprintf("%s@%s", recipient.Mailbox, recipient.Domain)
-			if recipientEmail == to {
-				if subjects, exists := message.Content.Headers["Subject"]; exists {
-					for _, subject := range subjects {
-						if strings.Contains(subject, subjectContains) {
-							return true
-						}
-					}
+			if recipientEmail != to {
+				continue
+			}
+
+			subjects, exists := message.Content.Headers["Subject"]
+			if !exists {
+				continue
+			}
+
+			for _, subject := range subjects {
+				if strings.Contains(subject, subjectContains) {
+					return true
 				}
 			}
 		}
@@ -109,13 +114,18 @@ func GetEmailContent(to, subjectContains string) (string, error) {
 	for _, message := range mailHogResp.Items {
 		for _, recipient := range message.To {
 			recipientEmail := fmt.Sprintf("%s@%s", recipient.Mailbox, recipient.Domain)
-			if recipientEmail == to {
-				if subjects, exists := message.Content.Headers["Subject"]; exists {
-					for _, subject := range subjects {
-						if strings.Contains(subject, subjectContains) {
-							return message.Content.Body, nil
-						}
-					}
+			if recipientEmail != to {
+				continue
+			}
+
+			subjects, exists := message.Content.Headers["Subject"]
+			if !exists {
+				continue
+			}
+
+			for _, subject := range subjects {
+				if strings.Contains(subject, subjectContains) {
+					return message.Content.Body, nil
 				}
 			}
 		}

@@ -7,8 +7,17 @@ import (
 	"strings"
 	"time"
 
+	"github.com/stretchr/testify/require"
 	"weatherapi.app/models"
 	"weatherapi.app/tests/integration/helpers"
+)
+
+const (
+	// Subscribe test constants
+	subscriptionSuccessful      = "Subscription successful"
+	confirmEmailSubject         = "Confirm your weather subscription"
+	emailAlreadySubscribedError = "email already subscribed"
+	invalidRequestFormatError   = "invalid request format"
 )
 
 func (s *IntegrationTestSuite) TestSubscribe_Success() {
@@ -26,16 +35,17 @@ func (s *IntegrationTestSuite) TestSubscribe_Success() {
 	var response map[string]string
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	s.NoError(err)
-	s.Contains(response["message"], "Subscription successful")
+	s.Contains(response["message"], subscriptionSuccessful)
 
 	subscription := s.AssertSubscriptionExists("test@example.com", "London")
 	s.Equal("daily", subscription.Frequency)
 	s.False(subscription.Confirmed)
 
-	s.AssertTokenExists(subscription.ID, "confirmation")
+	s.AssertTokenExists(subscription.ID, tokenTypeConfirmation)
 
-	time.Sleep(2 * time.Second)
-	s.AssertEmailSent("test@example.com", "Confirm your weather subscription")
+	require.Eventually(s.T(), func() bool {
+		return helpers.CheckEmailSent("test@example.com", confirmEmailSubject)
+	}, 10*time.Second, 500*time.Millisecond)
 }
 
 func (s *IntegrationTestSuite) TestSubscribe_UpdateExisting() {
@@ -57,8 +67,9 @@ func (s *IntegrationTestSuite) TestSubscribe_UpdateExisting() {
 	s.NoError(err)
 	s.Equal("daily", updatedSubscription.Frequency)
 
-	time.Sleep(2 * time.Second)
-	s.AssertEmailSent("test@example.com", "Confirm your weather subscription")
+	require.Eventually(s.T(), func() bool {
+		return helpers.CheckEmailSent("test@example.com", confirmEmailSubject)
+	}, 10*time.Second, 500*time.Millisecond)
 }
 
 func (s *IntegrationTestSuite) TestSubscribe_AlreadyConfirmed() {
@@ -76,7 +87,7 @@ func (s *IntegrationTestSuite) TestSubscribe_AlreadyConfirmed() {
 	var errorResponse models.ErrorResponse
 	err := json.Unmarshal(w.Body.Bytes(), &errorResponse)
 	s.NoError(err)
-	s.Equal("email already subscribed", errorResponse.Error)
+	s.Equal(emailAlreadySubscribedError, errorResponse.Error)
 }
 
 func (s *IntegrationTestSuite) TestSubscribe_MissingEmail() {
@@ -92,7 +103,7 @@ func (s *IntegrationTestSuite) TestSubscribe_MissingEmail() {
 	var errorResponse models.ErrorResponse
 	err := json.Unmarshal(w.Body.Bytes(), &errorResponse)
 	s.NoError(err)
-	s.Equal("invalid request format", errorResponse.Error)
+	s.Equal(invalidRequestFormatError, errorResponse.Error)
 }
 
 func (s *IntegrationTestSuite) TestSubscribe_InvalidEmail() {
@@ -108,7 +119,7 @@ func (s *IntegrationTestSuite) TestSubscribe_InvalidEmail() {
 	var errorResponse models.ErrorResponse
 	err := json.Unmarshal(w.Body.Bytes(), &errorResponse)
 	s.NoError(err)
-	s.Equal("invalid request format", errorResponse.Error)
+	s.Equal(invalidRequestFormatError, errorResponse.Error)
 }
 
 func (s *IntegrationTestSuite) TestSubscribe_MissingCity() {
@@ -124,7 +135,7 @@ func (s *IntegrationTestSuite) TestSubscribe_MissingCity() {
 	var errorResponse models.ErrorResponse
 	err := json.Unmarshal(w.Body.Bytes(), &errorResponse)
 	s.NoError(err)
-	s.Equal("invalid request format", errorResponse.Error)
+	s.Equal(invalidRequestFormatError, errorResponse.Error)
 }
 
 func (s *IntegrationTestSuite) TestSubscribe_InvalidFrequency() {
@@ -140,7 +151,7 @@ func (s *IntegrationTestSuite) TestSubscribe_InvalidFrequency() {
 	var errorResponse models.ErrorResponse
 	err := json.Unmarshal(w.Body.Bytes(), &errorResponse)
 	s.NoError(err)
-	s.Equal("invalid request format", errorResponse.Error)
+	s.Equal(invalidRequestFormatError, errorResponse.Error)
 }
 
 func (s *IntegrationTestSuite) TestSubscribe_JSONFormat() {
@@ -159,6 +170,7 @@ func (s *IntegrationTestSuite) TestSubscribe_JSONFormat() {
 	s.Equal("daily", subscription.Frequency)
 	s.False(subscription.Confirmed)
 
-	time.Sleep(2 * time.Second)
-	s.AssertEmailSent("test@example.com", "Confirm your weather subscription")
+	require.Eventually(s.T(), func() bool {
+		return helpers.CheckEmailSent("test@example.com", confirmEmailSubject)
+	}, 10*time.Second, 500*time.Millisecond)
 }

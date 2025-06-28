@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"os/exec"
 	"strings"
@@ -177,7 +177,7 @@ func prepareMockWeatherServer() {
 	cmd.Stderr = os.Stderr
 
 	if err := cmd.Run(); err != nil {
-		log.Printf("Failed to run go mod tidy in mock weather server: %v", err)
+		slog.Error("Failed to run go mod tidy in mock weather server", "error", err)
 		os.Exit(1)
 	}
 
@@ -190,6 +190,6 @@ func runCommand(name string, args ...string) {
 	cmd.Stderr = os.Stderr
 
 	if err := cmd.Run(); err != nil {
-		log.Printf("Command failed: %s %v - %v", name, args, err)
+		slog.Error("Command failed", "command", name, "args", args, "error", err)
 	}
 }
