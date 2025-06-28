@@ -150,7 +150,7 @@ func (s *IntegrationTestSuite) waitForServices() {
 				err = sqlDB.Ping()
 				if err == nil {
 					if closeErr := sqlDB.Close(); closeErr != nil {
-					slog.Warn("Failed to close database connection", "error", closeErr)
+						slog.Warn("Failed to close database connection", "error", closeErr)
 					}
 					postgresReady = true
 					break

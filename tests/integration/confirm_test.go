@@ -13,12 +13,12 @@ import (
 
 const (
 	// Confirmation test constants
-	subscriptionConfirmed = "Subscription confirmed"
-	tokenTypeUnsubscribe  = "unsubscribe"
-	tokenTypeConfirmation = "confirmation"
-	welcomeEmailSubject   = "Welcome to Weather Updates"
-	tokenNotFoundError    = "token not found or expired"
-	invalidTokenTypeError = "invalid token type"
+	subscriptionConfirmed     = "Subscription confirmed"
+	tokenTypeUnsubscribe      = "unsubscribe"
+	tokenTypeConfirmation     = "confirmation"
+	welcomeEmailSubject       = "Welcome to Weather Updates"
+	tokenNotFoundError        = "token not found or expired"
+	invalidTokenTypeError     = "invalid token type"
 	subscriptionNotFoundError = "subscription not found"
 )
 
