@@ -33,6 +33,11 @@ func (m *MockWeatherService) GetProviderInfo() map[string]interface{} {
 	return args.Get(0).(map[string]interface{})
 }
 
+func (m *MockWeatherService) GetCacheMetrics() map[string]interface{} {
+	args := m.Called()
+	return args.Get(0).(map[string]interface{})
+}
+
 // MockSubscriptionService for testing
 type MockSubscriptionService struct {
 	mock.Mock
@@ -58,26 +63,54 @@ func (m *MockSubscriptionService) SendWeatherUpdate(frequency string) error {
 	return args.Error(0)
 }
 
+// MockProviderManager for testing
+type MockProviderManager struct {
+	mock.Mock
+}
+
+func (m *MockProviderManager) GetWeather(city string) (*models.WeatherResponse, error) {
+	args := m.Called(city)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.WeatherResponse), args.Error(1)
+}
+
+func (m *MockProviderManager) GetProviderInfo() map[string]interface{} {
+	args := m.Called()
+	return args.Get(0).(map[string]interface{})
+}
+
+func (m *MockProviderManager) GetCacheMetrics() map[string]interface{} {
+	args := m.Called()
+	return args.Get(0).(map[string]interface{})
+}
+
 // Helper function to set up a test server with mocks
-func setupTestServer() (*gin.Engine, *MockWeatherService, *MockSubscriptionService) {
+func setupTestServer() (*gin.Engine, *MockWeatherService, *MockSubscriptionService, *MockProviderManager) {
 	gin.SetMode(gin.TestMode)
 
 	mockWeather := new(MockWeatherService)
 	mockSubscription := new(MockSubscriptionService)
+	mockProviderManager := new(MockProviderManager)
 
-	server := NewServer(
-		nil, // db not needed for these tests
-		&config.Config{AppBaseURL: "http://localhost:8080"},
-		mockWeather,
-		mockSubscription,
-	)
+	server, err := NewServer(ServerOptions{
+		DB:                  nil, // db not needed for these tests
+		Config:              &config.Config{AppBaseURL: "http://localhost:8080"},
+		WeatherService:      mockWeather,
+		SubscriptionService: mockSubscription,
+		ProviderManager:     mockProviderManager,
+	})
+	if err != nil {
+		panic("Failed to create test server: " + err.Error())
+	}
 
-	return server.GetRouter(), mockWeather, mockSubscription
+	return server.GetRouter(), mockWeather, mockSubscription, mockProviderManager
 }
 
 // Test for GET /weather endpoint
 func TestGetWeather_Success(t *testing.T) {
-	router, mockWeather, _ := setupTestServer()
+	router, mockWeather, _, _ := setupTestServer()
 
 	expectedWeather := &models.WeatherResponse{
 		Temperature: 15.0,
@@ -105,7 +138,7 @@ func TestGetWeather_Success(t *testing.T) {
 }
 
 func TestGetWeather_CityNotFound(t *testing.T) {
-	router, mockWeather, _ := setupTestServer()
+	router, mockWeather, _, _ := setupTestServer()
 
 	mockWeather.On("GetWeather", "NonExistentCity").Return(nil, errors.NewNotFoundError("city not found"))
 
@@ -125,7 +158,7 @@ func TestGetWeather_CityNotFound(t *testing.T) {
 }
 
 func TestGetWeather_MissingCity(t *testing.T) {
-	router, _, _ := setupTestServer()
+	router, _, _, _ := setupTestServer()
 
 	req := httptest.NewRequest("GET", "/api/weather", nil)
 	w := httptest.NewRecorder()
@@ -141,7 +174,7 @@ func TestGetWeather_MissingCity(t *testing.T) {
 }
 
 func TestGetWeather_ExternalAPIError(t *testing.T) {
-	router, mockWeather, _ := setupTestServer()
+	router, mockWeather, _, _ := setupTestServer()
 
 	mockWeather.On("GetWeather", "London").Return(nil, errors.NewExternalAPIError("weather service unavailable", nil))
 
@@ -161,7 +194,7 @@ func TestGetWeather_ExternalAPIError(t *testing.T) {
 }
 
 func TestSubscribe_Success(t *testing.T) {
-	router, _, mockSubscription := setupTestServer()
+	router, _, mockSubscription, _ := setupTestServer()
 
 	mockSubscription.On("Subscribe", mock.AnythingOfType("*models.SubscriptionRequest")).Return(nil)
 
@@ -184,7 +217,7 @@ func TestSubscribe_Success(t *testing.T) {
 }
 
 func TestSubscribe_AlreadySubscribed(t *testing.T) {
-	router, _, mockSubscription := setupTestServer()
+	router, _, mockSubscription, _ := setupTestServer()
 
 	mockSubscription.On("Subscribe", mock.AnythingOfType("*models.SubscriptionRequest")).Return(errors.NewAlreadyExistsError("email already subscribed"))
 
@@ -206,7 +239,7 @@ func TestSubscribe_AlreadySubscribed(t *testing.T) {
 }
 
 func TestSubscribe_ServiceValidationError(t *testing.T) {
-	router, _, mockSubscription := setupTestServer()
+	router, _, mockSubscription, _ := setupTestServer()
 
 	mockSubscription.On("Subscribe", mock.AnythingOfType("*models.SubscriptionRequest")).Return(errors.NewValidationError("city not supported"))
 
@@ -228,7 +261,7 @@ func TestSubscribe_ServiceValidationError(t *testing.T) {
 }
 
 func TestSubscribe_BindingValidationError(t *testing.T) {
-	router, _, _ := setupTestServer()
+	router, _, _, _ := setupTestServer()
 
 	// No mock expectation because the service should NOT be called when binding fails
 
@@ -248,7 +281,7 @@ func TestSubscribe_BindingValidationError(t *testing.T) {
 }
 
 func TestSubscribe_EmailError(t *testing.T) {
-	router, _, mockSubscription := setupTestServer()
+	router, _, mockSubscription, _ := setupTestServer()
 
 	mockSubscription.On("Subscribe", mock.AnythingOfType("*models.SubscriptionRequest")).Return(errors.NewEmailError("failed to send email", nil))
 
@@ -270,7 +303,7 @@ func TestSubscribe_EmailError(t *testing.T) {
 }
 
 func TestConfirmSubscription_Success(t *testing.T) {
-	router, _, mockSubscription := setupTestServer()
+	router, _, mockSubscription, _ := setupTestServer()
 
 	token := "valid-confirmation-token"
 	mockSubscription.On("ConfirmSubscription", token).Return(nil)
@@ -292,7 +325,7 @@ func TestConfirmSubscription_Success(t *testing.T) {
 }
 
 func TestConfirmSubscription_InvalidToken(t *testing.T) {
-	router, _, mockSubscription := setupTestServer()
+	router, _, mockSubscription, _ := setupTestServer()
 
 	token := "invalid-token"
 	mockSubscription.On("ConfirmSubscription", token).Return(errors.NewTokenError("invalid token type"))
@@ -313,7 +346,7 @@ func TestConfirmSubscription_InvalidToken(t *testing.T) {
 }
 
 func TestConfirmSubscription_NotFound(t *testing.T) {
-	router, _, mockSubscription := setupTestServer()
+	router, _, mockSubscription, _ := setupTestServer()
 
 	token := "nonexistent-token"
 	mockSubscription.On("ConfirmSubscription", token).Return(errors.NewNotFoundError("token not found"))
@@ -334,7 +367,7 @@ func TestConfirmSubscription_NotFound(t *testing.T) {
 }
 
 func TestUnsubscribe_Success(t *testing.T) {
-	router, _, mockSubscription := setupTestServer()
+	router, _, mockSubscription, _ := setupTestServer()
 
 	token := "valid-unsubscribe-token"
 	mockSubscription.On("Unsubscribe", token).Return(nil)
@@ -356,7 +389,7 @@ func TestUnsubscribe_Success(t *testing.T) {
 }
 
 func TestUnsubscribe_InvalidToken(t *testing.T) {
-	router, _, mockSubscription := setupTestServer()
+	router, _, mockSubscription, _ := setupTestServer()
 
 	token := "invalid-token"
 	mockSubscription.On("Unsubscribe", token).Return(errors.NewTokenError("invalid token type"))
@@ -377,7 +410,7 @@ func TestUnsubscribe_InvalidToken(t *testing.T) {
 }
 
 func TestUnsubscribe_NotFound(t *testing.T) {
-	router, _, mockSubscription := setupTestServer()
+	router, _, mockSubscription, _ := setupTestServer()
 
 	token := "nonexistent-token"
 	mockSubscription.On("Unsubscribe", token).Return(errors.NewNotFoundError("token not found"))
@@ -399,7 +432,7 @@ func TestUnsubscribe_NotFound(t *testing.T) {
 
 // Test validation for empty token parameter
 func TestConfirmSubscription_EmptyToken(t *testing.T) {
-	router, _, _ := setupTestServer()
+	router, _, _, _ := setupTestServer()
 
 	req := httptest.NewRequest("GET", "/api/confirm/", nil)
 	w := httptest.NewRecorder()
@@ -410,8 +443,176 @@ func TestConfirmSubscription_EmptyToken(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, w.Code)
 }
 
+// Test ServerOptions validation
+func TestServerOptions_Validation(t *testing.T) {
+	tests := []struct {
+		name        string
+		opts        ServerOptions
+		expectError bool
+		errorMsg    string
+	}{
+		{
+			name: "Valid options",
+			opts: ServerOptions{
+				DB:                  nil,
+				Config:              &config.Config{},
+				WeatherService:      new(MockWeatherService),
+				SubscriptionService: new(MockSubscriptionService),
+				ProviderManager:     new(MockProviderManager),
+			},
+			expectError: false,
+		},
+		{
+			name: "Missing config",
+			opts: ServerOptions{
+				DB:                  nil,
+				Config:              nil,
+				WeatherService:      new(MockWeatherService),
+				SubscriptionService: new(MockSubscriptionService),
+				ProviderManager:     new(MockProviderManager),
+			},
+			expectError: true,
+			errorMsg:    "config is required",
+		},
+		{
+			name: "Missing weather service",
+			opts: ServerOptions{
+				DB:                  nil,
+				Config:              &config.Config{},
+				WeatherService:      nil,
+				SubscriptionService: new(MockSubscriptionService),
+				ProviderManager:     new(MockProviderManager),
+			},
+			expectError: true,
+			errorMsg:    "weather service is required",
+		},
+		{
+			name: "Missing subscription service",
+			opts: ServerOptions{
+				DB:                  nil,
+				Config:              &config.Config{},
+				WeatherService:      new(MockWeatherService),
+				SubscriptionService: nil,
+				ProviderManager:     new(MockProviderManager),
+			},
+			expectError: true,
+			errorMsg:    "subscription service is required",
+		},
+		{
+			name: "Missing provider manager",
+			opts: ServerOptions{
+				DB:                  nil,
+				Config:              &config.Config{},
+				WeatherService:      new(MockWeatherService),
+				SubscriptionService: new(MockSubscriptionService),
+				ProviderManager:     nil,
+			},
+			expectError: true,
+			errorMsg:    "provider manager is required",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.opts.Validate()
+
+			if tt.expectError {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tt.errorMsg)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestNewServer_ValidationError(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	// Test that NewServer returns error when validation fails
+	server, err := NewServer(ServerOptions{
+		Config: nil, // Missing required config
+	})
+
+	assert.Error(t, err)
+	assert.Nil(t, server)
+	assert.Contains(t, err.Error(), "invalid server options")
+	assert.Contains(t, err.Error(), "config is required")
+}
+
+func TestServerOptionsBuilder(t *testing.T) {
+	mockWeather := new(MockWeatherService)
+	mockSubscription := new(MockSubscriptionService)
+	mockProviderManager := new(MockProviderManager)
+	config := &config.Config{AppBaseURL: "http://localhost:8080"}
+
+	// Test builder pattern
+	opts := NewServerOptionsBuilder().
+		WithConfig(config).
+		WithWeatherService(mockWeather).
+		WithSubscriptionService(mockSubscription).
+		WithProviderManager(mockProviderManager).
+		Build()
+
+	// Validate the built options
+	assert.Equal(t, config, opts.Config)
+	assert.Equal(t, mockWeather, opts.WeatherService)
+	assert.Equal(t, mockSubscription, opts.SubscriptionService)
+	assert.Equal(t, mockProviderManager, opts.ProviderManager)
+	assert.Nil(t, opts.DB) // Not set
+
+	// Should pass validation
+	err := opts.Validate()
+	assert.NoError(t, err)
+
+	// Should create server successfully
+	gin.SetMode(gin.TestMode)
+	server, err := NewServer(opts)
+	assert.NoError(t, err)
+	assert.NotNil(t, server)
+}
+
+// Test for the new metrics endpoint
+func TestMetricsEndpoint_Success(t *testing.T) {
+	router, _, _, mockProviderManager := setupTestServer()
+
+	// Set up mock expectations
+	mockProviderManager.On("GetCacheMetrics").Return(map[string]interface{}{
+		"cache_type": "memory",
+		"hits":       100,
+		"misses":     25,
+		"total":      125,
+		"hit_ratio":  0.8,
+	})
+	mockProviderManager.On("GetProviderInfo").Return(map[string]interface{}{
+		"cache_enabled": true,
+		"cache_type":    "memory",
+	})
+
+	req := httptest.NewRequest("GET", "/api/metrics", nil)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var response map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	assert.NoError(t, err)
+
+	// Verify response structure
+	assert.Contains(t, response, "cache")
+	assert.Contains(t, response, "provider_info")
+	assert.Contains(t, response, "endpoints")
+
+	endpoints := response["endpoints"].(map[string]interface{})
+	assert.Equal(t, "/metrics", endpoints["prometheus_metrics"])
+	assert.Equal(t, "/api/metrics", endpoints["cache_metrics"])
+	mockProviderManager.AssertExpectations(t)
+}
+
 func TestUnsubscribe_EmptyToken(t *testing.T) {
-	router, _, _ := setupTestServer()
+	router, _, _, _ := setupTestServer()
 
 	req := httptest.NewRequest("GET", "/api/unsubscribe/", nil)
 	w := httptest.NewRecorder()

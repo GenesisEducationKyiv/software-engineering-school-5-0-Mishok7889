@@ -48,6 +48,11 @@ func (s *WeatherService) GetProviderInfo() map[string]interface{} {
 	return s.providerManager.GetProviderInfo()
 }
 
+// GetCacheMetrics returns cache statistics from the provider manager
+func (s *WeatherService) GetCacheMetrics() map[string]interface{} {
+	return s.providerManager.GetCacheMetrics()
+}
+
 // SubscriptionService handles subscription-related business logic
 type SubscriptionService struct {
 	db               *gorm.DB

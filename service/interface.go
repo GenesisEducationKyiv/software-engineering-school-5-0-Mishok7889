@@ -4,18 +4,17 @@ import (
 	"time"
 
 	"weatherapi.app/models"
+	"weatherapi.app/providers"
 )
 
-// WeatherProviderManagerInterface defines the interface for weather provider management
-type WeatherProviderManagerInterface interface {
-	GetWeather(city string) (*models.WeatherResponse, error)
-	GetProviderInfo() map[string]interface{}
-}
+// WeatherProviderManagerInterface is an alias to the providers interface
+type WeatherProviderManagerInterface = providers.ProviderManagerInterface
 
 // WeatherServiceInterface defines the interface for weather operations
 type WeatherServiceInterface interface {
 	GetWeather(city string) (*models.WeatherResponse, error)
 	GetProviderInfo() map[string]interface{}
+	GetCacheMetrics() map[string]interface{}
 }
 
 // SubscriptionManagerInterface handles subscription creation and removal

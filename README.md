@@ -18,6 +18,8 @@ Weather data is fetched from multiple providers with automatic failover and deli
 - PostgreSQL for data storage
 - GORM as ORM
 - Multiple weather providers (WeatherAPI.com, OpenWeatherMap, AccuWeather) with automatic failover
+- Redis for distributed caching (with memory cache fallback)
+- Prometheus for metrics collection and monitoring
 - Gmail SMTP for email delivery
 - Docker and Docker Compose for containerization
 
@@ -64,6 +66,39 @@ go run main.go
 - `POST /api/subscribe` - Subscribe to weather updates
 - `GET /api/confirm/:token` - Confirm email subscription
 - `GET /api/unsubscribe/:token` - Unsubscribe from weather updates
+- `GET /api/metrics` - Get cache performance metrics (JSON format)
+- `GET /metrics` - Prometheus metrics endpoint
+
+## Caching and Monitoring
+
+The application includes sophisticated caching with comprehensive monitoring:
+
+### Cache Types
+- **Memory Cache**: Default in-memory caching for single-instance deployments
+- **Redis Cache**: Distributed caching for multi-instance deployments
+
+### Metrics and Monitoring
+- **Cache hit/miss ratios** with real-time tracking
+- **Cache operation latency** monitoring
+- **Prometheus metrics** for integration with monitoring systems
+- **JSON metrics endpoint** for custom dashboards
+
+### Cache Configuration
+
+Configure caching via environment variables:
+
+```bash
+# Cache type (memory or redis)
+CACHE_TYPE=redis
+
+# Redis settings (when CACHE_TYPE=redis)
+REDIS_ADDR=localhost:6379
+REDIS_PASSWORD=your_redis_password
+REDIS_DB=0
+REDIS_DIAL_TIMEOUT=5
+REDIS_READ_TIMEOUT=3
+REDIS_WRITE_TIMEOUT=3
+```
 
 ## Development
 

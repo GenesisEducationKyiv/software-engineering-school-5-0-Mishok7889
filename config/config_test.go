@@ -549,6 +549,17 @@ func TestConfigValidation(t *testing.T) {
 				HourlyInterval: 60,
 				DailyInterval:  1440,
 			},
+			Cache: CacheConfig{
+				Type: "memory",
+				Redis: RedisConfig{
+					Addr:         "localhost:6379",
+					Password:     "",
+					DB:           0,
+					DialTimeout:  5,
+					ReadTimeout:  3,
+					WriteTimeout: 3,
+				},
+			},
 			AppBaseURL: "http://localhost:8080",
 		}
 

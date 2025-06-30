@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"weatherapi.app/config"
 )
 
 func TestProviderManager_NoProvidersConfigured(t *testing.T) {
@@ -17,6 +18,8 @@ func TestProviderManager_NoProvidersConfigured(t *testing.T) {
 		EnableCache:       false,
 		EnableLogging:     false,
 		ProviderOrder:     []string{"weatherapi", "openweathermap", "accuweather"},
+		CacheType:         "memory",
+		CacheConfig:       &config.CacheConfig{Type: "memory"},
 	}
 
 	// With fail-fast approach, provider manager creation should fail
@@ -38,6 +41,8 @@ func TestProviderManager_WithProvidersConfigured(t *testing.T) {
 		EnableCache:       false,
 		EnableLogging:     false,
 		ProviderOrder:     []string{"weatherapi"},
+		CacheType:         "memory",
+		CacheConfig:       &config.CacheConfig{Type: "memory"},
 	}
 
 	// With at least one provider configured, creation should succeed

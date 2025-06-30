@@ -3,6 +3,7 @@ package integration
 import (
 	"time"
 
+	"weatherapi.app/config"
 	"weatherapi.app/providers"
 	"weatherapi.app/tests/integration/helpers"
 )
@@ -24,6 +25,8 @@ func (s *IntegrationTestSuite) TestProviderManagerIntegration() {
 		EnableCache:       false,
 		EnableLogging:     false,
 		ProviderOrder:     []string{"weatherapi"},
+		CacheType:         "memory",
+		CacheConfig:       &config.CacheConfig{Type: "memory"},
 	}
 
 	// This should now fail due to fail-fast validation

@@ -113,7 +113,17 @@ func (s *IntegrationTestSuite) SetupSuite() {
 		testConfig,
 	)
 
-	s.server = api.NewServer(db, testConfig, weatherService, subscriptionService)
+	server, err := api.NewServer(
+		api.NewServerOptionsBuilder().
+			WithDB(db).
+			WithConfig(testConfig).
+			WithWeatherService(weatherService).
+			WithSubscriptionService(subscriptionService).
+			WithProviderManager(providerManager).
+			Build(),
+	)
+	s.Require().NoError(err)
+	s.server = server
 	s.router = s.server.GetRouter()
 }
 

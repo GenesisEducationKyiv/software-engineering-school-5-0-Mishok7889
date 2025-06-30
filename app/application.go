@@ -106,7 +106,19 @@ func (app *Application) initializeServices() error {
 	)
 
 	// Create server and scheduler
-	app.server = api.NewServer(app.db, app.config, weatherService, subscriptionService)
+	server, err := api.NewServer(
+		api.NewServerOptionsBuilder().
+			WithDB(app.db).
+			WithConfig(app.config).
+			WithWeatherService(weatherService).
+			WithSubscriptionService(subscriptionService).
+			WithProviderManager(providerManager).
+			Build(),
+	)
+	if err != nil {
+		return fmt.Errorf("create server: %w", err)
+	}
+	app.server = server
 	app.scheduler = scheduler.NewScheduler(app.db, app.config, subscriptionService)
 
 	slog.Info("Services initialized successfully")
@@ -129,6 +141,8 @@ func (app *Application) createProviderManager() (*providers.ProviderManager, err
 		EnableCache:       app.config.Weather.EnableCache,
 		EnableLogging:     app.config.Weather.EnableLogging,
 		ProviderOrder:     app.config.Weather.ProviderOrder,
+		CacheType:         app.config.Cache.Type,
+		CacheConfig:       &app.config.Cache,
 	}
 
 	// Create provider manager

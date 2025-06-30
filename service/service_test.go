@@ -37,6 +37,11 @@ func (m *mockProviderManager) GetProviderInfo() map[string]interface{} {
 	return args.Get(0).(map[string]interface{})
 }
 
+func (m *mockProviderManager) GetCacheMetrics() map[string]interface{} {
+	args := m.Called()
+	return args.Get(0).(map[string]interface{})
+}
+
 // Ensure mock implements the interface
 var _ WeatherProviderManagerInterface = (*mockProviderManager)(nil)
 
@@ -317,6 +322,11 @@ func (m *mockWeatherService) GetProviderInfo() map[string]interface{} {
 	return args.Get(0).(map[string]interface{})
 }
 
+func (m *mockWeatherService) GetCacheMetrics() map[string]interface{} {
+	args := m.Called()
+	return args.Get(0).(map[string]interface{})
+}
+
 // Test SubscriptionService with improved architecture
 func TestSubscriptionService_Subscribe_Success(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
@@ -436,6 +446,8 @@ func TestProviderManager_Integration(t *testing.T) {
 		EnableCache:       false, // Disable cache for testing
 		EnableLogging:     false, // Disable logging for testing
 		ProviderOrder:     []string{"weatherapi"},
+		CacheType:         "memory",
+		CacheConfig:       &config.CacheConfig{Type: "memory"},
 	}
 
 	// This test demonstrates integration but won't make actual API calls
@@ -473,6 +485,8 @@ func TestProviderManager_ChainOfResponsibility_Complete(t *testing.T) {
 				EnableCache:       false,
 				EnableLogging:     false,
 				ProviderOrder:     []string{"weatherapi", "openweathermap", "accuweather"},
+				CacheType:         "memory",
+				CacheConfig:       &config.CacheConfig{Type: "memory"},
 			},
 			expectedError:  false,
 			expectProvider: "accuweather", // AccuWeather uses mock data
@@ -488,6 +502,8 @@ func TestProviderManager_ChainOfResponsibility_Complete(t *testing.T) {
 				EnableCache:       false,
 				EnableLogging:     false,
 				ProviderOrder:     []string{"weatherapi", "openweathermap", "accuweather"},
+				CacheType:         "memory",
+				CacheConfig:       &config.CacheConfig{Type: "memory"},
 			},
 			expectedError: true,
 		},
@@ -500,6 +516,8 @@ func TestProviderManager_ChainOfResponsibility_Complete(t *testing.T) {
 				EnableCache:    true, // Test Proxy pattern
 				EnableLogging:  false,
 				ProviderOrder:  []string{"accuweather"},
+				CacheType:      "memory",
+				CacheConfig:    &config.CacheConfig{Type: "memory"},
 			},
 			expectedError:  false,
 			expectProvider: "accuweather",
@@ -513,6 +531,8 @@ func TestProviderManager_ChainOfResponsibility_Complete(t *testing.T) {
 				EnableCache:    false,
 				EnableLogging:  true, // Test Decorator pattern
 				ProviderOrder:  []string{"accuweather"},
+				CacheType:      "memory",
+				CacheConfig:    &config.CacheConfig{Type: "memory"},
 			},
 			expectedError:  false,
 			expectProvider: "accuweather",
@@ -605,6 +625,8 @@ func TestProviderManager_Builder_Pattern(t *testing.T) {
 		WithLoggingEnabled(true).
 		WithLogFilePath("test_builder.log").
 		WithProviderOrder([]string{"accuweather"}).
+		WithCacheType("memory").
+		WithCacheConfig(&config.CacheConfig{Type: "memory"}).
 		Build()
 
 	defer func() {

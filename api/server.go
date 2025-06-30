@@ -7,10 +7,12 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"gorm.io/gorm"
 	"weatherapi.app/config"
 	weathererr "weatherapi.app/errors"
 	"weatherapi.app/models"
+	"weatherapi.app/providers"
 	"weatherapi.app/service"
 )
 
@@ -21,27 +23,99 @@ type Server struct {
 	config              *config.Config
 	weatherService      service.WeatherServiceInterface
 	subscriptionService service.SubscriptionServiceInterface
+	providerManager     providers.ProviderManagerInterface
+}
+
+// ServerOptions contains all dependencies needed to create a new server
+type ServerOptions struct {
+	DB                  *gorm.DB
+	Config              *config.Config
+	WeatherService      service.WeatherServiceInterface
+	SubscriptionService service.SubscriptionServiceInterface
+	ProviderManager     providers.ProviderManagerInterface
+}
+
+// Validate checks if all required dependencies are provided
+func (opts *ServerOptions) Validate() error {
+	if opts.Config == nil {
+		return errors.New("config is required")
+	}
+	if opts.WeatherService == nil {
+		return errors.New("weather service is required")
+	}
+	if opts.SubscriptionService == nil {
+		return errors.New("subscription service is required")
+	}
+	if opts.ProviderManager == nil {
+		return errors.New("provider manager is required")
+	}
+	return nil
+}
+
+// ServerOptionsBuilder helps build ServerOptions with a fluent interface
+type ServerOptionsBuilder struct {
+	opts ServerOptions
+}
+
+// NewServerOptionsBuilder creates a new ServerOptionsBuilder
+func NewServerOptionsBuilder() *ServerOptionsBuilder {
+	return &ServerOptionsBuilder{}
+}
+
+// WithDB sets the database
+func (b *ServerOptionsBuilder) WithDB(db *gorm.DB) *ServerOptionsBuilder {
+	b.opts.DB = db
+	return b
+}
+
+// WithConfig sets the configuration
+func (b *ServerOptionsBuilder) WithConfig(config *config.Config) *ServerOptionsBuilder {
+	b.opts.Config = config
+	return b
+}
+
+// WithWeatherService sets the weather service
+func (b *ServerOptionsBuilder) WithWeatherService(weatherService service.WeatherServiceInterface) *ServerOptionsBuilder {
+	b.opts.WeatherService = weatherService
+	return b
+}
+
+// WithSubscriptionService sets the subscription service
+func (b *ServerOptionsBuilder) WithSubscriptionService(subscriptionService service.SubscriptionServiceInterface) *ServerOptionsBuilder {
+	b.opts.SubscriptionService = subscriptionService
+	return b
+}
+
+// WithProviderManager sets the provider manager
+func (b *ServerOptionsBuilder) WithProviderManager(providerManager providers.ProviderManagerInterface) *ServerOptionsBuilder {
+	b.opts.ProviderManager = providerManager
+	return b
+}
+
+// Build creates the ServerOptions
+func (b *ServerOptionsBuilder) Build() ServerOptions {
+	return b.opts
 }
 
 // NewServer creates and configures a new HTTP server
-func NewServer(
-	db *gorm.DB,
-	config *config.Config,
-	weatherService service.WeatherServiceInterface,
-	subscriptionService service.SubscriptionServiceInterface,
-) *Server {
+func NewServer(opts ServerOptions) (*Server, error) {
+	if err := opts.Validate(); err != nil {
+		return nil, fmt.Errorf("invalid server options: %w", err)
+	}
+
 	router := gin.Default()
 
 	server := &Server{
 		router:              router,
-		db:                  db,
-		config:              config,
-		weatherService:      weatherService,
-		subscriptionService: subscriptionService,
+		db:                  opts.DB,
+		config:              opts.Config,
+		weatherService:      opts.WeatherService,
+		subscriptionService: opts.SubscriptionService,
+		providerManager:     opts.ProviderManager,
 	}
 
 	server.setupRoutes()
-	return server
+	return server, nil
 }
 
 func (s *Server) setupRoutes() {
@@ -52,7 +126,10 @@ func (s *Server) setupRoutes() {
 		api.GET("/confirm/:token", s.confirmSubscription)
 		api.GET("/unsubscribe/:token", s.unsubscribe)
 		api.GET("/debug", s.debugEndpoint)
+		api.GET("/metrics", s.metricsEndpoint)
 	}
+
+	s.router.GET("/metrics", gin.WrapH(promhttp.Handler()))
 
 	s.ServeStaticFiles()
 }
@@ -176,6 +253,24 @@ func (s *Server) debugEndpoint(c *gin.Context) {
 		"smtp": smtpConfig,
 		"config": map[string]string{
 			"appBaseURL": s.config.AppBaseURL,
+		},
+	}
+
+	c.JSON(http.StatusOK, response)
+}
+
+func (s *Server) metricsEndpoint(c *gin.Context) {
+	slog.Debug("Metrics endpoint called")
+
+	cacheMetrics := s.providerManager.GetCacheMetrics()
+	providerInfo := s.providerManager.GetProviderInfo()
+
+	response := gin.H{
+		"cache":         cacheMetrics,
+		"provider_info": providerInfo,
+		"endpoints": gin.H{
+			"prometheus_metrics": "/metrics",
+			"cache_metrics":      "/api/metrics",
 		},
 	}
 

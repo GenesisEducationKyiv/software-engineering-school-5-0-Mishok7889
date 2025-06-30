@@ -33,3 +33,10 @@ type FileLogger interface {
 type EmailProvider interface {
 	SendEmail(to, subject, body string, isHTML bool) error
 }
+
+// ProviderManagerInterface defines the interface for weather provider management
+type ProviderManagerInterface interface {
+	GetWeather(city string) (*models.WeatherResponse, error)
+	GetProviderInfo() map[string]interface{}
+	GetCacheMetrics() map[string]interface{}
+}

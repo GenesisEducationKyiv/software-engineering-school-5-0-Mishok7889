@@ -15,6 +15,7 @@ type Config struct {
 	Weather    WeatherConfig   `split_words:"true"`
 	Email      EmailConfig     `split_words:"true"`
 	Scheduler  SchedulerConfig `split_words:"true"`
+	Cache      CacheConfig     `split_words:"true"`
 	AppBaseURL string          `envconfig:"APP_URL" default:"http://localhost:8080"`
 }
 
@@ -55,6 +56,22 @@ type WeatherConfig struct {
 	EnableLogging   bool     `envconfig:"WEATHER_ENABLE_LOGGING" default:"true"`
 	CacheTTLMinutes int      `envconfig:"WEATHER_CACHE_TTL_MINUTES" default:"10"`
 	LogFilePath     string   `envconfig:"WEATHER_LOG_FILE_PATH" default:"logs/weather_providers.log"`
+}
+
+// CacheConfig contains cache-specific settings
+type CacheConfig struct {
+	Type  string `envconfig:"CACHE_TYPE" default:"memory"`
+	Redis RedisConfig
+}
+
+// RedisConfig contains Redis-specific settings
+type RedisConfig struct {
+	Addr         string `envconfig:"REDIS_ADDR" default:"localhost:6379"`
+	Password     string `envconfig:"REDIS_PASSWORD" default:""`
+	DB           int    `envconfig:"REDIS_DB" default:"0"`
+	DialTimeout  int    `envconfig:"REDIS_DIAL_TIMEOUT" default:"5"`
+	ReadTimeout  int    `envconfig:"REDIS_READ_TIMEOUT" default:"3"`
+	WriteTimeout int    `envconfig:"REDIS_WRITE_TIMEOUT" default:"3"`
 }
 
 // EmailConfig contains email server and sending settings
@@ -104,8 +121,44 @@ func (c *Config) Validate() error {
 	if err := c.Scheduler.Validate(); err != nil {
 		return err
 	}
+	if err := c.Cache.Validate(); err != nil {
+		return err
+	}
 	if err := c.validateAppBaseURL(); err != nil {
 		return err
+	}
+	return nil
+}
+
+// Validate checks cache configuration
+func (c *CacheConfig) Validate() error {
+	if c.Type != "memory" && c.Type != "redis" {
+		return errors.NewConfigurationError("CACHE_TYPE must be one of: memory, redis", nil)
+	}
+
+	if c.Type == "redis" {
+		return c.Redis.Validate()
+	}
+
+	return nil
+}
+
+// Validate checks Redis configuration
+func (r *RedisConfig) Validate() error {
+	if r.Addr == "" {
+		return errors.NewConfigurationError("REDIS_ADDR cannot be empty when using Redis cache", nil)
+	}
+	if r.DB < 0 || r.DB > 15 {
+		return errors.NewConfigurationError("REDIS_DB must be between 0 and 15", nil)
+	}
+	if r.DialTimeout < 1 {
+		return errors.NewConfigurationError("REDIS_DIAL_TIMEOUT must be at least 1 second", nil)
+	}
+	if r.ReadTimeout < 1 {
+		return errors.NewConfigurationError("REDIS_READ_TIMEOUT must be at least 1 second", nil)
+	}
+	if r.WriteTimeout < 1 {
+		return errors.NewConfigurationError("REDIS_WRITE_TIMEOUT must be at least 1 second", nil)
 	}
 	return nil
 }
