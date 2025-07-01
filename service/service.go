@@ -188,7 +188,7 @@ func (s *SubscriptionService) ConfirmSubscription(tokenStr string) error {
 
 	subscription, err := s.subscriptionRepo.FindByID(token.SubscriptionID)
 	if err != nil {
-		return errors.NewDatabaseError("failed to find subscription", err)
+		return err
 	}
 
 	return s.processConfirmation(subscription, token)
@@ -262,7 +262,7 @@ func (s *SubscriptionService) Unsubscribe(tokenStr string) error {
 
 	subscription, err := s.subscriptionRepo.FindByID(token.SubscriptionID)
 	if err != nil {
-		return errors.NewDatabaseError("failed to find subscription", err)
+		return err
 	}
 
 	return s.processUnsubscription(subscription, token)

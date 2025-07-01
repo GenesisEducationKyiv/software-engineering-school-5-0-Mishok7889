@@ -45,10 +45,7 @@ func (p *WeatherAPIProvider) GetCurrentWeather(city string) (*models.WeatherResp
 		return nil, errors.NewExternalAPIError("failed to get weather data", err)
 	}
 	defer func() {
-		if closeErr := resp.Body.Close(); closeErr != nil {
-			// Ignore close error as it's not critical for the main operation
-			_ = closeErr
-		}
+		_ = resp.Body.Close() // Explicitly ignore close error
 	}()
 
 	if resp.StatusCode == http.StatusNotFound {
