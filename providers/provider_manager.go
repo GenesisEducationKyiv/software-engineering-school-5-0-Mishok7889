@@ -160,11 +160,14 @@ func (pm *ProviderManager) buildChain(providers map[string]WeatherProvider) Weat
 	builder := NewChainBuilder()
 
 	for _, providerName := range pm.configuration.ProviderOrder {
-		if provider, exists := providers[providerName]; exists {
-			handler := pm.createHandler(providerName, provider)
-			if handler != nil {
-				builder.AddHandler(handler)
-			}
+		provider, exists := providers[providerName]
+		if !exists {
+			continue
+		}
+
+		handler := pm.createHandler(providerName, provider)
+		if handler != nil {
+			builder.AddHandler(handler)
 		}
 	}
 
