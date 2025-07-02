@@ -49,8 +49,8 @@ type WeatherConfig struct {
 type EmailConfig struct {
 	SMTPHost     string `envconfig:"EMAIL_SMTP_HOST" default:"smtp.gmail.com"`
 	SMTPPort     int    `envconfig:"EMAIL_SMTP_PORT" default:"587"`
-	SMTPUsername string `envconfig:"EMAIL_SMTP_USERNAME" required:"true"`
-	SMTPPassword string `envconfig:"EMAIL_SMTP_PASSWORD" required:"true"`
+	SMTPUsername string `envconfig:"EMAIL_SMTP_USERNAME"`
+	SMTPPassword string `envconfig:"EMAIL_SMTP_PASSWORD"`
 	FromName     string `envconfig:"EMAIL_FROM_NAME" default:"Weather API"`
 	FromAddress  string `envconfig:"EMAIL_FROM_ADDRESS" default:"no-reply@weatherapi.app"`
 }
@@ -170,11 +170,9 @@ func (e *EmailConfig) Validate() error {
 	if e.SMTPPort < 1 || e.SMTPPort > 65535 {
 		return errors.NewConfigurationError("EMAIL_SMTP_PORT must be between 1 and 65535", nil)
 	}
-	if e.SMTPUsername == "" {
-		return errors.NewConfigurationError("EMAIL_SMTP_USERNAME is required", nil)
-	}
-	if e.SMTPPassword == "" {
-		return errors.NewConfigurationError("EMAIL_SMTP_PASSWORD is required", nil)
+	// For authentication: either both username and password are provided, or both are empty (for testing)
+	if (e.SMTPUsername == "") != (e.SMTPPassword == "") {
+		return errors.NewConfigurationError("EMAIL_SMTP_USERNAME and EMAIL_SMTP_PASSWORD must both be provided or both be empty", nil)
 	}
 	if e.FromName == "" {
 		return errors.NewConfigurationError("EMAIL_FROM_NAME cannot be empty", nil)
