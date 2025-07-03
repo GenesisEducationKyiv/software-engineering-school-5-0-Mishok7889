@@ -241,7 +241,8 @@ func (pm *ProviderManager) createCache() (CacheInterface, error) {
 	switch pm.configuration.CacheType {
 	case CacheTypeMemory:
 		slog.Info("Creating memory cache")
-		return cache.NewMemoryCache(), nil
+		genericCache := cache.NewMemoryCache()
+		return cache.NewWeatherCache(genericCache), nil
 	case CacheTypeRedis:
 		slog.Info("Creating Redis cache", "addr", pm.configuration.CacheConfig.Redis.Addr)
 		redisConfig := &cache.RedisCacheConfig{
@@ -252,7 +253,11 @@ func (pm *ProviderManager) createCache() (CacheInterface, error) {
 			ReadTimeout:  time.Duration(pm.configuration.CacheConfig.Redis.ReadTimeout) * time.Second,
 			WriteTimeout: time.Duration(pm.configuration.CacheConfig.Redis.WriteTimeout) * time.Second,
 		}
-		return cache.NewRedisCache(redisConfig)
+		genericCache, err := cache.NewRedisCache(redisConfig)
+		if err != nil {
+			return nil, err
+		}
+		return cache.NewWeatherCache(genericCache), nil
 	default:
 		return nil, fmt.Errorf("unsupported cache type: %s", pm.configuration.CacheType)
 	}

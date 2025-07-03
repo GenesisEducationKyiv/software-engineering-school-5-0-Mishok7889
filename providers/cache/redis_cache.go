@@ -2,12 +2,10 @@ package cache
 
 import (
 	"context"
-	"encoding/json"
 	"log/slog"
 	"time"
 
 	"github.com/go-redis/redis/v8"
-	"weatherapi.app/models"
 )
 
 type RedisCache struct {
@@ -24,7 +22,7 @@ type RedisCacheConfig struct {
 	WriteTimeout time.Duration
 }
 
-func NewRedisCache(config *RedisCacheConfig) (CacheInterface, error) {
+func NewRedisCache(config *RedisCacheConfig) (GenericCacheInterface, error) {
 	ctx := context.Background()
 
 	client := redis.NewClient(&redis.Options{
@@ -48,8 +46,8 @@ func NewRedisCache(config *RedisCacheConfig) (CacheInterface, error) {
 	}, nil
 }
 
-func (r *RedisCache) Get(key string) (*models.WeatherResponse, bool) {
-	val, err := r.client.Get(r.ctx, key).Result()
+func (r *RedisCache) Get(ctx context.Context, key string) ([]byte, bool) {
+	val, err := r.client.Get(ctx, key).Result()
 	if err != nil {
 		if err == redis.Nil {
 			return nil, false
@@ -58,39 +56,27 @@ func (r *RedisCache) Get(key string) (*models.WeatherResponse, bool) {
 		return nil, false
 	}
 
-	var weather models.WeatherResponse
-	if err := json.Unmarshal([]byte(val), &weather); err != nil {
-		slog.Error("Redis unmarshal error", "error", err, "key", key)
-		return nil, false
-	}
-
-	return &weather, true
+	return []byte(val), true
 }
 
-func (r *RedisCache) Set(key string, value *models.WeatherResponse, ttl time.Duration) {
+func (r *RedisCache) Set(ctx context.Context, key string, value []byte, ttl time.Duration) {
 	if value == nil {
 		return
 	}
 
-	data, err := json.Marshal(value)
-	if err != nil {
-		slog.Error("Redis marshal error", "error", err, "key", key)
-		return
-	}
-
-	if err := r.client.Set(r.ctx, key, data, ttl).Err(); err != nil {
+	if err := r.client.Set(ctx, key, value, ttl).Err(); err != nil {
 		slog.Error("Redis set error", "error", err, "key", key)
 	}
 }
 
-func (r *RedisCache) Delete(key string) {
-	if err := r.client.Del(r.ctx, key).Err(); err != nil {
+func (r *RedisCache) Delete(ctx context.Context, key string) {
+	if err := r.client.Del(ctx, key).Err(); err != nil {
 		slog.Error("Redis delete error", "error", err, "key", key)
 	}
 }
 
-func (r *RedisCache) Clear() {
-	if err := r.client.FlushDB(r.ctx).Err(); err != nil {
+func (r *RedisCache) Clear(ctx context.Context) {
+	if err := r.client.FlushDB(ctx).Err(); err != nil {
 		slog.Error("Redis clear error", "error", err)
 	}
 }

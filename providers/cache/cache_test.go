@@ -19,12 +19,13 @@ func TestRedisCacheBasicOperations(t *testing.T) {
 		WriteTimeout: 3 * time.Second,
 	}
 
-	cache, err := NewRedisCache(config)
+	genericCache, err := NewRedisCache(config)
 	if err != nil {
 		t.Skipf("Redis not available, skipping test: %v", err)
 		return
 	}
 
+	cache := NewWeatherCache(genericCache)
 	defer cache.Clear()
 
 	testWeather := &models.WeatherResponse{
@@ -79,7 +80,8 @@ func TestRedisCacheBasicOperations(t *testing.T) {
 }
 
 func TestMemoryCache(t *testing.T) {
-	cache := NewMemoryCache()
+	genericCache := NewMemoryCache()
+	cache := NewWeatherCache(genericCache)
 
 	testWeather := &models.WeatherResponse{
 		Temperature: 20.0,
