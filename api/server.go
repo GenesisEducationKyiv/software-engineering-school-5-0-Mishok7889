@@ -23,7 +23,8 @@ type Server struct {
 	config              *config.Config
 	weatherService      service.WeatherServiceInterface
 	subscriptionService service.SubscriptionServiceInterface
-	providerManager     providers.ProviderManagerInterface
+	providerManager     providers.WeatherProviderInterface
+	providerMetrics     providers.WeatherProviderMetricsInterface
 }
 
 // ServerOptions contains all dependencies needed to create a new server
@@ -32,7 +33,8 @@ type ServerOptions struct {
 	Config              *config.Config
 	WeatherService      service.WeatherServiceInterface
 	SubscriptionService service.SubscriptionServiceInterface
-	ProviderManager     providers.ProviderManagerInterface
+	ProviderManager     providers.WeatherProviderInterface
+	ProviderMetrics     providers.WeatherProviderMetricsInterface
 }
 
 // Validate checks if all required dependencies are provided
@@ -48,6 +50,9 @@ func (opts *ServerOptions) Validate() error {
 	}
 	if opts.ProviderManager == nil {
 		return errors.New("provider manager is required")
+	}
+	if opts.ProviderMetrics == nil {
+		return errors.New("provider metrics is required")
 	}
 	return nil
 }
@@ -87,8 +92,13 @@ func (b *ServerOptionsBuilder) WithSubscriptionService(subscriptionService servi
 }
 
 // WithProviderManager sets the provider manager
-func (b *ServerOptionsBuilder) WithProviderManager(providerManager providers.ProviderManagerInterface) *ServerOptionsBuilder {
+func (b *ServerOptionsBuilder) WithProviderManager(providerManager providers.WeatherProviderInterface) *ServerOptionsBuilder {
 	b.opts.ProviderManager = providerManager
+	return b
+}
+
+func (b *ServerOptionsBuilder) WithProviderMetrics(providerMetrics providers.WeatherProviderMetricsInterface) *ServerOptionsBuilder {
+	b.opts.ProviderMetrics = providerMetrics
 	return b
 }
 
@@ -112,6 +122,7 @@ func NewServer(opts ServerOptions) (*Server, error) {
 		weatherService:      opts.WeatherService,
 		subscriptionService: opts.SubscriptionService,
 		providerManager:     opts.ProviderManager,
+		providerMetrics:     opts.ProviderMetrics,
 	}
 
 	server.setupRoutes()
@@ -262,8 +273,8 @@ func (s *Server) debugEndpoint(c *gin.Context) {
 func (s *Server) metricsEndpoint(c *gin.Context) {
 	slog.Debug("Metrics endpoint called")
 
-	cacheMetrics := s.providerManager.GetCacheMetrics()
-	providerInfo := s.providerManager.GetProviderInfo()
+	cacheMetrics := s.providerMetrics.GetCacheMetrics()
+	providerInfo := s.providerMetrics.GetProviderInfo()
 
 	response := gin.H{
 		"cache":         cacheMetrics,

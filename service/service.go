@@ -43,16 +43,6 @@ func (s *WeatherService) GetWeather(city string) (*models.WeatherResponse, error
 	return weather, nil
 }
 
-// GetProviderInfo returns information about configured providers
-func (s *WeatherService) GetProviderInfo() map[string]interface{} {
-	return s.providerManager.GetProviderInfo()
-}
-
-// GetCacheMetrics returns cache statistics from the provider manager
-func (s *WeatherService) GetCacheMetrics() map[string]interface{} {
-	return s.providerManager.GetCacheMetrics()
-}
-
 // SubscriptionService handles subscription-related business logic
 type SubscriptionService struct {
 	db               *gorm.DB

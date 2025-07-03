@@ -8,13 +8,14 @@ import (
 )
 
 // WeatherProviderManagerInterface is an alias to the providers interface
-type WeatherProviderManagerInterface = providers.ProviderManagerInterface
+type WeatherProviderManagerInterface = providers.WeatherProviderInterface
+
+// WeatherProviderMetricsInterface is an alias to the providers metrics interface
+type WeatherProviderMetricsInterface = providers.WeatherProviderMetricsInterface
 
 // WeatherServiceInterface defines the interface for weather operations
 type WeatherServiceInterface interface {
 	GetWeather(city string) (*models.WeatherResponse, error)
-	GetProviderInfo() map[string]interface{}
-	GetCacheMetrics() map[string]interface{}
 }
 
 // SubscriptionManagerInterface handles subscription creation and removal

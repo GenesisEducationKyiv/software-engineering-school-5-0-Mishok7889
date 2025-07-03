@@ -35,8 +35,11 @@ type EmailProvider interface {
 }
 
 // ProviderManagerInterface defines the interface for weather provider management
-type ProviderManagerInterface interface {
+type WeatherProviderInterface interface {
 	GetWeather(city string) (*models.WeatherResponse, error)
+}
+
+type WeatherProviderMetricsInterface interface {
 	GetProviderInfo() map[string]interface{}
 	GetCacheMetrics() map[string]interface{}
 }

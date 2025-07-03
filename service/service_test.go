@@ -32,16 +32,6 @@ func (m *mockProviderManager) GetWeather(city string) (*models.WeatherResponse, 
 	return args.Get(0).(*models.WeatherResponse), nil
 }
 
-func (m *mockProviderManager) GetProviderInfo() map[string]interface{} {
-	args := m.Called()
-	return args.Get(0).(map[string]interface{})
-}
-
-func (m *mockProviderManager) GetCacheMetrics() map[string]interface{} {
-	args := m.Called()
-	return args.Get(0).(map[string]interface{})
-}
-
 // Ensure mock implements the interface
 var _ WeatherProviderManagerInterface = (*mockProviderManager)(nil)
 
@@ -317,16 +307,6 @@ func (m *mockWeatherService) GetWeather(city string) (*models.WeatherResponse, e
 	return args.Get(0).(*models.WeatherResponse), nil
 }
 
-func (m *mockWeatherService) GetProviderInfo() map[string]interface{} {
-	args := m.Called()
-	return args.Get(0).(map[string]interface{})
-}
-
-func (m *mockWeatherService) GetCacheMetrics() map[string]interface{} {
-	args := m.Called()
-	return args.Get(0).(map[string]interface{})
-}
-
 // Test SubscriptionService with improved architecture
 func TestSubscriptionService_Subscribe_Success(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
@@ -582,8 +562,8 @@ func TestProviderManager_ChainOfResponsibility_Complete(t *testing.T) {
 					assert.Equal(t, "Partly cloudy", weather.Description)
 				}
 
-				// Verify provider info
-				info := weatherService.GetProviderInfo()
+				// Verify provider info from manager
+				info := manager.GetProviderInfo()
 				assert.NotNil(t, info)
 				assert.Equal(t, tt.config.EnableCache, info["cache_enabled"])
 				assert.Equal(t, tt.config.EnableLogging, info["logging_enabled"])

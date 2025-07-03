@@ -28,16 +28,6 @@ func (m *MockWeatherService) GetWeather(city string) (*models.WeatherResponse, e
 	return args.Get(0).(*models.WeatherResponse), args.Error(1)
 }
 
-func (m *MockWeatherService) GetProviderInfo() map[string]interface{} {
-	args := m.Called()
-	return args.Get(0).(map[string]interface{})
-}
-
-func (m *MockWeatherService) GetCacheMetrics() map[string]interface{} {
-	args := m.Called()
-	return args.Get(0).(map[string]interface{})
-}
-
 // MockSubscriptionService for testing
 type MockSubscriptionService struct {
 	mock.Mock
@@ -76,12 +66,17 @@ func (m *MockProviderManager) GetWeather(city string) (*models.WeatherResponse, 
 	return args.Get(0).(*models.WeatherResponse), args.Error(1)
 }
 
-func (m *MockProviderManager) GetProviderInfo() map[string]interface{} {
+// MockProviderMetricsService for testing
+type MockProviderMetricsService struct {
+	mock.Mock
+}
+
+func (m *MockProviderMetricsService) GetProviderInfo() map[string]interface{} {
 	args := m.Called()
 	return args.Get(0).(map[string]interface{})
 }
 
-func (m *MockProviderManager) GetCacheMetrics() map[string]interface{} {
+func (m *MockProviderMetricsService) GetCacheMetrics() map[string]interface{} {
 	args := m.Called()
 	return args.Get(0).(map[string]interface{})
 }
@@ -92,6 +87,7 @@ type TestServerSetup struct {
 	MockWeather         *MockWeatherService
 	MockSubscription    *MockSubscriptionService
 	MockProviderManager *MockProviderManager
+	MockProviderMetrics *MockProviderMetricsService
 }
 
 // Helper function to set up a test server with mocks
@@ -101,6 +97,7 @@ func setupTestServer() *TestServerSetup {
 	mockWeather := new(MockWeatherService)
 	mockSubscription := new(MockSubscriptionService)
 	mockProviderManager := new(MockProviderManager)
+	mockProviderMetrics := new(MockProviderMetricsService)
 
 	server, err := NewServer(ServerOptions{
 		DB:                  nil, // db not needed for these tests
@@ -108,6 +105,7 @@ func setupTestServer() *TestServerSetup {
 		WeatherService:      mockWeather,
 		SubscriptionService: mockSubscription,
 		ProviderManager:     mockProviderManager,
+		ProviderMetrics:     mockProviderMetrics,
 	})
 	if err != nil {
 		panic("Failed to create test server: " + err.Error())
@@ -118,6 +116,7 @@ func setupTestServer() *TestServerSetup {
 		MockWeather:         mockWeather,
 		MockSubscription:    mockSubscription,
 		MockProviderManager: mockProviderManager,
+		MockProviderMetrics: mockProviderMetrics,
 	}
 }
 
@@ -472,6 +471,7 @@ func TestServerOptions_Validation(t *testing.T) {
 				WeatherService:      new(MockWeatherService),
 				SubscriptionService: new(MockSubscriptionService),
 				ProviderManager:     new(MockProviderManager),
+				ProviderMetrics:     new(MockProviderMetricsService),
 			},
 			expectError: false,
 		},
@@ -495,6 +495,7 @@ func TestServerOptions_Validation(t *testing.T) {
 				WeatherService:      nil,
 				SubscriptionService: new(MockSubscriptionService),
 				ProviderManager:     new(MockProviderManager),
+				ProviderMetrics:     new(MockProviderMetricsService),
 			},
 			expectError: true,
 			errorMsg:    "weather service is required",
@@ -507,6 +508,7 @@ func TestServerOptions_Validation(t *testing.T) {
 				WeatherService:      new(MockWeatherService),
 				SubscriptionService: nil,
 				ProviderManager:     new(MockProviderManager),
+				ProviderMetrics:     new(MockProviderMetricsService),
 			},
 			expectError: true,
 			errorMsg:    "subscription service is required",
@@ -519,9 +521,23 @@ func TestServerOptions_Validation(t *testing.T) {
 				WeatherService:      new(MockWeatherService),
 				SubscriptionService: new(MockSubscriptionService),
 				ProviderManager:     nil,
+				ProviderMetrics:     new(MockProviderMetricsService),
 			},
 			expectError: true,
 			errorMsg:    "provider manager is required",
+		},
+		{
+			name: "Missing provider metrics",
+			opts: ServerOptions{
+				DB:                  nil,
+				Config:              &config.Config{},
+				WeatherService:      new(MockWeatherService),
+				SubscriptionService: new(MockSubscriptionService),
+				ProviderManager:     new(MockProviderManager),
+				ProviderMetrics:     nil,
+			},
+			expectError: true,
+			errorMsg:    "provider metrics is required",
 		},
 	}
 
@@ -558,14 +574,14 @@ func TestMetricsEndpoint_Success(t *testing.T) {
 	setup := setupTestServer()
 
 	// Set up mock expectations
-	setup.MockProviderManager.On("GetCacheMetrics").Return(map[string]interface{}{
+	setup.MockProviderMetrics.On("GetCacheMetrics").Return(map[string]interface{}{
 		"cache_type": "memory",
 		"hits":       100,
 		"misses":     25,
 		"total":      125,
 		"hit_ratio":  0.8,
 	})
-	setup.MockProviderManager.On("GetProviderInfo").Return(map[string]interface{}{
+	setup.MockProviderMetrics.On("GetProviderInfo").Return(map[string]interface{}{
 		"cache_enabled": true,
 		"cache_type":    "memory",
 	})
@@ -589,7 +605,7 @@ func TestMetricsEndpoint_Success(t *testing.T) {
 	endpoints := response["endpoints"].(map[string]interface{})
 	assert.Equal(t, "/metrics", endpoints["prometheus_metrics"])
 	assert.Equal(t, "/api/metrics", endpoints["cache_metrics"])
-	setup.MockProviderManager.AssertExpectations(t)
+	setup.MockProviderMetrics.AssertExpectations(t)
 }
 
 func TestUnsubscribe_EmptyToken(t *testing.T) {
