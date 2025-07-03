@@ -1,12 +1,14 @@
 package providers
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	"weatherapi.app/config"
-	"weatherapi.app/metrics"
 	"weatherapi.app/models"
 	"weatherapi.app/providers/cache"
 )
@@ -41,12 +43,12 @@ func CacheTypeFromString(s string) CacheType {
 }
 
 type ProviderManager struct {
-	primaryChain  WeatherProviderChain
-	cache         CacheInterface
-	logger        FileLogger
-	configuration *ProviderConfiguration
-	cacheMetrics  *metrics.CacheMetrics
-	cacheType     CacheType
+	primaryChain      WeatherProviderChain
+	cache             CacheInterface
+	instrumentedCache *InstrumentedCache
+	logger            FileLogger
+	configuration     *ProviderConfiguration
+	cacheType         CacheType
 }
 
 type ProviderConfiguration struct {
@@ -84,12 +86,15 @@ func NewProviderManager(config *ProviderConfiguration) (*ProviderManager, error)
 func (pm *ProviderManager) initializeComponents() error {
 	if pm.configuration.EnableCache {
 		var err error
-		pm.cache, err = pm.createCache()
+		genericCache, err := pm.createGenericCache()
 		if err != nil {
 			return fmt.Errorf("create cache: %w", err)
 		}
 		pm.cacheType = pm.configuration.CacheType
-		pm.cacheMetrics = metrics.NewCacheMetrics(pm.cacheType.String())
+
+		// Create instrumented cache and weather cache wrapper
+		pm.instrumentedCache = NewInstrumentedCache(genericCache, pm.cacheType.String())
+		pm.cache = cache.NewWeatherCache(pm.instrumentedCache)
 	}
 
 	if pm.configuration.EnableLogging {
@@ -118,14 +123,6 @@ func (pm *ProviderManager) buildProviderChain() error {
 	chain := pm.buildChain(providers)
 	if chain == nil {
 		return fmt.Errorf("build provider chain")
-	}
-
-	if pm.configuration.EnableCache {
-		proxy := NewInstrumentedChainCacheProxy(chain, pm.cache, pm.configuration.CacheTTL, pm.cacheType.String())
-		if instrumentedProxy, ok := proxy.(*InstrumentedChainCacheProxy); ok {
-			pm.cacheMetrics = instrumentedProxy.GetMetrics()
-		}
-		chain = proxy
 	}
 
 	pm.primaryChain = chain
@@ -234,15 +231,46 @@ func (pm *ProviderManager) createHandler(providerName string, provider WeatherPr
 }
 
 func (pm *ProviderManager) GetWeather(city string) (*models.WeatherResponse, error) {
+	if pm.configuration.EnableCache {
+		return pm.getWeatherWithCache(city)
+	}
 	return pm.primaryChain.Handle(city)
 }
 
-func (pm *ProviderManager) createCache() (CacheInterface, error) {
+func (pm *ProviderManager) getWeatherWithCache(city string) (*models.WeatherResponse, error) {
+	cacheKey := pm.generateCacheKey(city)
+
+	// Try cache first
+	if cachedData, found := pm.instrumentedCache.Get(context.Background(), cacheKey); found {
+		var weather models.WeatherResponse
+		if err := json.Unmarshal(cachedData, &weather); err == nil {
+			return &weather, nil
+		}
+	}
+
+	// Cache miss - get from provider chain
+	response, err := pm.primaryChain.Handle(city)
+	if err != nil {
+		return nil, err
+	}
+
+	// Cache the response
+	if data, err := json.Marshal(response); err == nil {
+		pm.instrumentedCache.Set(context.Background(), cacheKey, data, pm.configuration.CacheTTL)
+	}
+
+	return response, nil
+}
+
+func (pm *ProviderManager) generateCacheKey(city string) string {
+	return fmt.Sprintf("weather:%s", strings.ToLower(strings.TrimSpace(city)))
+}
+
+func (pm *ProviderManager) createGenericCache() (cache.GenericCacheInterface, error) {
 	switch pm.configuration.CacheType {
 	case CacheTypeMemory:
 		slog.Info("Creating memory cache")
-		genericCache := cache.NewMemoryCache()
-		return cache.NewWeatherCache(genericCache), nil
+		return cache.NewMemoryCache(), nil
 	case CacheTypeRedis:
 		slog.Info("Creating Redis cache", "addr", pm.configuration.CacheConfig.Redis.Addr)
 		redisConfig := &cache.RedisCacheConfig{
@@ -253,11 +281,7 @@ func (pm *ProviderManager) createCache() (CacheInterface, error) {
 			ReadTimeout:  time.Duration(pm.configuration.CacheConfig.Redis.ReadTimeout) * time.Second,
 			WriteTimeout: time.Duration(pm.configuration.CacheConfig.Redis.WriteTimeout) * time.Second,
 		}
-		genericCache, err := cache.NewRedisCache(redisConfig)
-		if err != nil {
-			return nil, err
-		}
-		return cache.NewWeatherCache(genericCache), nil
+		return cache.NewRedisCache(redisConfig)
 	default:
 		return nil, fmt.Errorf("unsupported cache type: %s", pm.configuration.CacheType)
 	}
@@ -277,10 +301,10 @@ func (pm *ProviderManager) GetProviderInfo() map[string]interface{} {
 }
 
 func (pm *ProviderManager) GetCacheMetrics() map[string]interface{} {
-	if pm.cacheMetrics == nil {
+	if pm.instrumentedCache == nil {
 		return map[string]interface{}{"error": "cache not enabled"}
 	}
-	return pm.cacheMetrics.GetStats()
+	return pm.instrumentedCache.GetMetrics().GetStats()
 }
 
 func DefaultProviderConfiguration() *ProviderConfiguration {

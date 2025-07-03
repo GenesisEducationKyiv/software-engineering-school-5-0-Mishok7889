@@ -1,134 +1,67 @@
 package providers
 
 import (
-	"fmt"
+	"context"
 	"log/slog"
 	"time"
 
 	"weatherapi.app/metrics"
-	"weatherapi.app/models"
+	"weatherapi.app/providers/cache"
 )
 
-type InstrumentedCacheProxy struct {
-	realProvider WeatherProvider
-	cache        CacheInterface
-	cacheTTL     time.Duration
-	metrics      *metrics.CacheMetrics
+type InstrumentedCache struct {
+	cache   cache.GenericCacheInterface
+	metrics *metrics.CacheMetrics
 }
 
-func NewInstrumentedCacheProxy(realProvider WeatherProvider, cache CacheInterface, cacheTTL time.Duration, cacheType string) WeatherProvider {
-	return &InstrumentedCacheProxy{
-		realProvider: realProvider,
-		cache:        cache,
-		cacheTTL:     cacheTTL,
-		metrics:      metrics.NewCacheMetrics(cacheType),
+func NewInstrumentedCache(cache cache.GenericCacheInterface, cacheType string) *InstrumentedCache {
+	return &InstrumentedCache{
+		cache:   cache,
+		metrics: metrics.NewCacheMetrics(cacheType),
 	}
 }
 
-func (p *InstrumentedCacheProxy) GetCurrentWeather(city string) (*models.WeatherResponse, error) {
+func (c *InstrumentedCache) measureLatency(operation string, fn func()) {
 	start := time.Now()
-	cacheKey := p.generateCacheKey(city)
+	fn()
+	latency := time.Since(start).Seconds()
+	c.metrics.RecordLatency(operation, latency)
+}
 
-	cachedResponse, found := p.cache.Get(cacheKey)
-	getLatency := time.Since(start).Seconds()
-	p.metrics.RecordLatency("get", getLatency)
+func (c *InstrumentedCache) Get(ctx context.Context, key string) ([]byte, bool) {
+	var data []byte
+	var found bool
+
+	c.measureLatency("get", func() {
+		data, found = c.cache.Get(ctx, key)
+	})
 
 	if found {
-		p.metrics.RecordHit()
-		slog.Debug("cache hit", "city", city, "latency_ms", getLatency*1000)
-		return cachedResponse, nil
+		c.metrics.RecordHit()
+		slog.Debug("cache hit", "key", key)
+	} else {
+		c.metrics.RecordMiss()
+		slog.Debug("cache miss", "key", key)
 	}
 
-	p.metrics.RecordMiss()
-	slog.Debug("cache miss", "city", city, "latency_ms", getLatency*1000)
-
-	providerStart := time.Now()
-	response, err := p.realProvider.GetCurrentWeather(city)
-	providerLatency := time.Since(providerStart).Seconds()
-
-	if err != nil {
-		return nil, err
-	}
-
-	setStart := time.Now()
-	p.cache.Set(cacheKey, response, p.cacheTTL)
-	setLatency := time.Since(setStart).Seconds()
-	p.metrics.RecordLatency("set", setLatency)
-
-	slog.Debug("cache set", "city", city, "provider_latency_ms", providerLatency*1000, "set_latency_ms", setLatency*1000)
-	return response, nil
+	return data, found
 }
 
-func (p *InstrumentedCacheProxy) generateCacheKey(city string) string {
-	return fmt.Sprintf("weather:%s", city)
+func (c *InstrumentedCache) Set(ctx context.Context, key string, value []byte, ttl time.Duration) {
+	c.measureLatency("set", func() {
+		c.cache.Set(ctx, key, value, ttl)
+	})
+	slog.Debug("cache set", "key", key)
 }
 
-func (p *InstrumentedCacheProxy) GetMetrics() *metrics.CacheMetrics {
-	return p.metrics
+func (c *InstrumentedCache) Delete(ctx context.Context, key string) {
+	c.cache.Delete(ctx, key)
 }
 
-type InstrumentedChainCacheProxy struct {
-	realChain WeatherProviderChain
-	cache     CacheInterface
-	cacheTTL  time.Duration
-	metrics   *metrics.CacheMetrics
+func (c *InstrumentedCache) Clear(ctx context.Context) {
+	c.cache.Clear(ctx)
 }
 
-func NewInstrumentedChainCacheProxy(realChain WeatherProviderChain, cache CacheInterface, cacheTTL time.Duration, cacheType string) WeatherProviderChain {
-	return &InstrumentedChainCacheProxy{
-		realChain: realChain,
-		cache:     cache,
-		cacheTTL:  cacheTTL,
-		metrics:   metrics.NewCacheMetrics(cacheType),
-	}
-}
-
-func (p *InstrumentedChainCacheProxy) Handle(city string) (*models.WeatherResponse, error) {
-	start := time.Now()
-	cacheKey := p.generateCacheKey(city)
-
-	cachedResponse, found := p.cache.Get(cacheKey)
-	getLatency := time.Since(start).Seconds()
-	p.metrics.RecordLatency("get", getLatency)
-
-	if found {
-		p.metrics.RecordHit()
-		slog.Debug("chain cache hit", "city", city, "latency_ms", getLatency*1000)
-		return cachedResponse, nil
-	}
-
-	p.metrics.RecordMiss()
-	slog.Debug("chain cache miss", "city", city, "latency_ms", getLatency*1000)
-
-	chainStart := time.Now()
-	response, err := p.realChain.Handle(city)
-	chainLatency := time.Since(chainStart).Seconds()
-
-	if err != nil {
-		return nil, err
-	}
-
-	setStart := time.Now()
-	p.cache.Set(cacheKey, response, p.cacheTTL)
-	setLatency := time.Since(setStart).Seconds()
-	p.metrics.RecordLatency("set", setLatency)
-
-	slog.Debug("chain cache set", "city", city, "chain_latency_ms", chainLatency*1000, "set_latency_ms", setLatency*1000)
-	return response, nil
-}
-
-func (p *InstrumentedChainCacheProxy) SetNext(handler WeatherProviderChain) {
-	p.realChain.SetNext(handler)
-}
-
-func (p *InstrumentedChainCacheProxy) GetProviderName() string {
-	return fmt.Sprintf("InstrumentedCache(%s)", p.realChain.GetProviderName())
-}
-
-func (p *InstrumentedChainCacheProxy) generateCacheKey(city string) string {
-	return fmt.Sprintf("weather:%s", city)
-}
-
-func (p *InstrumentedChainCacheProxy) GetMetrics() *metrics.CacheMetrics {
-	return p.metrics
+func (c *InstrumentedCache) GetMetrics() *metrics.CacheMetrics {
+	return c.metrics
 }
