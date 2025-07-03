@@ -95,7 +95,7 @@ func (s *IntegrationTestSuite) SetupSuite() {
 		CacheConfig:       &config.CacheConfig{Type: "memory"},
 	}
 
-	providerManager, err := providers.NewProviderManager(providerConfig)
+	providerManager, err := providers.NewProviderManager(providerConfig, nil)
 	s.Require().NoError(err)
 
 	emailProvider := providers.NewSMTPEmailProvider(&testConfig.Email)

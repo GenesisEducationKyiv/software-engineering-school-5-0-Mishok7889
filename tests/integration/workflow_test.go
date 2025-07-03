@@ -220,7 +220,7 @@ func (s *IntegrationTestSuite) getSubscriptionService() service.SubscriptionServ
 		ProviderOrder:     []string{"weatherapi"},
 	}
 
-	providerManager, err := providers.NewProviderManager(providerConfig)
+	providerManager, err := providers.NewProviderManager(providerConfig, nil)
 	s.Require().NoError(err)
 
 	emailProvider := providers.NewSMTPEmailProvider(&s.config.Email)

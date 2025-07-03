@@ -131,23 +131,20 @@ func (app *Application) initializeServices() error {
 func (app *Application) createProviderManager() (*providers.ProviderManager, error) {
 	slog.Debug("Creating weather provider manager...")
 
-	// Convert config to provider configuration
-	providerConfig := &providers.ProviderConfiguration{
-		WeatherAPIKey:     app.config.Weather.APIKey,
-		WeatherAPIBaseURL: app.config.Weather.BaseURL,
-		OpenWeatherMapKey: app.config.Weather.OpenWeatherMapKey,
-		AccuWeatherKey:    app.config.Weather.AccuWeatherKey,
-		CacheTTL:          time.Duration(app.config.Weather.CacheTTLMinutes) * time.Minute,
-		LogFilePath:       app.config.Weather.LogFilePath,
-		EnableCache:       app.config.Weather.EnableCache,
-		EnableLogging:     app.config.Weather.EnableLogging,
-		ProviderOrder:     app.config.Weather.ProviderOrder,
-		CacheType:         providers.CacheTypeFromString(app.config.Cache.Type),
-		CacheConfig:       &app.config.Cache,
-	}
-
-	// Create provider manager
-	providerManager, err := providers.NewProviderManager(providerConfig)
+	// Create provider manager using builder pattern
+	providerManager, err := providers.NewProviderManagerBuilder().
+		WithWeatherAPIKey(app.config.Weather.APIKey).
+		WithWeatherAPIBaseURL(app.config.Weather.BaseURL).
+		WithOpenWeatherMapKey(app.config.Weather.OpenWeatherMapKey).
+		WithAccuWeatherKey(app.config.Weather.AccuWeatherKey).
+		WithCacheType(providers.CacheTypeFromString(app.config.Cache.Type)).
+		WithCacheConfig(&app.config.Cache).
+		WithCacheTTL(time.Duration(app.config.Weather.CacheTTLMinutes) * time.Minute).
+		WithLogFilePath(app.config.Weather.LogFilePath).
+		WithCacheEnabled(app.config.Weather.EnableCache).
+		WithLoggingEnabled(app.config.Weather.EnableLogging).
+		WithProviderOrder(app.config.Weather.ProviderOrder).
+		Build()
 	if err != nil {
 		return nil, err
 	}

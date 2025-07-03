@@ -30,7 +30,7 @@ func (s *IntegrationTestSuite) TestProviderManagerIntegration() {
 	}
 
 	// This should now fail due to fail-fast validation
-	_, err = providers.NewProviderManager(providerConfigEmpty)
+	_, err = providers.NewProviderManager(providerConfigEmpty, nil)
 	s.Error(err, "Provider manager creation should fail with no providers configured")
 	s.Contains(err.Error(), "no weather providers configured")
 

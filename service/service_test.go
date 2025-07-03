@@ -432,7 +432,7 @@ func TestProviderManager_Integration(t *testing.T) {
 
 	// This test demonstrates integration but won't make actual API calls
 	// In real scenarios, you'd use mocked HTTP servers
-	manager, err := providers.NewProviderManager(config)
+	manager, err := providers.NewProviderManager(config, nil)
 	assert.NoError(t, err)
 	assert.NotNil(t, manager)
 
@@ -528,7 +528,7 @@ func TestProviderManager_ChainOfResponsibility_Complete(t *testing.T) {
 				}()
 			}
 
-			manager, err := providers.NewProviderManager(tt.config)
+			manager, err := providers.NewProviderManager(tt.config, nil)
 
 			// Handle the "All providers fail" case - now fails at creation time due to fail-fast
 			if tt.name == "All providers fail" {

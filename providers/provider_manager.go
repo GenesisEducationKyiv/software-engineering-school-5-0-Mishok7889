@@ -42,6 +42,11 @@ func CacheTypeFromString(s string) CacheType {
 	}
 }
 
+type ProviderManagerOptions struct {
+	Cache             CacheInterface
+	InstrumentedCache *InstrumentedCache
+}
+
 type ProviderManager struct {
 	primaryChain      WeatherProviderChain
 	cache             CacheInterface
@@ -65,9 +70,15 @@ type ProviderConfiguration struct {
 	CacheConfig       *config.CacheConfig
 }
 
-func NewProviderManager(config *ProviderConfiguration) (*ProviderManager, error) {
+func NewProviderManager(config *ProviderConfiguration, opts *ProviderManagerOptions) (*ProviderManager, error) {
 	manager := &ProviderManager{
 		configuration: config,
+	}
+
+	// Apply options if provided
+	if opts != nil {
+		manager.cache = opts.Cache
+		manager.instrumentedCache = opts.InstrumentedCache
 	}
 
 	// Initialize components
@@ -85,16 +96,7 @@ func NewProviderManager(config *ProviderConfiguration) (*ProviderManager, error)
 
 func (pm *ProviderManager) initializeComponents() error {
 	if pm.configuration.EnableCache {
-		var err error
-		genericCache, err := pm.createGenericCache()
-		if err != nil {
-			return fmt.Errorf("create cache: %w", err)
-		}
 		pm.cacheType = pm.configuration.CacheType
-
-		// Create instrumented cache and weather cache wrapper
-		pm.instrumentedCache = NewInstrumentedCache(genericCache, pm.cacheType.String())
-		pm.cache = cache.NewWeatherCache(pm.instrumentedCache)
 	}
 
 	if pm.configuration.EnableLogging {
@@ -266,27 +268,6 @@ func (pm *ProviderManager) generateCacheKey(city string) string {
 	return fmt.Sprintf("weather:%s", strings.ToLower(strings.TrimSpace(city)))
 }
 
-func (pm *ProviderManager) createGenericCache() (cache.GenericCacheInterface, error) {
-	switch pm.configuration.CacheType {
-	case CacheTypeMemory:
-		slog.Info("Creating memory cache")
-		return cache.NewMemoryCache(), nil
-	case CacheTypeRedis:
-		slog.Info("Creating Redis cache", "addr", pm.configuration.CacheConfig.Redis.Addr)
-		redisConfig := &cache.RedisCacheConfig{
-			Addr:         pm.configuration.CacheConfig.Redis.Addr,
-			Password:     pm.configuration.CacheConfig.Redis.Password,
-			DB:           pm.configuration.CacheConfig.Redis.DB,
-			DialTimeout:  time.Duration(pm.configuration.CacheConfig.Redis.DialTimeout) * time.Second,
-			ReadTimeout:  time.Duration(pm.configuration.CacheConfig.Redis.ReadTimeout) * time.Second,
-			WriteTimeout: time.Duration(pm.configuration.CacheConfig.Redis.WriteTimeout) * time.Second,
-		}
-		return cache.NewRedisCache(redisConfig)
-	default:
-		return nil, fmt.Errorf("unsupported cache type: %s", pm.configuration.CacheType)
-	}
-}
-
 func (pm *ProviderManager) GetProviderInfo() map[string]interface{} {
 	info := make(map[string]interface{})
 
@@ -327,6 +308,21 @@ func NewProviderManagerBuilder() *ProviderManagerBuilder {
 	return &ProviderManagerBuilder{
 		config: DefaultProviderConfiguration(),
 	}
+}
+
+func (b *ProviderManagerBuilder) WithWeatherAPIKey(key string) *ProviderManagerBuilder {
+	b.config.WeatherAPIKey = key
+	return b
+}
+
+func (b *ProviderManagerBuilder) WithWeatherAPIBaseURL(baseURL string) *ProviderManagerBuilder {
+	b.config.WeatherAPIBaseURL = baseURL
+	return b
+}
+
+func (b *ProviderManagerBuilder) WithOpenWeatherMapKey(key string) *ProviderManagerBuilder {
+	b.config.OpenWeatherMapKey = key
+	return b
 }
 
 func (b *ProviderManagerBuilder) WithAccuWeatherKey(key string) *ProviderManagerBuilder {
@@ -373,7 +369,46 @@ func (b *ProviderManagerBuilder) Build() (*ProviderManager, error) {
 	if err := b.validate(); err != nil {
 		return nil, fmt.Errorf("provider manager configuration validation failed: %w", err)
 	}
-	return NewProviderManager(b.config)
+
+	// Create options
+	var opts *ProviderManagerOptions
+
+	if b.config.EnableCache {
+		genericCache, err := b.createGenericCache()
+		if err != nil {
+			return nil, fmt.Errorf("create cache: %w", err)
+		}
+		instrumentedCache := NewInstrumentedCache(genericCache, b.config.CacheType.String())
+		weatherCache := cache.NewWeatherCache(instrumentedCache)
+
+		opts = &ProviderManagerOptions{
+			Cache:             weatherCache,
+			InstrumentedCache: instrumentedCache,
+		}
+	}
+
+	return NewProviderManager(b.config, opts)
+}
+
+func (b *ProviderManagerBuilder) createGenericCache() (cache.GenericCacheInterface, error) {
+	switch b.config.CacheType {
+	case CacheTypeMemory:
+		slog.Info("Creating memory cache")
+		return cache.NewMemoryCache(), nil
+	case CacheTypeRedis:
+		slog.Info("Creating Redis cache", "addr", b.config.CacheConfig.Redis.Addr)
+		redisConfig := &cache.RedisCacheConfig{
+			Addr:         b.config.CacheConfig.Redis.Addr,
+			Password:     b.config.CacheConfig.Redis.Password,
+			DB:           b.config.CacheConfig.Redis.DB,
+			DialTimeout:  time.Duration(b.config.CacheConfig.Redis.DialTimeout) * time.Second,
+			ReadTimeout:  time.Duration(b.config.CacheConfig.Redis.ReadTimeout) * time.Second,
+			WriteTimeout: time.Duration(b.config.CacheConfig.Redis.WriteTimeout) * time.Second,
+		}
+		return cache.NewRedisCache(redisConfig)
+	default:
+		return nil, fmt.Errorf("unsupported cache type: %s", b.config.CacheType)
+	}
 }
 
 // validate ensures the builder configuration is valid before building

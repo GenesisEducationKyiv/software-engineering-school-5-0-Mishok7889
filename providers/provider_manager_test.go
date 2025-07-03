@@ -23,7 +23,7 @@ func TestProviderManager_NoProvidersConfigured(t *testing.T) {
 	}
 
 	// With fail-fast approach, provider manager creation should fail
-	manager, err := NewProviderManager(config)
+	manager, err := NewProviderManager(config, nil)
 	assert.Error(t, err)
 	assert.Nil(t, manager)
 	assert.Contains(t, err.Error(), "no weather providers configured")
@@ -46,7 +46,7 @@ func TestProviderManager_WithProvidersConfigured(t *testing.T) {
 	}
 
 	// With at least one provider configured, creation should succeed
-	manager, err := NewProviderManager(config)
+	manager, err := NewProviderManager(config, nil)
 	assert.NoError(t, err)
 	assert.NotNil(t, manager)
 
