@@ -11,13 +11,42 @@ import (
 	"weatherapi.app/providers/cache"
 )
 
+type CacheType int
+
+const (
+	CacheTypeMemory CacheType = iota
+	CacheTypeRedis
+)
+
+func (c CacheType) String() string {
+	switch c {
+	case CacheTypeMemory:
+		return "memory"
+	case CacheTypeRedis:
+		return "redis"
+	default:
+		return "unknown"
+	}
+}
+
+func CacheTypeFromString(s string) CacheType {
+	switch s {
+	case "memory":
+		return CacheTypeMemory
+	case "redis":
+		return CacheTypeRedis
+	default:
+		return CacheTypeMemory
+	}
+}
+
 type ProviderManager struct {
 	primaryChain  WeatherProviderChain
 	cache         CacheInterface
 	logger        FileLogger
 	configuration *ProviderConfiguration
 	cacheMetrics  *metrics.CacheMetrics
-	cacheType     string
+	cacheType     CacheType
 }
 
 type ProviderConfiguration struct {
@@ -30,7 +59,7 @@ type ProviderConfiguration struct {
 	EnableCache       bool
 	EnableLogging     bool
 	ProviderOrder     []string
-	CacheType         string
+	CacheType         CacheType
 	CacheConfig       *config.CacheConfig
 }
 
@@ -60,7 +89,7 @@ func (pm *ProviderManager) initializeComponents() error {
 			return fmt.Errorf("create cache: %w", err)
 		}
 		pm.cacheType = pm.configuration.CacheType
-		pm.cacheMetrics = metrics.NewCacheMetrics(pm.cacheType)
+		pm.cacheMetrics = metrics.NewCacheMetrics(pm.cacheType.String())
 	}
 
 	if pm.configuration.EnableLogging {
@@ -73,6 +102,10 @@ func (pm *ProviderManager) initializeComponents() error {
 
 	return nil
 }
+
+// Ensure ProviderManager implements both interfaces
+var _ WeatherProviderInterface = (*ProviderManager)(nil)
+var _ WeatherProviderMetricsInterface = (*ProviderManager)(nil)
 
 func (pm *ProviderManager) buildProviderChain() error {
 	providers := pm.createProviders()
@@ -88,7 +121,7 @@ func (pm *ProviderManager) buildProviderChain() error {
 	}
 
 	if pm.configuration.EnableCache {
-		proxy := NewInstrumentedChainCacheProxy(chain, pm.cache, pm.configuration.CacheTTL, pm.cacheType)
+		proxy := NewInstrumentedChainCacheProxy(chain, pm.cache, pm.configuration.CacheTTL, pm.cacheType.String())
 		if instrumentedProxy, ok := proxy.(*InstrumentedChainCacheProxy); ok {
 			pm.cacheMetrics = instrumentedProxy.GetMetrics()
 		}
@@ -206,10 +239,10 @@ func (pm *ProviderManager) GetWeather(city string) (*models.WeatherResponse, err
 
 func (pm *ProviderManager) createCache() (CacheInterface, error) {
 	switch pm.configuration.CacheType {
-	case "memory":
+	case CacheTypeMemory:
 		slog.Info("Creating memory cache")
 		return cache.NewMemoryCache(), nil
-	case "redis":
+	case CacheTypeRedis:
 		slog.Info("Creating Redis cache", "addr", pm.configuration.CacheConfig.Redis.Addr)
 		redisConfig := &cache.RedisCacheConfig{
 			Addr:         pm.configuration.CacheConfig.Redis.Addr,
@@ -229,7 +262,7 @@ func (pm *ProviderManager) GetProviderInfo() map[string]interface{} {
 	info := make(map[string]interface{})
 
 	info["cache_enabled"] = pm.configuration.EnableCache
-	info["cache_type"] = pm.cacheType
+	info["cache_type"] = pm.cacheType.String()
 	info["logging_enabled"] = pm.configuration.EnableLogging
 	info["cache_ttl"] = pm.configuration.CacheTTL.String()
 	info["provider_order"] = pm.configuration.ProviderOrder
@@ -252,8 +285,8 @@ func DefaultProviderConfiguration() *ProviderConfiguration {
 		EnableCache:   true,
 		EnableLogging: true,
 		ProviderOrder: []string{"weatherapi", "openweathermap", "accuweather"},
-		CacheType:     "memory",
-		CacheConfig:   &config.CacheConfig{Type: "memory"},
+		CacheType:     CacheTypeMemory,
+		CacheConfig:   &config.CacheConfig{Type: CacheTypeMemory.String()},
 	}
 }
 
@@ -297,7 +330,7 @@ func (b *ProviderManagerBuilder) WithProviderOrder(order []string) *ProviderMana
 	return b
 }
 
-func (b *ProviderManagerBuilder) WithCacheType(cacheType string) *ProviderManagerBuilder {
+func (b *ProviderManagerBuilder) WithCacheType(cacheType CacheType) *ProviderManagerBuilder {
 	b.config.CacheType = cacheType
 	return b
 }

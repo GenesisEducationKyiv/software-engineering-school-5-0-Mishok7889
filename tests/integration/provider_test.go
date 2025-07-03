@@ -25,7 +25,7 @@ func (s *IntegrationTestSuite) TestProviderManagerIntegration() {
 		EnableCache:       false,
 		EnableLogging:     false,
 		ProviderOrder:     []string{"weatherapi"},
-		CacheType:         "memory",
+		CacheType:         providers.CacheTypeMemory,
 		CacheConfig:       &config.CacheConfig{Type: "memory"},
 	}
 

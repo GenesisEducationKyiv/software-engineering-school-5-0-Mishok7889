@@ -426,7 +426,7 @@ func TestProviderManager_Integration(t *testing.T) {
 		EnableCache:       false, // Disable cache for testing
 		EnableLogging:     false, // Disable logging for testing
 		ProviderOrder:     []string{"weatherapi"},
-		CacheType:         "memory",
+		CacheType:         providers.CacheTypeMemory,
 		CacheConfig:       &config.CacheConfig{Type: "memory"},
 	}
 
@@ -465,7 +465,7 @@ func TestProviderManager_ChainOfResponsibility_Complete(t *testing.T) {
 				EnableCache:       false,
 				EnableLogging:     false,
 				ProviderOrder:     []string{"weatherapi", "openweathermap", "accuweather"},
-				CacheType:         "memory",
+				CacheType:         providers.CacheTypeMemory,
 				CacheConfig:       &config.CacheConfig{Type: "memory"},
 			},
 			expectedError:  false,
@@ -482,7 +482,7 @@ func TestProviderManager_ChainOfResponsibility_Complete(t *testing.T) {
 				EnableCache:       false,
 				EnableLogging:     false,
 				ProviderOrder:     []string{"weatherapi", "openweathermap", "accuweather"},
-				CacheType:         "memory",
+				CacheType:         providers.CacheTypeMemory,
 				CacheConfig:       &config.CacheConfig{Type: "memory"},
 			},
 			expectedError: true,
@@ -496,7 +496,7 @@ func TestProviderManager_ChainOfResponsibility_Complete(t *testing.T) {
 				EnableCache:    true, // Test Proxy pattern
 				EnableLogging:  false,
 				ProviderOrder:  []string{"accuweather"},
-				CacheType:      "memory",
+				CacheType:      providers.CacheTypeMemory,
 				CacheConfig:    &config.CacheConfig{Type: "memory"},
 			},
 			expectedError:  false,
@@ -511,7 +511,7 @@ func TestProviderManager_ChainOfResponsibility_Complete(t *testing.T) {
 				EnableCache:    false,
 				EnableLogging:  true, // Test Decorator pattern
 				ProviderOrder:  []string{"accuweather"},
-				CacheType:      "memory",
+				CacheType:      providers.CacheTypeMemory,
 				CacheConfig:    &config.CacheConfig{Type: "memory"},
 			},
 			expectedError:  false,
@@ -605,7 +605,7 @@ func TestProviderManager_Builder_Pattern(t *testing.T) {
 		WithLoggingEnabled(true).
 		WithLogFilePath("test_builder.log").
 		WithProviderOrder([]string{"accuweather"}).
-		WithCacheType("memory").
+		WithCacheType(providers.CacheTypeMemory).
 		WithCacheConfig(&config.CacheConfig{Type: "memory"}).
 		Build()
 

@@ -91,6 +91,8 @@ func (s *IntegrationTestSuite) SetupSuite() {
 		EnableCache:       false, // Disable cache for testing
 		EnableLogging:     false, // Disable logging for testing
 		ProviderOrder:     []string{"weatherapi"},
+		CacheType:         providers.CacheTypeMemory,
+		CacheConfig:       &config.CacheConfig{Type: "memory"},
 	}
 
 	providerManager, err := providers.NewProviderManager(providerConfig)
@@ -120,6 +122,7 @@ func (s *IntegrationTestSuite) SetupSuite() {
 			WithWeatherService(weatherService).
 			WithSubscriptionService(subscriptionService).
 			WithProviderManager(providerManager).
+			WithProviderMetrics(providerManager).
 			Build(),
 	)
 	s.Require().NoError(err)

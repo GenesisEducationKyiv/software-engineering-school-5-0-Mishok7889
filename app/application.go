@@ -113,6 +113,7 @@ func (app *Application) initializeServices() error {
 			WithWeatherService(weatherService).
 			WithSubscriptionService(subscriptionService).
 			WithProviderManager(providerManager).
+			WithProviderMetrics(providerManager).
 			Build(),
 	)
 	if err != nil {
@@ -141,7 +142,7 @@ func (app *Application) createProviderManager() (*providers.ProviderManager, err
 		EnableCache:       app.config.Weather.EnableCache,
 		EnableLogging:     app.config.Weather.EnableLogging,
 		ProviderOrder:     app.config.Weather.ProviderOrder,
-		CacheType:         app.config.Cache.Type,
+		CacheType:         providers.CacheTypeFromString(app.config.Cache.Type),
 		CacheConfig:       &app.config.Cache,
 	}
 
