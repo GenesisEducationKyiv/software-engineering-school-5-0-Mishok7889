@@ -416,23 +416,17 @@ func TestSubscriptionService_Subscribe_AlreadyExists(t *testing.T) {
 
 // Test ProviderManager Integration (Optional - demonstrates real usage)
 func TestProviderManager_Integration(t *testing.T) {
-	// Create a simple configuration for testing
-	config := &providers.ProviderConfiguration{
-		WeatherAPIKey:     "test-key",
-		OpenWeatherMapKey: "",
-		AccuWeatherKey:    "",
-		CacheTTL:          5 * time.Minute,
-		LogFilePath:       "test.log",
-		EnableCache:       false, // Disable cache for testing
-		EnableLogging:     false, // Disable logging for testing
-		ProviderOrder:     []string{"weatherapi"},
-		CacheType:         providers.CacheTypeMemory,
-		CacheConfig:       &config.CacheConfig{Type: "memory"},
-	}
-
 	// This test demonstrates integration but won't make actual API calls
-	// In real scenarios, you'd use mocked HTTP servers
-	manager, err := providers.NewProviderManager(config)
+	// Use AccuWeather since it has mock data and doesn't require base URL
+	manager, err := providers.NewProviderManagerBuilder().
+		WithAccuWeatherKey("test-key"). // Use AccuWeather for simple integration test
+		WithCacheTTL(5 * time.Minute).
+		WithLogFilePath("test.log").
+		WithLoggingEnabled(false).
+		WithProviderOrder([]string{"accuweather"}).
+		WithCacheType(providers.CacheTypeMemory).
+		WithCacheConfig(nil).
+		Build()
 	assert.NoError(t, err)
 	assert.NotNil(t, manager)
 
@@ -441,7 +435,7 @@ func TestProviderManager_Integration(t *testing.T) {
 	assert.NotNil(t, info)
 	assert.Equal(t, false, info["cache_enabled"])
 	assert.Equal(t, false, info["logging_enabled"])
-	assert.Equal(t, []string{"weatherapi"}, info["provider_order"])
+	assert.Equal(t, []string{"accuweather"}, info["provider_order"])
 }
 
 func TestProviderManager_ChainOfResponsibility_Complete(t *testing.T) {
@@ -462,7 +456,6 @@ func TestProviderManager_ChainOfResponsibility_Complete(t *testing.T) {
 				AccuWeatherKey:    "test-key", // Enabled - will succeed with mock
 				CacheTTL:          5 * time.Minute,
 				LogFilePath:       "test.log",
-				EnableCache:       false,
 				EnableLogging:     false,
 				ProviderOrder:     []string{"weatherapi", "openweathermap", "accuweather"},
 				CacheType:         providers.CacheTypeMemory,
@@ -479,7 +472,6 @@ func TestProviderManager_ChainOfResponsibility_Complete(t *testing.T) {
 				AccuWeatherKey:    "",
 				CacheTTL:          5 * time.Minute,
 				LogFilePath:       "test.log",
-				EnableCache:       false,
 				EnableLogging:     false,
 				ProviderOrder:     []string{"weatherapi", "openweathermap", "accuweather"},
 				CacheType:         providers.CacheTypeMemory,
@@ -493,11 +485,10 @@ func TestProviderManager_ChainOfResponsibility_Complete(t *testing.T) {
 				AccuWeatherKey: "test-key",
 				CacheTTL:       1 * time.Minute,
 				LogFilePath:    "test.log",
-				EnableCache:    true, // Test Proxy pattern
 				EnableLogging:  false,
 				ProviderOrder:  []string{"accuweather"},
 				CacheType:      providers.CacheTypeMemory,
-				CacheConfig:    &config.CacheConfig{Type: "memory"},
+				CacheConfig:    &config.CacheConfig{Type: "memory"}, // Cache config present = caching enabled
 			},
 			expectedError:  false,
 			expectProvider: "accuweather",
@@ -508,11 +499,10 @@ func TestProviderManager_ChainOfResponsibility_Complete(t *testing.T) {
 				AccuWeatherKey: "test-key",
 				CacheTTL:       5 * time.Minute,
 				LogFilePath:    "test_weather.log",
-				EnableCache:    false,
 				EnableLogging:  true, // Test Decorator pattern
 				ProviderOrder:  []string{"accuweather"},
 				CacheType:      providers.CacheTypeMemory,
-				CacheConfig:    &config.CacheConfig{Type: "memory"},
+				CacheConfig:    nil, // No cache config = caching disabled
 			},
 			expectedError:  false,
 			expectProvider: "accuweather",
@@ -528,13 +518,24 @@ func TestProviderManager_ChainOfResponsibility_Complete(t *testing.T) {
 				}()
 			}
 
-			manager, err := providers.NewProviderManager(tt.config)
+			manager, err := providers.NewProviderManagerBuilder().
+				WithWeatherAPIKey(tt.config.WeatherAPIKey).
+				WithWeatherAPIBaseURL(tt.config.WeatherAPIBaseURL).
+				WithOpenWeatherMapKey(tt.config.OpenWeatherMapKey).
+				WithAccuWeatherKey(tt.config.AccuWeatherKey).
+				WithCacheTTL(tt.config.CacheTTL).
+				WithLogFilePath(tt.config.LogFilePath).
+				WithLoggingEnabled(tt.config.EnableLogging).
+				WithProviderOrder(tt.config.ProviderOrder).
+				WithCacheType(tt.config.CacheType).
+				WithCacheConfig(tt.config.CacheConfig).
+				Build()
 
 			// Handle the "All providers fail" case - now fails at creation time due to fail-fast
 			if tt.name == "All providers fail" {
 				assert.Error(t, err)
 				assert.Nil(t, manager)
-				assert.Contains(t, err.Error(), "no weather providers configured")
+				assert.Contains(t, err.Error(), "at least one weather provider API key must be configured")
 				return // Exit early for this test case
 			}
 
@@ -565,11 +566,11 @@ func TestProviderManager_ChainOfResponsibility_Complete(t *testing.T) {
 				// Verify provider info from manager
 				info := manager.GetProviderInfo()
 				assert.NotNil(t, info)
-				assert.Equal(t, tt.config.EnableCache, info["cache_enabled"])
+				assert.Equal(t, tt.config.CacheConfig != nil, info["cache_enabled"])
 				assert.Equal(t, tt.config.EnableLogging, info["logging_enabled"])
 
 				// Test caching if enabled
-				if tt.config.EnableCache {
+				if tt.config.CacheConfig != nil {
 					// Second call should be cached
 					weather2, err2 := weatherService.GetWeather("London")
 					assert.NoError(t, err2)
@@ -601,7 +602,6 @@ func TestProviderManager_Builder_Pattern(t *testing.T) {
 	manager, err := providers.NewProviderManagerBuilder().
 		WithAccuWeatherKey("test-key").
 		WithCacheTTL(15 * time.Minute).
-		WithCacheEnabled(true).
 		WithLoggingEnabled(true).
 		WithLogFilePath("test_builder.log").
 		WithProviderOrder([]string{"accuweather"}).

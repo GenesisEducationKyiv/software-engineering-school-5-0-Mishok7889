@@ -215,12 +215,11 @@ func (s *IntegrationTestSuite) getSubscriptionService() service.SubscriptionServ
 		AccuWeatherKey:    "",
 		CacheTTL:          5 * time.Minute,
 		LogFilePath:       "test.log",
-		EnableCache:       false, // Disable cache for testing
 		EnableLogging:     false, // Disable logging for testing
 		ProviderOrder:     []string{"weatherapi"},
 	}
 
-	providerManager, err := providers.NewProviderManager(providerConfig)
+	providerManager, err := providers.NewProviderManager(providerConfig, nil)
 	s.Require().NoError(err)
 
 	emailProvider := providers.NewSMTPEmailProvider(&s.config.Email)

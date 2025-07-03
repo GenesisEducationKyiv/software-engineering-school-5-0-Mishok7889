@@ -5,29 +5,14 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"weatherapi.app/config"
 )
 
 func TestProviderManager_NoProvidersConfigured(t *testing.T) {
-	config := &ProviderConfiguration{
-		WeatherAPIKey:     "",
-		OpenWeatherMapKey: "",
-		AccuWeatherKey:    "",
-		CacheTTL:          5 * time.Minute,
-		LogFilePath:       "test.log",
-		EnableCache:       false,
-		EnableLogging:     false,
-		ProviderOrder:     []string{"weatherapi", "openweathermap", "accuweather"},
-		CacheType:         CacheTypeMemory,
-		CacheConfig:       &config.CacheConfig{Type: CacheTypeMemory.String()},
-	}
-
 	// With fail-fast approach, provider manager creation should fail
-	manager, err := NewProviderManager(config)
+	manager, err := NewProviderManagerBuilder().Build()
 	assert.Error(t, err)
 	assert.Nil(t, manager)
-	assert.Contains(t, err.Error(), "no weather providers configured")
-	assert.Contains(t, err.Error(), "at least one API key must be provided")
+	assert.Contains(t, err.Error(), "at least one weather provider API key must be configured")
 }
 
 func TestProviderManager_WithProvidersConfigured(t *testing.T) {
@@ -38,15 +23,23 @@ func TestProviderManager_WithProvidersConfigured(t *testing.T) {
 		AccuWeatherKey:    "",
 		CacheTTL:          5 * time.Minute,
 		LogFilePath:       "test.log",
-		EnableCache:       false,
 		EnableLogging:     false,
 		ProviderOrder:     []string{"weatherapi"},
 		CacheType:         CacheTypeMemory,
-		CacheConfig:       &config.CacheConfig{Type: CacheTypeMemory.String()},
+		CacheConfig:       nil, // No caching
 	}
 
 	// With at least one provider configured, creation should succeed
-	manager, err := NewProviderManager(config)
+	manager, err := NewProviderManagerBuilder().
+		WithWeatherAPIKey(config.WeatherAPIKey).
+		WithWeatherAPIBaseURL(config.WeatherAPIBaseURL).
+		WithCacheTTL(config.CacheTTL).
+		WithLogFilePath(config.LogFilePath).
+		WithLoggingEnabled(config.EnableLogging).
+		WithProviderOrder(config.ProviderOrder).
+		WithCacheType(config.CacheType).
+		WithCacheConfig(config.CacheConfig).
+		Build()
 	assert.NoError(t, err)
 	assert.NotNil(t, manager)
 
@@ -55,6 +48,7 @@ func TestProviderManager_WithProvidersConfigured(t *testing.T) {
 	assert.NotNil(t, info)
 	assert.Equal(t, false, info["cache_enabled"])
 	assert.Equal(t, false, info["logging_enabled"])
-	assert.Equal(t, "5m0s", info["cache_ttl"])
+	// cache_ttl should not be present when caching is disabled
+	assert.Nil(t, info["cache_ttl"])
 	assert.NotEmpty(t, info["chain_name"])
 }

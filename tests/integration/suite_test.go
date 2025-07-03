@@ -88,14 +88,13 @@ func (s *IntegrationTestSuite) SetupSuite() {
 		AccuWeatherKey:    "",
 		CacheTTL:          5 * time.Minute,
 		LogFilePath:       "test.log",
-		EnableCache:       false, // Disable cache for testing
 		EnableLogging:     false, // Disable logging for testing
 		ProviderOrder:     []string{"weatherapi"},
 		CacheType:         providers.CacheTypeMemory,
-		CacheConfig:       &config.CacheConfig{Type: "memory"},
+		CacheConfig:       nil, // No cache config = caching disabled
 	}
 
-	providerManager, err := providers.NewProviderManager(providerConfig)
+	providerManager, err := providers.NewProviderManager(providerConfig, nil)
 	s.Require().NoError(err)
 
 	emailProvider := providers.NewSMTPEmailProvider(&testConfig.Email)

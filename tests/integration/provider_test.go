@@ -3,7 +3,6 @@ package integration
 import (
 	"time"
 
-	"weatherapi.app/config"
 	"weatherapi.app/providers"
 	"weatherapi.app/tests/integration/helpers"
 )
@@ -22,15 +21,14 @@ func (s *IntegrationTestSuite) TestProviderManagerIntegration() {
 		AccuWeatherKey:    "",
 		CacheTTL:          5 * time.Minute,
 		LogFilePath:       "test.log",
-		EnableCache:       false,
 		EnableLogging:     false,
 		ProviderOrder:     []string{"weatherapi"},
 		CacheType:         providers.CacheTypeMemory,
-		CacheConfig:       &config.CacheConfig{Type: "memory"},
+		CacheConfig:       nil, // No cache config = caching disabled
 	}
 
 	// This should now fail due to fail-fast validation
-	_, err = providers.NewProviderManager(providerConfigEmpty)
+	_, err = providers.NewProviderManager(providerConfigEmpty, nil)
 	s.Error(err, "Provider manager creation should fail with no providers configured")
 	s.Contains(err.Error(), "no weather providers configured")
 

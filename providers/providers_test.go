@@ -340,13 +340,13 @@ func TestProviderManagerBuilder_Validation(t *testing.T) {
 					config: &ProviderConfiguration{
 						CacheTTL:      10 * time.Minute,
 						LogFilePath:   "logs/weather_providers.log",
-						EnableCache:   true,
 						EnableLogging: true,
 						ProviderOrder: []string{"weatherapi", "openweathermap", "accuweather"},
+						CacheConfig:   &config.CacheConfig{Type: CacheTypeMemory.String()}, // Enable caching
 						// All API keys are empty strings by default
 					},
 				}
-				return builder.WithCacheEnabled(true)
+				return builder
 			},
 			wantError: true,
 			errorMsg:  "at least one weather provider API key must be configured",
@@ -418,7 +418,7 @@ func TestProviderManagerBuilder_DefaultConfiguration(t *testing.T) {
 	// Test that builder starts with default configuration
 	assert.Equal(t, 10*time.Minute, builder.config.CacheTTL)
 	assert.Equal(t, "logs/weather_providers.log", builder.config.LogFilePath)
-	assert.True(t, builder.config.EnableCache)
+	assert.NotNil(t, builder.config.CacheConfig) // Caching enabled by default through CacheConfig presence
 	assert.True(t, builder.config.EnableLogging)
 	assert.Equal(t, []string{"weatherapi", "openweathermap", "accuweather"}, builder.config.ProviderOrder)
 
