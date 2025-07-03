@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"weatherapi.app/models"
 )
 
@@ -70,10 +71,10 @@ func TestRedisCacheBasicOperations(t *testing.T) {
 		assert.True(t, found)
 		assert.NotNil(t, result)
 
-		time.Sleep(200 * time.Millisecond)
-
-		_, found = cache.Get(key)
-		assert.False(t, found)
+		require.Eventually(t, func() bool {
+			_, found = cache.Get(key)
+			return !found
+		}, 500*time.Millisecond, 10*time.Millisecond)
 	})
 }
 
