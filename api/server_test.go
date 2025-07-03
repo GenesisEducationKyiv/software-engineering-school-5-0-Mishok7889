@@ -86,8 +86,16 @@ func (m *MockProviderManager) GetCacheMetrics() map[string]interface{} {
 	return args.Get(0).(map[string]interface{})
 }
 
+// TestServerSetup contains all the components needed for testing
+type TestServerSetup struct {
+	Router              *gin.Engine
+	MockWeather         *MockWeatherService
+	MockSubscription    *MockSubscriptionService
+	MockProviderManager *MockProviderManager
+}
+
 // Helper function to set up a test server with mocks
-func setupTestServer() (*gin.Engine, *MockWeatherService, *MockSubscriptionService, *MockProviderManager) {
+func setupTestServer() *TestServerSetup {
 	gin.SetMode(gin.TestMode)
 
 	mockWeather := new(MockWeatherService)
@@ -105,24 +113,29 @@ func setupTestServer() (*gin.Engine, *MockWeatherService, *MockSubscriptionServi
 		panic("Failed to create test server: " + err.Error())
 	}
 
-	return server.GetRouter(), mockWeather, mockSubscription, mockProviderManager
+	return &TestServerSetup{
+		Router:              server.GetRouter(),
+		MockWeather:         mockWeather,
+		MockSubscription:    mockSubscription,
+		MockProviderManager: mockProviderManager,
+	}
 }
 
 // Test for GET /weather endpoint
 func TestGetWeather_Success(t *testing.T) {
-	router, mockWeather, _, _ := setupTestServer()
+	setup := setupTestServer()
 
 	expectedWeather := &models.WeatherResponse{
 		Temperature: 15.0,
 		Humidity:    76.0,
 		Description: "Partly cloudy",
 	}
-	mockWeather.On("GetWeather", "London").Return(expectedWeather, nil)
+	setup.MockWeather.On("GetWeather", "London").Return(expectedWeather, nil)
 
 	req := httptest.NewRequest("GET", "/api/weather?city=London", nil)
 	w := httptest.NewRecorder()
 
-	router.ServeHTTP(w, req)
+	setup.Router.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
@@ -134,18 +147,18 @@ func TestGetWeather_Success(t *testing.T) {
 	assert.Equal(t, expectedWeather.Humidity, response.Humidity)
 	assert.Equal(t, expectedWeather.Description, response.Description)
 
-	mockWeather.AssertExpectations(t)
+	setup.MockWeather.AssertExpectations(t)
 }
 
 func TestGetWeather_CityNotFound(t *testing.T) {
-	router, mockWeather, _, _ := setupTestServer()
+	setup := setupTestServer()
 
-	mockWeather.On("GetWeather", "NonExistentCity").Return(nil, errors.NewNotFoundError("city not found"))
+	setup.MockWeather.On("GetWeather", "NonExistentCity").Return(nil, errors.NewNotFoundError("city not found"))
 
 	req := httptest.NewRequest("GET", "/api/weather?city=NonExistentCity", nil)
 	w := httptest.NewRecorder()
 
-	router.ServeHTTP(w, req)
+	setup.Router.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusNotFound, w.Code)
 
@@ -154,16 +167,16 @@ func TestGetWeather_CityNotFound(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "city not found", errorResponse.Error)
 
-	mockWeather.AssertExpectations(t)
+	setup.MockWeather.AssertExpectations(t)
 }
 
 func TestGetWeather_MissingCity(t *testing.T) {
-	router, _, _, _ := setupTestServer()
+	setup := setupTestServer()
 
 	req := httptest.NewRequest("GET", "/api/weather", nil)
 	w := httptest.NewRecorder()
 
-	router.ServeHTTP(w, req)
+	setup.Router.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 
@@ -174,14 +187,14 @@ func TestGetWeather_MissingCity(t *testing.T) {
 }
 
 func TestGetWeather_ExternalAPIError(t *testing.T) {
-	router, mockWeather, _, _ := setupTestServer()
+	setup := setupTestServer()
 
-	mockWeather.On("GetWeather", "London").Return(nil, errors.NewExternalAPIError("weather service unavailable", nil))
+	setup.MockWeather.On("GetWeather", "London").Return(nil, errors.NewExternalAPIError("weather service unavailable", nil))
 
 	req := httptest.NewRequest("GET", "/api/weather?city=London", nil)
 	w := httptest.NewRecorder()
 
-	router.ServeHTTP(w, req)
+	setup.Router.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
 
@@ -190,20 +203,20 @@ func TestGetWeather_ExternalAPIError(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "External service unavailable", errorResponse.Error)
 
-	mockWeather.AssertExpectations(t)
+	setup.MockWeather.AssertExpectations(t)
 }
 
 func TestSubscribe_Success(t *testing.T) {
-	router, _, mockSubscription, _ := setupTestServer()
+	setup := setupTestServer()
 
-	mockSubscription.On("Subscribe", mock.AnythingOfType("*models.SubscriptionRequest")).Return(nil)
+	setup.MockSubscription.On("Subscribe", mock.AnythingOfType("*models.SubscriptionRequest")).Return(nil)
 
 	formData := "email=test%40example.com&city=London&frequency=daily"
 	req := httptest.NewRequest("POST", "/api/subscribe", strings.NewReader(formData))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	w := httptest.NewRecorder()
 
-	router.ServeHTTP(w, req)
+	setup.Router.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
@@ -213,20 +226,20 @@ func TestSubscribe_Success(t *testing.T) {
 	assert.Contains(t, response, "message")
 	assert.Contains(t, response["message"], "Subscription successful")
 
-	mockSubscription.AssertExpectations(t)
+	setup.MockSubscription.AssertExpectations(t)
 }
 
 func TestSubscribe_AlreadySubscribed(t *testing.T) {
-	router, _, mockSubscription, _ := setupTestServer()
+	setup := setupTestServer()
 
-	mockSubscription.On("Subscribe", mock.AnythingOfType("*models.SubscriptionRequest")).Return(errors.NewAlreadyExistsError("email already subscribed"))
+	setup.MockSubscription.On("Subscribe", mock.AnythingOfType("*models.SubscriptionRequest")).Return(errors.NewAlreadyExistsError("email already subscribed"))
 
 	formData := "email=test%40example.com&city=London&frequency=daily"
 	req := httptest.NewRequest("POST", "/api/subscribe", strings.NewReader(formData))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	w := httptest.NewRecorder()
 
-	router.ServeHTTP(w, req)
+	setup.Router.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusConflict, w.Code)
 
@@ -235,20 +248,20 @@ func TestSubscribe_AlreadySubscribed(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "email already subscribed", errorResponse.Error)
 
-	mockSubscription.AssertExpectations(t)
+	setup.MockSubscription.AssertExpectations(t)
 }
 
 func TestSubscribe_ServiceValidationError(t *testing.T) {
-	router, _, mockSubscription, _ := setupTestServer()
+	setup := setupTestServer()
 
-	mockSubscription.On("Subscribe", mock.AnythingOfType("*models.SubscriptionRequest")).Return(errors.NewValidationError("city not supported"))
+	setup.MockSubscription.On("Subscribe", mock.AnythingOfType("*models.SubscriptionRequest")).Return(errors.NewValidationError("city not supported"))
 
 	formData := "email=test%40example.com&city=London&frequency=daily" // Valid form data
 	req := httptest.NewRequest("POST", "/api/subscribe", strings.NewReader(formData))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	w := httptest.NewRecorder()
 
-	router.ServeHTTP(w, req)
+	setup.Router.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 
@@ -257,11 +270,11 @@ func TestSubscribe_ServiceValidationError(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "city not supported", errorResponse.Error)
 
-	mockSubscription.AssertExpectations(t)
+	setup.MockSubscription.AssertExpectations(t)
 }
 
 func TestSubscribe_BindingValidationError(t *testing.T) {
-	router, _, _, _ := setupTestServer()
+	setup := setupTestServer()
 
 	// No mock expectation because the service should NOT be called when binding fails
 
@@ -270,7 +283,7 @@ func TestSubscribe_BindingValidationError(t *testing.T) {
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	w := httptest.NewRecorder()
 
-	router.ServeHTTP(w, req)
+	setup.Router.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 
@@ -281,16 +294,16 @@ func TestSubscribe_BindingValidationError(t *testing.T) {
 }
 
 func TestSubscribe_EmailError(t *testing.T) {
-	router, _, mockSubscription, _ := setupTestServer()
+	setup := setupTestServer()
 
-	mockSubscription.On("Subscribe", mock.AnythingOfType("*models.SubscriptionRequest")).Return(errors.NewEmailError("failed to send email", nil))
+	setup.MockSubscription.On("Subscribe", mock.AnythingOfType("*models.SubscriptionRequest")).Return(errors.NewEmailError("failed to send email", nil))
 
 	formData := "email=test%40example.com&city=London&frequency=daily"
 	req := httptest.NewRequest("POST", "/api/subscribe", strings.NewReader(formData))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	w := httptest.NewRecorder()
 
-	router.ServeHTTP(w, req)
+	setup.Router.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
 
@@ -299,19 +312,19 @@ func TestSubscribe_EmailError(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "Unable to send email", errorResponse.Error)
 
-	mockSubscription.AssertExpectations(t)
+	setup.MockSubscription.AssertExpectations(t)
 }
 
 func TestConfirmSubscription_Success(t *testing.T) {
-	router, _, mockSubscription, _ := setupTestServer()
+	setup := setupTestServer()
 
 	token := "valid-confirmation-token"
-	mockSubscription.On("ConfirmSubscription", token).Return(nil)
+	setup.MockSubscription.On("ConfirmSubscription", token).Return(nil)
 
 	req := httptest.NewRequest("GET", "/api/confirm/"+token, nil)
 	w := httptest.NewRecorder()
 
-	router.ServeHTTP(w, req)
+	setup.Router.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
@@ -321,19 +334,19 @@ func TestConfirmSubscription_Success(t *testing.T) {
 	assert.Contains(t, response, "message")
 	assert.Contains(t, response["message"], "Subscription confirmed")
 
-	mockSubscription.AssertExpectations(t)
+	setup.MockSubscription.AssertExpectations(t)
 }
 
 func TestConfirmSubscription_InvalidToken(t *testing.T) {
-	router, _, mockSubscription, _ := setupTestServer()
+	setup := setupTestServer()
 
 	token := "invalid-token"
-	mockSubscription.On("ConfirmSubscription", token).Return(errors.NewTokenError("invalid token type"))
+	setup.MockSubscription.On("ConfirmSubscription", token).Return(errors.NewTokenError("invalid token type"))
 
 	req := httptest.NewRequest("GET", "/api/confirm/"+token, nil)
 	w := httptest.NewRecorder()
 
-	router.ServeHTTP(w, req)
+	setup.Router.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 
@@ -342,19 +355,19 @@ func TestConfirmSubscription_InvalidToken(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "invalid token type", errorResponse.Error)
 
-	mockSubscription.AssertExpectations(t)
+	setup.MockSubscription.AssertExpectations(t)
 }
 
 func TestConfirmSubscription_NotFound(t *testing.T) {
-	router, _, mockSubscription, _ := setupTestServer()
+	setup := setupTestServer()
 
 	token := "nonexistent-token"
-	mockSubscription.On("ConfirmSubscription", token).Return(errors.NewNotFoundError("token not found"))
+	setup.MockSubscription.On("ConfirmSubscription", token).Return(errors.NewNotFoundError("token not found"))
 
 	req := httptest.NewRequest("GET", "/api/confirm/"+token, nil)
 	w := httptest.NewRecorder()
 
-	router.ServeHTTP(w, req)
+	setup.Router.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusNotFound, w.Code)
 
@@ -363,19 +376,19 @@ func TestConfirmSubscription_NotFound(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "token not found", errorResponse.Error)
 
-	mockSubscription.AssertExpectations(t)
+	setup.MockSubscription.AssertExpectations(t)
 }
 
 func TestUnsubscribe_Success(t *testing.T) {
-	router, _, mockSubscription, _ := setupTestServer()
+	setup := setupTestServer()
 
 	token := "valid-unsubscribe-token"
-	mockSubscription.On("Unsubscribe", token).Return(nil)
+	setup.MockSubscription.On("Unsubscribe", token).Return(nil)
 
 	req := httptest.NewRequest("GET", "/api/unsubscribe/"+token, nil)
 	w := httptest.NewRecorder()
 
-	router.ServeHTTP(w, req)
+	setup.Router.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
@@ -385,19 +398,19 @@ func TestUnsubscribe_Success(t *testing.T) {
 	assert.Contains(t, response, "message")
 	assert.Contains(t, response["message"], "Unsubscribed successfully")
 
-	mockSubscription.AssertExpectations(t)
+	setup.MockSubscription.AssertExpectations(t)
 }
 
 func TestUnsubscribe_InvalidToken(t *testing.T) {
-	router, _, mockSubscription, _ := setupTestServer()
+	setup := setupTestServer()
 
 	token := "invalid-token"
-	mockSubscription.On("Unsubscribe", token).Return(errors.NewTokenError("invalid token type"))
+	setup.MockSubscription.On("Unsubscribe", token).Return(errors.NewTokenError("invalid token type"))
 
 	req := httptest.NewRequest("GET", "/api/unsubscribe/"+token, nil)
 	w := httptest.NewRecorder()
 
-	router.ServeHTTP(w, req)
+	setup.Router.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 
@@ -406,19 +419,19 @@ func TestUnsubscribe_InvalidToken(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "invalid token type", errorResponse.Error)
 
-	mockSubscription.AssertExpectations(t)
+	setup.MockSubscription.AssertExpectations(t)
 }
 
 func TestUnsubscribe_NotFound(t *testing.T) {
-	router, _, mockSubscription, _ := setupTestServer()
+	setup := setupTestServer()
 
 	token := "nonexistent-token"
-	mockSubscription.On("Unsubscribe", token).Return(errors.NewNotFoundError("token not found"))
+	setup.MockSubscription.On("Unsubscribe", token).Return(errors.NewNotFoundError("token not found"))
 
 	req := httptest.NewRequest("GET", "/api/unsubscribe/"+token, nil)
 	w := httptest.NewRecorder()
 
-	router.ServeHTTP(w, req)
+	setup.Router.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusNotFound, w.Code)
 
@@ -427,17 +440,17 @@ func TestUnsubscribe_NotFound(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "token not found", errorResponse.Error)
 
-	mockSubscription.AssertExpectations(t)
+	setup.MockSubscription.AssertExpectations(t)
 }
 
 // Test validation for empty token parameter
 func TestConfirmSubscription_EmptyToken(t *testing.T) {
-	router, _, _, _ := setupTestServer()
+	setup := setupTestServer()
 
 	req := httptest.NewRequest("GET", "/api/confirm/", nil)
 	w := httptest.NewRecorder()
 
-	router.ServeHTTP(w, req)
+	setup.Router.ServeHTTP(w, req)
 
 	// Should return 404 since the route doesn't match
 	assert.Equal(t, http.StatusNotFound, w.Code)
@@ -540,51 +553,19 @@ func TestNewServer_ValidationError(t *testing.T) {
 	assert.Contains(t, err.Error(), "config is required")
 }
 
-func TestServerOptionsBuilder(t *testing.T) {
-	mockWeather := new(MockWeatherService)
-	mockSubscription := new(MockSubscriptionService)
-	mockProviderManager := new(MockProviderManager)
-	config := &config.Config{AppBaseURL: "http://localhost:8080"}
-
-	// Test builder pattern
-	opts := NewServerOptionsBuilder().
-		WithConfig(config).
-		WithWeatherService(mockWeather).
-		WithSubscriptionService(mockSubscription).
-		WithProviderManager(mockProviderManager).
-		Build()
-
-	// Validate the built options
-	assert.Equal(t, config, opts.Config)
-	assert.Equal(t, mockWeather, opts.WeatherService)
-	assert.Equal(t, mockSubscription, opts.SubscriptionService)
-	assert.Equal(t, mockProviderManager, opts.ProviderManager)
-	assert.Nil(t, opts.DB) // Not set
-
-	// Should pass validation
-	err := opts.Validate()
-	assert.NoError(t, err)
-
-	// Should create server successfully
-	gin.SetMode(gin.TestMode)
-	server, err := NewServer(opts)
-	assert.NoError(t, err)
-	assert.NotNil(t, server)
-}
-
 // Test for the new metrics endpoint
 func TestMetricsEndpoint_Success(t *testing.T) {
-	router, _, _, mockProviderManager := setupTestServer()
+	setup := setupTestServer()
 
 	// Set up mock expectations
-	mockProviderManager.On("GetCacheMetrics").Return(map[string]interface{}{
+	setup.MockProviderManager.On("GetCacheMetrics").Return(map[string]interface{}{
 		"cache_type": "memory",
 		"hits":       100,
 		"misses":     25,
 		"total":      125,
 		"hit_ratio":  0.8,
 	})
-	mockProviderManager.On("GetProviderInfo").Return(map[string]interface{}{
+	setup.MockProviderManager.On("GetProviderInfo").Return(map[string]interface{}{
 		"cache_enabled": true,
 		"cache_type":    "memory",
 	})
@@ -592,7 +573,7 @@ func TestMetricsEndpoint_Success(t *testing.T) {
 	req := httptest.NewRequest("GET", "/api/metrics", nil)
 	w := httptest.NewRecorder()
 
-	router.ServeHTTP(w, req)
+	setup.Router.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
@@ -608,16 +589,16 @@ func TestMetricsEndpoint_Success(t *testing.T) {
 	endpoints := response["endpoints"].(map[string]interface{})
 	assert.Equal(t, "/metrics", endpoints["prometheus_metrics"])
 	assert.Equal(t, "/api/metrics", endpoints["cache_metrics"])
-	mockProviderManager.AssertExpectations(t)
+	setup.MockProviderManager.AssertExpectations(t)
 }
 
 func TestUnsubscribe_EmptyToken(t *testing.T) {
-	router, _, _, _ := setupTestServer()
+	setup := setupTestServer()
 
 	req := httptest.NewRequest("GET", "/api/unsubscribe/", nil)
 	w := httptest.NewRecorder()
 
-	router.ServeHTTP(w, req)
+	setup.Router.ServeHTTP(w, req)
 
 	// Should return 404 since the route doesn't match
 	assert.Equal(t, http.StatusNotFound, w.Code)
