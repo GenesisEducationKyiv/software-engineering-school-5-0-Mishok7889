@@ -26,22 +26,22 @@ type Condition struct {
 var weatherData = map[string]WeatherResponse{
 	"london": {
 		Current: Current{
-			TempC:    15.0,
-			Humidity: 76.0,
+			TempC:     15.0,
+			Humidity:  76.0,
 			Condition: Condition{Text: "Partly cloudy"},
 		},
 	},
 	"paris": {
 		Current: Current{
-			TempC:    18.0,
-			Humidity: 68.0,
+			TempC:     18.0,
+			Humidity:  68.0,
 			Condition: Condition{Text: "Clear"},
 		},
 	},
 	"berlin": {
 		Current: Current{
-			TempC:    12.0,
-			Humidity: 82.0,
+			TempC:     12.0,
+			Humidity:  82.0,
 			Condition: Condition{Text: "Overcast"},
 		},
 	},

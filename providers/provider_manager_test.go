@@ -19,8 +19,6 @@ func TestProviderManager_WithProvidersConfigured(t *testing.T) {
 	config := &ProviderConfiguration{
 		WeatherAPIKey:     "test-weather-api-key",
 		WeatherAPIBaseURL: "https://api.weatherapi.com/v1",
-		OpenWeatherMapKey: "",
-		AccuWeatherKey:    "",
 		CacheTTL:          5 * time.Minute,
 		LogFilePath:       "test.log",
 		EnableLogging:     false,
