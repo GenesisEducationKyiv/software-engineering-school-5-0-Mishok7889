@@ -57,10 +57,10 @@ func (p *AccuWeatherProvider) GetCurrentWeather(city string) (*models.WeatherRes
 	}
 	mockResponse.Temperature.Metric.Value = 22.5
 
-	return p.convertToWeatherResponse(mockResponse), nil
+	return p.convert(mockResponse), nil
 }
 
-func (p *AccuWeatherProvider) convertToWeatherResponse(apiResp *AccuWeatherResponse) *models.WeatherResponse {
+func (p *AccuWeatherProvider) convert(apiResp *AccuWeatherResponse) *models.WeatherResponse {
 	return &models.WeatherResponse{
 		Temperature: apiResp.Temperature.Metric.Value,
 		Humidity:    apiResp.RelativeHumidity,
