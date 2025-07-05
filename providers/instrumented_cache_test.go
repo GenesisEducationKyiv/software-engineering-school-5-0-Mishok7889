@@ -36,11 +36,11 @@ func TestInstrumentedCacheIntegration(t *testing.T) {
 	metrics := instrumentedCache.GetMetrics()
 	stats := metrics.GetStats()
 
-	if stats["total"].(int64) < 1 {
+	if stats.Total < 1 {
 		t.Error("Expected metrics to be recorded")
 	}
 
-	if stats["hits"].(int64) < 1 {
+	if stats.Hits < 1 {
 		t.Error("Expected at least one cache hit")
 	}
 }

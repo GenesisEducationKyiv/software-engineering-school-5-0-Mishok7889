@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"weatherapi.app/config"
+	"weatherapi.app/metrics"
 	"weatherapi.app/models"
 	"weatherapi.app/providers/cache"
 )
@@ -282,11 +283,11 @@ func (pm *ProviderManager) GetProviderInfo() map[string]interface{} {
 	return info
 }
 
-func (pm *ProviderManager) GetCacheMetrics() map[string]interface{} {
+func (pm *ProviderManager) GetCacheMetrics() (metrics.CacheStats, error) {
 	if pm.instrumentedCache == nil {
-		return map[string]interface{}{"error": "cache not enabled"}
+		return metrics.CacheStats{}, fmt.Errorf("cache not enabled")
 	}
-	return pm.instrumentedCache.GetMetrics().GetStats()
+	return pm.instrumentedCache.GetMetrics().GetStats(), nil
 }
 
 func DefaultProviderConfiguration() *ProviderConfiguration {

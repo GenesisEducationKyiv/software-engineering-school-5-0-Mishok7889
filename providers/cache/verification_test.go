@@ -8,24 +8,28 @@ import (
 	"weatherapi.app/models"
 )
 
-// This test verifies that our cache implementations satisfy the interfaces
+// TestInterfaceCompliance verifies that our cache implementations satisfy the interfaces at compile time
 func TestInterfaceCompliance(t *testing.T) {
-	// Test that MemoryCache implements GenericCache
-	var memCache = NewMemoryCache()
-	_ = memCache
+	// Verify MemoryCache implements GenericCache
+	var _ GenericCache = (*MemoryCache)(nil)
+	
+	// Verify WeatherCache implements Cache
+	var _ Cache = (*WeatherCache)(nil)
+}
 
-	// Test that WeatherCache implements Cache
-	var weatherCache = NewWeatherCache(memCache)
-	_ = weatherCache
+// TestWeatherCacheOperations tests the actual functionality of the cache implementations
+func TestWeatherCacheOperations(t *testing.T) {
+	// Create cache instances
+	memCache := NewMemoryCache()
+	weatherCache := NewWeatherCache(memCache)
 
-	// Test basic functionality
+	// Test weather cache operations
 	weather := &models.WeatherResponse{
 		Temperature: 25.0,
 		Humidity:    60.0,
 		Description: "Test weather",
 	}
 
-	// Test weather cache operations
 	weatherCache.Set("test:key", weather, time.Minute)
 	result, found := weatherCache.Get("test:key")
 

@@ -273,7 +273,13 @@ func (s *Server) debugEndpoint(c *gin.Context) {
 func (s *Server) metricsEndpoint(c *gin.Context) {
 	slog.Debug("Metrics endpoint called")
 
-	cacheMetrics := s.providerMetrics.GetCacheMetrics()
+	cacheMetrics, err := s.providerMetrics.GetCacheMetrics()
+	if err != nil {
+		slog.Error("Error getting cache metrics", "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "cache metrics unavailable"})
+		return
+	}
+
 	providerInfo := s.providerMetrics.GetProviderInfo()
 
 	response := gin.H{

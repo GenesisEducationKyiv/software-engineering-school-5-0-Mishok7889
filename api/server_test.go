@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -12,6 +13,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	"weatherapi.app/config"
 	"weatherapi.app/errors"
+	"weatherapi.app/metrics"
 	"weatherapi.app/models"
 )
 
@@ -76,9 +78,9 @@ func (m *MockProviderMetricsService) GetProviderInfo() map[string]interface{} {
 	return args.Get(0).(map[string]interface{})
 }
 
-func (m *MockProviderMetricsService) GetCacheMetrics() map[string]interface{} {
+func (m *MockProviderMetricsService) GetCacheMetrics() (metrics.CacheStats, error) {
 	args := m.Called()
-	return args.Get(0).(map[string]interface{})
+	return args.Get(0).(metrics.CacheStats), args.Error(1)
 }
 
 // TestServerSetup contains all the components needed for testing
@@ -574,13 +576,14 @@ func TestMetricsEndpoint_Success(t *testing.T) {
 	setup := setupTestServer()
 
 	// Set up mock expectations
-	setup.MockProviderMetrics.On("GetCacheMetrics").Return(map[string]interface{}{
-		"cache_type": "memory",
-		"hits":       100,
-		"misses":     25,
-		"total":      125,
-		"hit_ratio":  0.8,
-	})
+	expectedCacheStats := metrics.CacheStats{
+		CacheType: "memory",
+		Hits:      100,
+		Misses:    25,
+		Total:     125,
+		HitRatio:  0.8,
+	}
+	setup.MockProviderMetrics.On("GetCacheMetrics").Return(expectedCacheStats, nil)
 	setup.MockProviderMetrics.On("GetProviderInfo").Return(map[string]interface{}{
 		"cache_enabled": true,
 		"cache_type":    "memory",
@@ -605,6 +608,30 @@ func TestMetricsEndpoint_Success(t *testing.T) {
 	endpoints := response["endpoints"].(map[string]interface{})
 	assert.Equal(t, "/metrics", endpoints["prometheus_metrics"])
 	assert.Equal(t, "/api/metrics", endpoints["cache_metrics"])
+	setup.MockProviderMetrics.AssertExpectations(t)
+}
+
+// Test for the metrics endpoint error case
+func TestMetricsEndpoint_CacheError(t *testing.T) {
+	setup := setupTestServer()
+
+	// Set up mock expectations for error case
+	setup.MockProviderMetrics.On("GetCacheMetrics").Return(metrics.CacheStats{}, fmt.Errorf("cache not enabled"))
+
+	req := httptest.NewRequest("GET", "/api/metrics", nil)
+	w := httptest.NewRecorder()
+
+	setup.Router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+
+	var response map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	assert.NoError(t, err)
+
+	// Verify error response
+	assert.Contains(t, response, "error")
+	assert.Equal(t, "cache metrics unavailable", response["error"])
 	setup.MockProviderMetrics.AssertExpectations(t)
 }
 

@@ -3,6 +3,7 @@ package providers
 import (
 	"time"
 
+	"weatherapi.app/metrics"
 	"weatherapi.app/models"
 	"weatherapi.app/providers/cache"
 )
@@ -41,5 +42,5 @@ type WeatherManager interface {
 
 type WeatherProviderMetrics interface {
 	GetProviderInfo() map[string]interface{}
-	GetCacheMetrics() map[string]interface{}
+	GetCacheMetrics() (metrics.CacheStats, error)
 }

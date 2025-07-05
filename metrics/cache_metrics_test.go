@@ -11,10 +11,10 @@ func TestCacheMetrics(t *testing.T) {
 
 	t.Run("Initial state", func(t *testing.T) {
 		stats := metrics.GetStats()
-		assert.Equal(t, "test", stats["cache_type"])
-		assert.Equal(t, int64(0), stats["hits"])
-		assert.Equal(t, int64(0), stats["misses"])
-		assert.Equal(t, int64(0), stats["total"])
+		assert.Equal(t, "test", stats.CacheType)
+		assert.Equal(t, int64(0), stats.Hits)
+		assert.Equal(t, int64(0), stats.Misses)
+		assert.Equal(t, int64(0), stats.Total)
 	})
 
 	t.Run("Record hits and misses", func(t *testing.T) {
@@ -23,10 +23,10 @@ func TestCacheMetrics(t *testing.T) {
 		metrics.RecordMiss()
 
 		stats := metrics.GetStats()
-		assert.Equal(t, int64(2), stats["hits"])
-		assert.Equal(t, int64(1), stats["misses"])
-		assert.Equal(t, int64(3), stats["total"])
-		assert.Equal(t, float64(2)/float64(3), stats["hit_ratio"])
+		assert.Equal(t, int64(2), stats.Hits)
+		assert.Equal(t, int64(1), stats.Misses)
+		assert.Equal(t, int64(3), stats.Total)
+		assert.Equal(t, float64(2)/float64(3), stats.HitRatio)
 	})
 
 	t.Run("Hit ratio calculation", func(t *testing.T) {
@@ -40,10 +40,10 @@ func TestCacheMetrics(t *testing.T) {
 		}
 
 		stats := newMetrics.GetStats()
-		assert.Equal(t, int64(7), stats["hits"])
-		assert.Equal(t, int64(3), stats["misses"])
-		assert.Equal(t, int64(10), stats["total"])
-		assert.Equal(t, 0.7, stats["hit_ratio"])
+		assert.Equal(t, int64(7), stats.Hits)
+		assert.Equal(t, int64(3), stats.Misses)
+		assert.Equal(t, int64(10), stats.Total)
+		assert.Equal(t, 0.7, stats.HitRatio)
 	})
 
 	t.Run("Record latency", func(t *testing.T) {

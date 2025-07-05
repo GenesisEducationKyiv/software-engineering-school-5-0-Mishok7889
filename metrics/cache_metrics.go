@@ -15,6 +15,14 @@ type CacheMetricsCollector struct {
 	HitRatio *prometheus.GaugeVec
 }
 
+type CacheStats struct {
+	CacheType string  `json:"cache_type"`
+	Hits      int64   `json:"hits"`
+	Misses    int64   `json:"misses"`
+	Total     int64   `json:"total"`
+	HitRatio  float64 `json:"hit_ratio"`
+}
+
 var globalCollector *CacheMetricsCollector
 
 func getCollector() *CacheMetricsCollector {
@@ -112,7 +120,7 @@ func (m *CacheMetrics) updateHitRatio() {
 	}
 }
 
-func (m *CacheMetrics) GetStats() map[string]interface{} {
+func (m *CacheMetrics) GetStats() CacheStats {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -121,11 +129,11 @@ func (m *CacheMetrics) GetStats() map[string]interface{} {
 		hitRatio = float64(m.hits) / float64(m.total)
 	}
 
-	return map[string]interface{}{
-		"cache_type": m.cacheType,
-		"hits":       m.hits,
-		"misses":     m.misses,
-		"total":      m.total,
-		"hit_ratio":  hitRatio,
+	return CacheStats{
+		CacheType: m.cacheType,
+		Hits:      m.hits,
+		Misses:    m.misses,
+		Total:     m.total,
+		HitRatio:  hitRatio,
 	}
 }
