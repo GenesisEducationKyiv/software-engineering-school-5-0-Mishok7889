@@ -23,8 +23,8 @@ type Server struct {
 	config              *config.Config
 	weatherService      service.WeatherServiceInterface
 	subscriptionService service.SubscriptionServiceInterface
-	providerManager     providers.WeatherProviderInterface
-	providerMetrics     providers.WeatherProviderMetricsInterface
+	providerManager     providers.WeatherManager
+	providerMetrics     providers.WeatherProviderMetrics
 }
 
 // ServerOptions contains all dependencies needed to create a new server
@@ -33,8 +33,8 @@ type ServerOptions struct {
 	Config              *config.Config
 	WeatherService      service.WeatherServiceInterface
 	SubscriptionService service.SubscriptionServiceInterface
-	ProviderManager     providers.WeatherProviderInterface
-	ProviderMetrics     providers.WeatherProviderMetricsInterface
+	ProviderManager     providers.WeatherManager
+	ProviderMetrics     providers.WeatherProviderMetrics
 }
 
 // Validate checks if all required dependencies are provided
@@ -92,12 +92,12 @@ func (b *ServerOptionsBuilder) WithSubscriptionService(subscriptionService servi
 }
 
 // WithProviderManager sets the provider manager
-func (b *ServerOptionsBuilder) WithProviderManager(providerManager providers.WeatherProviderInterface) *ServerOptionsBuilder {
+func (b *ServerOptionsBuilder) WithProviderManager(providerManager providers.WeatherManager) *ServerOptionsBuilder {
 	b.opts.ProviderManager = providerManager
 	return b
 }
 
-func (b *ServerOptionsBuilder) WithProviderMetrics(providerMetrics providers.WeatherProviderMetricsInterface) *ServerOptionsBuilder {
+func (b *ServerOptionsBuilder) WithProviderMetrics(providerMetrics providers.WeatherProviderMetrics) *ServerOptionsBuilder {
 	b.opts.ProviderMetrics = providerMetrics
 	return b
 }

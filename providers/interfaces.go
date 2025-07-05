@@ -19,8 +19,8 @@ type WeatherProviderChain interface {
 	GetProviderName() string
 }
 
-// CacheInterface is an alias to avoid circular imports
-type CacheInterface = cache.CacheInterface
+// Cache is an alias to avoid circular imports
+type Cache = cache.Cache
 
 // FileLogger defines the interface for file logging operations
 type FileLogger interface {
@@ -34,12 +34,12 @@ type EmailProvider interface {
 	SendEmail(to, subject, body string, isHTML bool) error
 }
 
-// ProviderManagerInterface defines the interface for weather provider management
-type WeatherProviderInterface interface {
+// WeatherManager defines the interface for weather provider management
+type WeatherManager interface {
 	GetWeather(city string) (*models.WeatherResponse, error)
 }
 
-type WeatherProviderMetricsInterface interface {
+type WeatherProviderMetrics interface {
 	GetProviderInfo() map[string]interface{}
 	GetCacheMetrics() map[string]interface{}
 }

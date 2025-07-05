@@ -43,13 +43,13 @@ func CacheTypeFromString(s string) CacheType {
 }
 
 type ProviderManagerOptions struct {
-	Cache             CacheInterface
+	Cache             Cache
 	InstrumentedCache *InstrumentedCache
 }
 
 type ProviderManager struct {
 	primaryChain      WeatherProviderChain
-	cache             CacheInterface
+	cache             Cache
 	instrumentedCache *InstrumentedCache
 	logger            FileLogger
 	configuration     *ProviderConfiguration
@@ -110,8 +110,8 @@ func (pm *ProviderManager) initializeComponents() error {
 }
 
 // Ensure ProviderManager implements both interfaces
-var _ WeatherProviderInterface = (*ProviderManager)(nil)
-var _ WeatherProviderMetricsInterface = (*ProviderManager)(nil)
+var _ WeatherManager = (*ProviderManager)(nil)
+var _ WeatherProviderMetrics = (*ProviderManager)(nil)
 
 func (pm *ProviderManager) buildProviderChain() error {
 	providers := pm.createProviders()
@@ -385,7 +385,7 @@ func (b *ProviderManagerBuilder) Build() (*ProviderManager, error) {
 	return NewProviderManager(b.config, opts)
 }
 
-func (b *ProviderManagerBuilder) createGenericCache() (cache.GenericCacheInterface, error) {
+func (b *ProviderManagerBuilder) createGenericCache() (cache.GenericCache, error) {
 	switch b.config.CacheType {
 	case CacheTypeMemory:
 		slog.Info("Creating memory cache")

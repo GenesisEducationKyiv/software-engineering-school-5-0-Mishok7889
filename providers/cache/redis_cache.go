@@ -22,7 +22,7 @@ type RedisCacheConfig struct {
 	WriteTimeout time.Duration
 }
 
-func NewRedisCache(config *RedisCacheConfig) (GenericCacheInterface, error) {
+func NewRedisCache(config *RedisCacheConfig) (GenericCache, error) {
 	ctx := context.Background()
 
 	client := redis.NewClient(&redis.Options{

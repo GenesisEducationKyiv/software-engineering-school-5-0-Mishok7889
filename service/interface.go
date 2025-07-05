@@ -8,10 +8,10 @@ import (
 )
 
 // WeatherProviderManagerInterface is an alias to the providers interface
-type WeatherProviderManagerInterface = providers.WeatherProviderInterface
+type WeatherProviderManagerInterface = providers.WeatherManager
 
 // WeatherProviderMetricsInterface is an alias to the providers metrics interface
-type WeatherProviderMetricsInterface = providers.WeatherProviderMetricsInterface
+type WeatherProviderMetricsInterface = providers.WeatherProviderMetrics
 
 // WeatherServiceInterface defines the interface for weather operations
 type WeatherServiceInterface interface {

@@ -10,11 +10,11 @@ import (
 )
 
 type InstrumentedCache struct {
-	cache   cache.GenericCacheInterface
+	cache   cache.GenericCache
 	metrics *metrics.CacheMetrics
 }
 
-func NewInstrumentedCache(cache cache.GenericCacheInterface, cacheType string) *InstrumentedCache {
+func NewInstrumentedCache(cache cache.GenericCache, cacheType string) *InstrumentedCache {
 	return &InstrumentedCache{
 		cache:   cache,
 		metrics: metrics.NewCacheMetrics(cacheType),

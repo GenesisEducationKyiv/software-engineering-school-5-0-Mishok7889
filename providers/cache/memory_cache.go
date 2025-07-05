@@ -9,16 +9,16 @@ import (
 	"weatherapi.app/models"
 )
 
-// GenericCacheInterface defines generic cache operations
-type GenericCacheInterface interface {
+// GenericCache defines generic cache operations
+type GenericCache interface {
 	Get(ctx context.Context, key string) ([]byte, bool)
 	Set(ctx context.Context, key string, value []byte, ttl time.Duration)
 	Delete(ctx context.Context, key string)
 	Clear(ctx context.Context)
 }
 
-// CacheInterface defines the interface for weather caching operations
-type CacheInterface interface {
+// Cache defines the interface for weather caching operations
+type Cache interface {
 	Get(key string) (*models.WeatherResponse, bool)
 	Set(key string, value *models.WeatherResponse, ttl time.Duration)
 	Delete(key string)
@@ -37,7 +37,7 @@ type MemoryCache struct {
 	stopCh chan struct{}
 }
 
-func NewMemoryCache() GenericCacheInterface {
+func NewMemoryCache() GenericCache {
 	cache := &MemoryCache{
 		data:   make(map[string]cacheEntry),
 		ticker: time.NewTicker(5 * time.Minute),
@@ -94,10 +94,10 @@ func (c *MemoryCache) Clear(ctx context.Context) {
 
 // WeatherCache wraps generic cache with weather-specific operations
 type WeatherCache struct {
-	cache GenericCacheInterface
+	cache GenericCache
 }
 
-func NewWeatherCache(cache GenericCacheInterface) CacheInterface {
+func NewWeatherCache(cache GenericCache) Cache {
 	return &WeatherCache{
 		cache: cache,
 	}

@@ -10,11 +10,11 @@ import (
 
 // This test verifies that our cache implementations satisfy the interfaces
 func TestInterfaceCompliance(t *testing.T) {
-	// Test that MemoryCache implements GenericCacheInterface
+	// Test that MemoryCache implements GenericCache
 	var memCache = NewMemoryCache()
 	_ = memCache
 
-	// Test that WeatherCache implements CacheInterface
+	// Test that WeatherCache implements Cache
 	var weatherCache = NewWeatherCache(memCache)
 	_ = weatherCache
 
