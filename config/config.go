@@ -8,6 +8,13 @@ import (
 	"weatherapi.app/errors"
 )
 
+const (
+	maxRedisDB         = 15
+	maxCacheTTLMinutes = 1440
+	maxDailyInterval   = 10080
+	maxPortNumber      = 65535
+)
+
 // Config represents the application configuration structure
 type Config struct {
 	Server     ServerConfig    `split_words:"true"`
@@ -148,7 +155,7 @@ func (r *RedisConfig) Validate() error {
 	if r.Addr == "" {
 		return errors.NewConfigurationError("REDIS_ADDR cannot be empty when using Redis cache", nil)
 	}
-	if r.DB < 0 || r.DB > 15 {
+	if r.DB < 0 || r.DB > maxRedisDB {
 		return errors.NewConfigurationError("REDIS_DB must be between 0 and 15", nil)
 	}
 	if r.DialTimeout < 1 {
@@ -175,7 +182,7 @@ func (c *Config) validateAppBaseURL() error {
 
 // Validate checks server configuration
 func (s *ServerConfig) Validate() error {
-	if s.Port < 1 || s.Port > 65535 {
+	if s.Port < 1 || s.Port > maxPortNumber {
 		return errors.NewConfigurationError("SERVER_PORT must be between 1 and 65535", nil)
 	}
 	return nil
@@ -198,7 +205,7 @@ func (d *DatabaseConfig) Validate() error {
 	if d.Host == "" {
 		return errors.NewConfigurationError("DB_HOST cannot be empty", nil)
 	}
-	if d.Port < 1 || d.Port > 65535 {
+	if d.Port < 1 || d.Port > maxPortNumber {
 		return errors.NewConfigurationError("DB_PORT must be between 1 and 65535", nil)
 	}
 	if d.User == "" {
@@ -231,7 +238,7 @@ func (w *WeatherConfig) Validate() error {
 	}
 
 	// Validate cache TTL
-	if w.CacheTTLMinutes < 1 || w.CacheTTLMinutes > 1440 {
+	if w.CacheTTLMinutes < 1 || w.CacheTTLMinutes > maxCacheTTLMinutes {
 		return errors.NewConfigurationError("WEATHER_CACHE_TTL_MINUTES must be between 1 and 1440 minutes", nil)
 	}
 
@@ -256,7 +263,7 @@ func (e *EmailConfig) Validate() error {
 	if e.SMTPHost == "" {
 		return errors.NewConfigurationError("EMAIL_SMTP_HOST cannot be empty", nil)
 	}
-	if e.SMTPPort < 1 || e.SMTPPort > 65535 {
+	if e.SMTPPort < 1 || e.SMTPPort > maxPortNumber {
 		return errors.NewConfigurationError("EMAIL_SMTP_PORT must be between 1 and 65535", nil)
 	}
 	// For authentication: either both username and password are provided, or both are empty (for testing)
@@ -283,10 +290,10 @@ func (s *SchedulerConfig) Validate() error {
 	if s.DailyInterval < 1 {
 		return errors.NewConfigurationError("DAILY_INTERVAL must be at least 1 minute", nil)
 	}
-	if s.HourlyInterval > 1440 {
+	if s.HourlyInterval > maxCacheTTLMinutes {
 		return errors.NewConfigurationError("HOURLY_INTERVAL cannot exceed 1440 minutes (24 hours)", nil)
 	}
-	if s.DailyInterval > 10080 {
+	if s.DailyInterval > maxDailyInterval {
 		return errors.NewConfigurationError("DAILY_INTERVAL cannot exceed 10080 minutes (7 days)", nil)
 	}
 	return nil

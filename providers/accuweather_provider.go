@@ -8,6 +8,10 @@ import (
 	"weatherapi.app/models"
 )
 
+const (
+	defaultHTTPTimeout = 10 * time.Second
+)
+
 type AccuWeatherProvider struct {
 	apiKey     string
 	baseURL    string
@@ -37,7 +41,7 @@ func NewAccuWeatherProvider(apiKey string) WeatherProvider {
 		apiKey:  apiKey,
 		baseURL: "http://dataservice.accuweather.com/currentconditions/v1",
 		httpClient: &http.Client{
-			Timeout: 10 * time.Second,
+			Timeout: defaultHTTPTimeout,
 		},
 	}
 }

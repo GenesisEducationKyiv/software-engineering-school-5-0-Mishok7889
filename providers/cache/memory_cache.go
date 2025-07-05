@@ -9,6 +9,10 @@ import (
 	"weatherapi.app/models"
 )
 
+const (
+	defaultCleanupInterval = 5 * time.Minute
+)
+
 // GenericCache defines generic cache operations
 type GenericCache interface {
 	Get(ctx context.Context, key string) ([]byte, bool)
@@ -40,7 +44,7 @@ type MemoryCache struct {
 func NewMemoryCache() GenericCache {
 	cache := &MemoryCache{
 		data:   make(map[string]cacheEntry),
-		ticker: time.NewTicker(5 * time.Minute),
+		ticker: time.NewTicker(defaultCleanupInterval),
 		stopCh: make(chan struct{}),
 	}
 
