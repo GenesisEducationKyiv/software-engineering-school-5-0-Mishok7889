@@ -58,16 +58,18 @@ type ProviderManager struct {
 }
 
 type ProviderConfiguration struct {
-	WeatherAPIKey     string
-	WeatherAPIBaseURL string
-	OpenWeatherMapKey string
-	AccuWeatherKey    string
-	CacheTTL          time.Duration
-	LogFilePath       string
-	EnableLogging     bool
-	ProviderOrder     []string
-	CacheType         CacheType
-	CacheConfig       *config.CacheConfig
+	WeatherAPIKey         string
+	WeatherAPIBaseURL     string
+	OpenWeatherMapKey     string
+	OpenWeatherMapBaseURL string
+	AccuWeatherKey        string
+	AccuWeatherBaseURL    string
+	CacheTTL              time.Duration
+	LogFilePath           string
+	EnableLogging         bool
+	ProviderOrder         []string
+	CacheType             CacheType
+	CacheConfig           *config.CacheConfig
 }
 
 func NewProviderManager(config *ProviderConfiguration, opts *ProviderManagerOptions) (*ProviderManager, error) {
@@ -180,7 +182,12 @@ func (pm *ProviderManager) createOpenWeatherProvider() WeatherProvider {
 		return nil
 	}
 
-	var provider = NewOpenWeatherMapProvider(pm.configuration.OpenWeatherMapKey)
+	baseURL := pm.configuration.OpenWeatherMapBaseURL
+	if baseURL == "" {
+		baseURL = "https://api.openweathermap.org/data/2.5"
+	}
+
+	var provider = NewOpenWeatherMapProvider(pm.configuration.OpenWeatherMapKey, baseURL)
 
 	if pm.configuration.EnableLogging {
 		provider = NewWeatherLoggerDecorator(provider, pm.logger, "OpenWeatherMap")
@@ -195,7 +202,12 @@ func (pm *ProviderManager) createAccuWeatherProvider() WeatherProvider {
 		return nil
 	}
 
-	var provider = NewAccuWeatherProvider(pm.configuration.AccuWeatherKey)
+	baseURL := pm.configuration.AccuWeatherBaseURL
+	if baseURL == "" {
+		baseURL = "http://dataservice.accuweather.com/currentconditions/v1"
+	}
+
+	var provider = NewAccuWeatherProvider(pm.configuration.AccuWeatherKey, baseURL)
 
 	if pm.configuration.EnableLogging {
 		provider = NewWeatherLoggerDecorator(provider, pm.logger, "AccuWeather")
@@ -326,8 +338,18 @@ func (b *ProviderManagerBuilder) WithOpenWeatherMapKey(key string) *ProviderMana
 	return b
 }
 
+func (b *ProviderManagerBuilder) WithOpenWeatherMapBaseURL(baseURL string) *ProviderManagerBuilder {
+	b.config.OpenWeatherMapBaseURL = baseURL
+	return b
+}
+
 func (b *ProviderManagerBuilder) WithAccuWeatherKey(key string) *ProviderManagerBuilder {
 	b.config.AccuWeatherKey = key
+	return b
+}
+
+func (b *ProviderManagerBuilder) WithAccuWeatherBaseURL(baseURL string) *ProviderManagerBuilder {
+	b.config.AccuWeatherBaseURL = baseURL
 	return b
 }
 

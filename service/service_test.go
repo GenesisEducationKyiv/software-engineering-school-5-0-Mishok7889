@@ -640,7 +640,7 @@ func TestWeatherProviders_Individual(t *testing.T) {
 	}{
 		{
 			name:     "AccuWeather with mock data",
-			provider: providers.NewAccuWeatherProvider("test-key"),
+			provider: providers.NewAccuWeatherProvider("test-key", "http://dataservice.accuweather.com/currentconditions/v1"),
 			city:     "London",
 			expected: &models.WeatherResponse{
 				Temperature: 22.5,
@@ -651,14 +651,14 @@ func TestWeatherProviders_Individual(t *testing.T) {
 		},
 		{
 			name:     "AccuWeather with empty city",
-			provider: providers.NewAccuWeatherProvider("test-key"),
+			provider: providers.NewAccuWeatherProvider("test-key", "http://dataservice.accuweather.com/currentconditions/v1"),
 			city:     "",
 			expected: nil,
 			hasError: true,
 		},
 		{
 			name:     "OpenWeatherMap with invalid key (will fail)",
-			provider: providers.NewOpenWeatherMapProvider("invalid-key"),
+			provider: providers.NewOpenWeatherMapProvider("invalid-key", "https://api.openweathermap.org/data/2.5"),
 			city:     "London",
 			expected: nil,
 			hasError: true,

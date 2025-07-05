@@ -27,10 +27,10 @@ type OpenWeatherMapResponse struct {
 	Message string `json:"message,omitempty"`
 }
 
-func NewOpenWeatherMapProvider(apiKey string) WeatherProvider {
+func NewOpenWeatherMapProvider(apiKey, baseURL string) WeatherProvider {
 	return &OpenWeatherMapProvider{
 		apiKey:  apiKey,
-		baseURL: "https://api.openweathermap.org/data/2.5/weather",
+		baseURL: baseURL + "/weather",
 		httpClient: &http.Client{
 			Timeout: 10 * time.Second,
 		},

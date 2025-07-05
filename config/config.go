@@ -54,8 +54,10 @@ type WeatherConfig struct {
 	BaseURL string `envconfig:"WEATHER_API_BASE_URL" default:"https://api.weatherapi.com/v1"`
 
 	// Additional provider settings
-	OpenWeatherMapKey string `envconfig:"OPENWEATHERMAP_API_KEY"`
-	AccuWeatherKey    string `envconfig:"ACCUWEATHER_API_KEY"`
+	OpenWeatherMapKey     string `envconfig:"OPENWEATHERMAP_API_KEY"`
+	OpenWeatherMapBaseURL string `envconfig:"OPENWEATHERMAP_API_BASE_URL" default:"https://api.openweathermap.org/data/2.5"`
+	AccuWeatherKey        string `envconfig:"ACCUWEATHER_API_KEY"`
+	AccuWeatherBaseURL    string `envconfig:"ACCUWEATHER_API_BASE_URL" default:"http://dataservice.accuweather.com/currentconditions/v1"`
 
 	// Provider ordering and features
 	ProviderOrder   []string `envconfig:"WEATHER_PROVIDER_ORDER" default:"weatherapi,openweathermap,accuweather"`

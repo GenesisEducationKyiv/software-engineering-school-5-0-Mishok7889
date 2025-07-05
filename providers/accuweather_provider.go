@@ -36,10 +36,10 @@ type AccuWeatherResponse struct {
 	Message          string      `json:"message,omitempty"`
 }
 
-func NewAccuWeatherProvider(apiKey string) WeatherProvider {
+func NewAccuWeatherProvider(apiKey, baseURL string) WeatherProvider {
 	return &AccuWeatherProvider{
 		apiKey:  apiKey,
-		baseURL: "http://dataservice.accuweather.com/currentconditions/v1",
+		baseURL: baseURL,
 		httpClient: &http.Client{
 			Timeout: defaultHTTPTimeout,
 		},

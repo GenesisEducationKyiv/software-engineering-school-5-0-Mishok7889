@@ -12,7 +12,7 @@ import (
 func TestInterfaceCompliance(t *testing.T) {
 	// Verify MemoryCache implements GenericCache
 	var _ GenericCache = (*MemoryCache)(nil)
-	
+
 	// Verify WeatherCache implements Cache
 	var _ Cache = (*WeatherCache)(nil)
 }

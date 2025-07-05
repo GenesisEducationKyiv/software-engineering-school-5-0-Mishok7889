@@ -136,7 +136,9 @@ func (app *Application) createProviderManager() (*providers.ProviderManager, err
 		WithWeatherAPIKey(app.config.Weather.APIKey).
 		WithWeatherAPIBaseURL(app.config.Weather.BaseURL).
 		WithOpenWeatherMapKey(app.config.Weather.OpenWeatherMapKey).
+		WithOpenWeatherMapBaseURL(app.config.Weather.OpenWeatherMapBaseURL).
 		WithAccuWeatherKey(app.config.Weather.AccuWeatherKey).
+		WithAccuWeatherBaseURL(app.config.Weather.AccuWeatherBaseURL).
 		WithCacheType(providers.CacheTypeFromString(app.config.Cache.Type)).
 		WithCacheTTL(time.Duration(app.config.Weather.CacheTTLMinutes) * time.Minute).
 		WithLogFilePath(app.config.Weather.LogFilePath).
