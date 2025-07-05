@@ -1,6 +1,8 @@
 package metrics
 
 import (
+	"sync"
+
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
@@ -65,6 +67,7 @@ type CacheMetrics struct {
 	misses    int64
 	total     int64
 	collector *CacheMetricsCollector
+	mu        sync.RWMutex
 }
 
 func NewCacheMetrics(cacheType string) *CacheMetrics {
@@ -75,6 +78,9 @@ func NewCacheMetrics(cacheType string) *CacheMetrics {
 }
 
 func (m *CacheMetrics) RecordHit() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	m.hits++
 	m.total++
 	m.collector.Hits.WithLabelValues(m.cacheType).Inc()
@@ -83,6 +89,9 @@ func (m *CacheMetrics) RecordHit() {
 }
 
 func (m *CacheMetrics) RecordMiss() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	m.misses++
 	m.total++
 	m.collector.Misses.WithLabelValues(m.cacheType).Inc()
@@ -94,6 +103,8 @@ func (m *CacheMetrics) RecordLatency(operation string, duration float64) {
 	m.collector.Latency.WithLabelValues(m.cacheType, operation).Observe(duration)
 }
 
+// updateHitRatio updates the Prometheus hit ratio gauge.
+// Must be called while holding the mutex.
 func (m *CacheMetrics) updateHitRatio() {
 	if m.total > 0 {
 		ratio := float64(m.hits) / float64(m.total)
@@ -102,6 +113,9 @@ func (m *CacheMetrics) updateHitRatio() {
 }
 
 func (m *CacheMetrics) GetStats() map[string]interface{} {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
 	var hitRatio float64
 	if m.total > 0 {
 		hitRatio = float64(m.hits) / float64(m.total)
