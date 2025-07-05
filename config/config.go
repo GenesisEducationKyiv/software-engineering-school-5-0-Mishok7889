@@ -8,6 +8,13 @@ import (
 	"weatherapi.app/errors"
 )
 
+const (
+	maxRedisDB         = 15
+	maxCacheTTLMinutes = 1440
+	maxDailyInterval   = 10080
+	maxPortNumber      = 65535
+)
+
 // Config represents the application configuration structure
 type Config struct {
 	Server     ServerConfig    `split_words:"true"`
@@ -15,6 +22,7 @@ type Config struct {
 	Weather    WeatherConfig   `split_words:"true"`
 	Email      EmailConfig     `split_words:"true"`
 	Scheduler  SchedulerConfig `split_words:"true"`
+	Cache      CacheConfig     `split_words:"true"`
 	AppBaseURL string          `envconfig:"APP_URL" default:"http://localhost:8080"`
 }
 
@@ -39,10 +47,40 @@ func (c DatabaseConfig) GetDSN() string {
 		c.Host, c.Port, c.User, c.Password, c.Name, c.SSLMode)
 }
 
-// WeatherConfig contains settings for the weather API service
+// WeatherConfig contains settings for weather API services
 type WeatherConfig struct {
-	APIKey  string `envconfig:"WEATHER_API_KEY" required:"true"`
+	// Primary WeatherAPI.com settings (existing)
+	APIKey  string `envconfig:"WEATHER_API_KEY"`
 	BaseURL string `envconfig:"WEATHER_API_BASE_URL" default:"https://api.weatherapi.com/v1"`
+
+	// Additional provider settings
+	OpenWeatherMapKey     string `envconfig:"OPENWEATHERMAP_API_KEY"`
+	OpenWeatherMapBaseURL string `envconfig:"OPENWEATHERMAP_API_BASE_URL" default:"https://api.openweathermap.org/data/2.5"`
+	AccuWeatherKey        string `envconfig:"ACCUWEATHER_API_KEY"`
+	AccuWeatherBaseURL    string `envconfig:"ACCUWEATHER_API_BASE_URL" default:"http://dataservice.accuweather.com/currentconditions/v1"`
+
+	// Provider ordering and features
+	ProviderOrder   []string `envconfig:"WEATHER_PROVIDER_ORDER" default:"weatherapi,openweathermap,accuweather"`
+	EnableCache     bool     `envconfig:"WEATHER_ENABLE_CACHE" default:"true"`
+	EnableLogging   bool     `envconfig:"WEATHER_ENABLE_LOGGING" default:"true"`
+	CacheTTLMinutes int      `envconfig:"WEATHER_CACHE_TTL_MINUTES" default:"10"`
+	LogFilePath     string   `envconfig:"WEATHER_LOG_FILE_PATH" default:"logs/weather_providers.log"`
+}
+
+// CacheConfig contains cache-specific settings
+type CacheConfig struct {
+	Type  string `envconfig:"CACHE_TYPE" default:"memory"`
+	Redis RedisConfig
+}
+
+// RedisConfig contains Redis-specific settings
+type RedisConfig struct {
+	Addr         string `envconfig:"REDIS_ADDR" default:"localhost:6379"`
+	Password     string `envconfig:"REDIS_PASSWORD" default:""`
+	DB           int    `envconfig:"REDIS_DB" default:"0"`
+	DialTimeout  int    `envconfig:"REDIS_DIAL_TIMEOUT" default:"5"`
+	ReadTimeout  int    `envconfig:"REDIS_READ_TIMEOUT" default:"3"`
+	WriteTimeout int    `envconfig:"REDIS_WRITE_TIMEOUT" default:"3"`
 }
 
 // EmailConfig contains email server and sending settings
@@ -92,8 +130,44 @@ func (c *Config) Validate() error {
 	if err := c.Scheduler.Validate(); err != nil {
 		return err
 	}
+	if err := c.Cache.Validate(); err != nil {
+		return err
+	}
 	if err := c.validateAppBaseURL(); err != nil {
 		return err
+	}
+	return nil
+}
+
+// Validate checks cache configuration
+func (c *CacheConfig) Validate() error {
+	if c.Type != "memory" && c.Type != "redis" {
+		return errors.NewConfigurationError("CACHE_TYPE must be one of: memory, redis", nil)
+	}
+
+	if c.Type == "redis" {
+		return c.Redis.Validate()
+	}
+
+	return nil
+}
+
+// Validate checks Redis configuration
+func (r *RedisConfig) Validate() error {
+	if r.Addr == "" {
+		return errors.NewConfigurationError("REDIS_ADDR cannot be empty when using Redis cache", nil)
+	}
+	if r.DB < 0 || r.DB > maxRedisDB {
+		return errors.NewConfigurationError("REDIS_DB must be between 0 and 15", nil)
+	}
+	if r.DialTimeout < 1 {
+		return errors.NewConfigurationError("REDIS_DIAL_TIMEOUT must be at least 1 second", nil)
+	}
+	if r.ReadTimeout < 1 {
+		return errors.NewConfigurationError("REDIS_READ_TIMEOUT must be at least 1 second", nil)
+	}
+	if r.WriteTimeout < 1 {
+		return errors.NewConfigurationError("REDIS_WRITE_TIMEOUT must be at least 1 second", nil)
 	}
 	return nil
 }
@@ -110,7 +184,7 @@ func (c *Config) validateAppBaseURL() error {
 
 // Validate checks server configuration
 func (s *ServerConfig) Validate() error {
-	if s.Port < 1 || s.Port > 65535 {
+	if s.Port < 1 || s.Port > maxPortNumber {
 		return errors.NewConfigurationError("SERVER_PORT must be between 1 and 65535", nil)
 	}
 	return nil
@@ -133,7 +207,7 @@ func (d *DatabaseConfig) Validate() error {
 	if d.Host == "" {
 		return errors.NewConfigurationError("DB_HOST cannot be empty", nil)
 	}
-	if d.Port < 1 || d.Port > 65535 {
+	if d.Port < 1 || d.Port > maxPortNumber {
 		return errors.NewConfigurationError("DB_PORT must be between 1 and 65535", nil)
 	}
 	if d.User == "" {
@@ -150,15 +224,39 @@ func (d *DatabaseConfig) Validate() error {
 
 // Validate checks weather API configuration
 func (w *WeatherConfig) Validate() error {
-	if w.APIKey == "" {
-		return errors.NewConfigurationError("WEATHER_API_KEY is required", nil)
+	// At least one weather provider must be configured
+	if w.APIKey == "" && w.OpenWeatherMapKey == "" && w.AccuWeatherKey == "" {
+		return errors.NewConfigurationError("at least one weather provider API key must be configured", nil)
 	}
-	if w.BaseURL == "" {
-		return errors.NewConfigurationError("WEATHER_API_BASE_URL cannot be empty", nil)
+
+	// Validate primary WeatherAPI settings if configured
+	if w.APIKey != "" {
+		if w.BaseURL == "" {
+			return errors.NewConfigurationError("WEATHER_API_BASE_URL cannot be empty when WEATHER_API_KEY is set", nil)
+		}
+		if !strings.HasPrefix(w.BaseURL, "http://") && !strings.HasPrefix(w.BaseURL, "https://") {
+			return errors.NewConfigurationError("WEATHER_API_BASE_URL must start with http:// or https://", nil)
+		}
 	}
-	if !strings.HasPrefix(w.BaseURL, "http://") && !strings.HasPrefix(w.BaseURL, "https://") {
-		return errors.NewConfigurationError("WEATHER_API_BASE_URL must start with http:// or https://", nil)
+
+	// Validate cache TTL
+	if w.CacheTTLMinutes < 1 || w.CacheTTLMinutes > maxCacheTTLMinutes {
+		return errors.NewConfigurationError("WEATHER_CACHE_TTL_MINUTES must be between 1 and 1440 minutes", nil)
 	}
+
+	// Validate provider order contains valid providers
+	validProviders := map[string]bool{
+		"weatherapi":     true,
+		"openweathermap": true,
+		"accuweather":    true,
+	}
+
+	for _, provider := range w.ProviderOrder {
+		if !validProviders[provider] {
+			return errors.NewConfigurationError(fmt.Sprintf("invalid weather provider in order: %s", provider), nil)
+		}
+	}
+
 	return nil
 }
 
@@ -167,7 +265,7 @@ func (e *EmailConfig) Validate() error {
 	if e.SMTPHost == "" {
 		return errors.NewConfigurationError("EMAIL_SMTP_HOST cannot be empty", nil)
 	}
-	if e.SMTPPort < 1 || e.SMTPPort > 65535 {
+	if e.SMTPPort < 1 || e.SMTPPort > maxPortNumber {
 		return errors.NewConfigurationError("EMAIL_SMTP_PORT must be between 1 and 65535", nil)
 	}
 	// For authentication: either both username and password are provided, or both are empty (for testing)
@@ -194,10 +292,10 @@ func (s *SchedulerConfig) Validate() error {
 	if s.DailyInterval < 1 {
 		return errors.NewConfigurationError("DAILY_INTERVAL must be at least 1 minute", nil)
 	}
-	if s.HourlyInterval > 1440 {
+	if s.HourlyInterval > maxCacheTTLMinutes {
 		return errors.NewConfigurationError("HOURLY_INTERVAL cannot exceed 1440 minutes (24 hours)", nil)
 	}
-	if s.DailyInterval > 10080 {
+	if s.DailyInterval > maxDailyInterval {
 		return errors.NewConfigurationError("DAILY_INTERVAL cannot exceed 10080 minutes (7 days)", nil)
 	}
 	return nil

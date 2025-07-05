@@ -3,6 +3,7 @@ package app
 import (
 	"fmt"
 	"log/slog"
+	"time"
 
 	"gorm.io/gorm"
 	"weatherapi.app/api"
@@ -77,15 +78,24 @@ func (app *Application) initializeDatabase() error {
 func (app *Application) initializeServices() error {
 	slog.Info("Initializing services...")
 
-	weatherProvider := providers.NewWeatherAPIProvider(&app.config.Weather)
+	// Create provider manager with all patterns
+	providerManager, err := app.createProviderManager()
+	if err != nil {
+		return fmt.Errorf("create provider manager: %w", err)
+	}
+
+	// Create email provider
 	emailProvider := providers.NewSMTPEmailProvider(&app.config.Email)
 
-	weatherService := service.NewWeatherService(weatherProvider)
+	// Create services
+	weatherService := service.NewWeatherService(providerManager)
 	emailService := service.NewEmailService(emailProvider)
 
+	// Create repositories
 	subscriptionRepo := repository.NewSubscriptionRepository(app.db)
 	tokenRepo := repository.NewTokenRepository(app.db)
 
+	// Create subscription service
 	subscriptionService := service.NewSubscriptionService(
 		app.db,
 		subscriptionRepo,
@@ -95,11 +105,58 @@ func (app *Application) initializeServices() error {
 		app.config,
 	)
 
-	app.server = api.NewServer(app.db, app.config, weatherService, subscriptionService)
+	// Create server and scheduler
+	server, err := api.NewServer(
+		api.NewServerOptionsBuilder().
+			WithDB(app.db).
+			WithConfig(app.config).
+			WithWeatherService(weatherService).
+			WithSubscriptionService(subscriptionService).
+			WithProviderManager(providerManager).
+			WithProviderMetrics(providerManager).
+			Build(),
+	)
+	if err != nil {
+		return fmt.Errorf("create server: %w", err)
+	}
+	app.server = server
 	app.scheduler = scheduler.NewScheduler(app.db, app.config, subscriptionService)
 
 	slog.Info("Services initialized successfully")
 	return nil
+}
+
+// createProviderManager creates and configures the weather provider manager
+// Follows Factory Method pattern: creates complex configured object
+func (app *Application) createProviderManager() (*providers.ProviderManager, error) {
+	slog.Debug("Creating weather provider manager...")
+
+	// Create provider manager using builder pattern
+	builder := providers.NewProviderManagerBuilder().
+		WithWeatherAPIKey(app.config.Weather.APIKey).
+		WithWeatherAPIBaseURL(app.config.Weather.BaseURL).
+		WithOpenWeatherMapKey(app.config.Weather.OpenWeatherMapKey).
+		WithOpenWeatherMapBaseURL(app.config.Weather.OpenWeatherMapBaseURL).
+		WithAccuWeatherKey(app.config.Weather.AccuWeatherKey).
+		WithAccuWeatherBaseURL(app.config.Weather.AccuWeatherBaseURL).
+		WithCacheType(providers.CacheTypeFromString(app.config.Cache.Type)).
+		WithCacheTTL(time.Duration(app.config.Weather.CacheTTLMinutes) * time.Minute).
+		WithLogFilePath(app.config.Weather.LogFilePath).
+		WithLoggingEnabled(app.config.Weather.EnableLogging).
+		WithProviderOrder(app.config.Weather.ProviderOrder)
+
+	// Presence-based caching: only provide CacheConfig if caching is enabled
+	if app.config.Weather.EnableCache {
+		builder = builder.WithCacheConfig(&app.config.Cache)
+	}
+
+	providerManager, err := builder.Build()
+	if err != nil {
+		return nil, err
+	}
+
+	slog.Debug("Provider manager created", "config", providerManager.GetProviderInfo())
+	return providerManager, nil
 }
 
 // Start starts the application

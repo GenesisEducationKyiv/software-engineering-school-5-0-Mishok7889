@@ -9,22 +9,23 @@ import (
 	"weatherapi.app/config"
 	"weatherapi.app/errors"
 	"weatherapi.app/models"
-	"weatherapi.app/providers"
 )
 
-// WeatherService handles weather-related operations
+// WeatherService handles weather-related operations using provider manager
+// Follows Facade pattern: simple interface to complex provider chain
 type WeatherService struct {
-	provider providers.WeatherProvider
+	providerManager WeatherProviderManagerInterface
 }
 
-// NewWeatherService creates a new weather service with the specified provider
-func NewWeatherService(provider providers.WeatherProvider) *WeatherService {
+// NewWeatherService creates a new weather service with the specified provider manager
+func NewWeatherService(providerManager WeatherProviderManagerInterface) *WeatherService {
 	return &WeatherService{
-		provider: provider,
+		providerManager: providerManager,
 	}
 }
 
 // GetWeather retrieves current weather information for a specific city
+// Uses chain of responsibility with caching and logging
 func (s *WeatherService) GetWeather(city string) (*models.WeatherResponse, error) {
 	slog.Debug("Getting weather", "city", city)
 
@@ -32,7 +33,7 @@ func (s *WeatherService) GetWeather(city string) (*models.WeatherResponse, error
 		return nil, errors.NewValidationError("city cannot be empty")
 	}
 
-	weather, err := s.provider.GetCurrentWeather(city)
+	weather, err := s.providerManager.GetWeather(city)
 	if err != nil {
 		slog.Error("Weather provider error", "error", err, "city", city)
 		return nil, err
@@ -81,7 +82,7 @@ func (s *SubscriptionService) Subscribe(req *models.SubscriptionRequest) error {
 
 	existing, err := s.subscriptionRepo.FindByEmail(req.Email, req.City)
 	if err != nil {
-		return errors.NewDatabaseError("failed to check existing subscription", err)
+		return errors.NewDatabaseError("check existing subscription", err)
 	}
 
 	if existing != nil && existing.Confirmed {
@@ -112,7 +113,7 @@ func (s *SubscriptionService) validateSubscriptionRequest(req *models.Subscripti
 func (s *SubscriptionService) createOrUpdateSubscription(existing *models.Subscription, req *models.SubscriptionRequest) (*models.Subscription, error) {
 	tx := s.db.Begin()
 	if tx.Error != nil {
-		return nil, errors.NewDatabaseError("failed to begin transaction", tx.Error)
+		return nil, errors.NewDatabaseError("begin transaction", tx.Error)
 	}
 	defer func() {
 		if r := recover(); r != nil {
@@ -126,7 +127,7 @@ func (s *SubscriptionService) createOrUpdateSubscription(existing *models.Subscr
 		subscription.Frequency = req.Frequency
 		if err := tx.Save(subscription).Error; err != nil {
 			tx.Rollback()
-			return nil, errors.NewDatabaseError("failed to update subscription", err)
+			return nil, errors.NewDatabaseError("update subscription", err)
 		}
 	} else {
 		subscription = &models.Subscription{
@@ -137,12 +138,12 @@ func (s *SubscriptionService) createOrUpdateSubscription(existing *models.Subscr
 		}
 		if err := tx.Create(subscription).Error; err != nil {
 			tx.Rollback()
-			return nil, errors.NewDatabaseError("failed to create subscription", err)
+			return nil, errors.NewDatabaseError("create subscription", err)
 		}
 	}
 
 	if err := tx.Commit().Error; err != nil {
-		return nil, errors.NewDatabaseError("failed to commit transaction", err)
+		return nil, errors.NewDatabaseError("commit transaction", err)
 	}
 
 	return subscription, nil
@@ -151,7 +152,7 @@ func (s *SubscriptionService) createOrUpdateSubscription(existing *models.Subscr
 func (s *SubscriptionService) sendConfirmationEmail(subscription *models.Subscription) error {
 	token, err := s.tokenRepo.CreateToken(subscription.ID, "confirmation", 24*time.Hour)
 	if err != nil {
-		return errors.NewDatabaseError("failed to create confirmation token", err)
+		return errors.NewDatabaseError("create confirmation token", err)
 	}
 
 	confirmURL := fmt.Sprintf("%s/api/confirm/%s", s.config.AppBaseURL, token.Token)
@@ -197,7 +198,7 @@ func (s *SubscriptionService) ConfirmSubscription(tokenStr string) error {
 func (s *SubscriptionService) processConfirmation(subscription *models.Subscription, token *models.Token) error {
 	tx := s.db.Begin()
 	if tx.Error != nil {
-		return errors.NewDatabaseError("failed to begin transaction", tx.Error)
+		return errors.NewDatabaseError("begin transaction", tx.Error)
 	}
 	defer func() {
 		if r := recover(); r != nil {
@@ -208,22 +209,22 @@ func (s *SubscriptionService) processConfirmation(subscription *models.Subscript
 	subscription.Confirmed = true
 	if err := tx.Save(subscription).Error; err != nil {
 		tx.Rollback()
-		return errors.NewDatabaseError("failed to update subscription", err)
+		return errors.NewDatabaseError("update subscription", err)
 	}
 
 	if err := tx.Delete(token).Error; err != nil {
 		tx.Rollback()
-		return errors.NewDatabaseError("failed to delete token", err)
+		return errors.NewDatabaseError("delete token", err)
 	}
 
 	unsubscribeToken, err := s.tokenRepo.CreateToken(subscription.ID, "unsubscribe", 365*24*time.Hour)
 	if err != nil {
 		tx.Rollback()
-		return errors.NewDatabaseError("failed to create unsubscribe token", err)
+		return errors.NewDatabaseError("create unsubscribe token", err)
 	}
 
 	if err := tx.Commit().Error; err != nil {
-		return errors.NewDatabaseError("failed to commit transaction", err)
+		return errors.NewDatabaseError("commit transaction", err)
 	}
 
 	unsubscribeURL := fmt.Sprintf("%s/api/unsubscribe/%s", s.config.AppBaseURL, unsubscribeToken.Token)
@@ -237,7 +238,7 @@ func (s *SubscriptionService) processConfirmation(subscription *models.Subscript
 	}
 
 	if err := s.emailService.SendWelcomeEmailWithParams(params); err != nil {
-		slog.Warn("Failed to send welcome email", "error", err, "email", subscription.Email)
+		slog.Warn("send welcome email", "error", err, "email", subscription.Email)
 	}
 
 	return nil
@@ -271,7 +272,7 @@ func (s *SubscriptionService) Unsubscribe(tokenStr string) error {
 func (s *SubscriptionService) processUnsubscription(subscription *models.Subscription, token *models.Token) error {
 	tx := s.db.Begin()
 	if tx.Error != nil {
-		return errors.NewDatabaseError("failed to begin transaction", tx.Error)
+		return errors.NewDatabaseError("begin transaction", tx.Error)
 	}
 	defer func() {
 		if r := recover(); r != nil {
@@ -281,16 +282,16 @@ func (s *SubscriptionService) processUnsubscription(subscription *models.Subscri
 
 	if err := tx.Delete(subscription).Error; err != nil {
 		tx.Rollback()
-		return errors.NewDatabaseError("failed to delete subscription", err)
+		return errors.NewDatabaseError("delete subscription", err)
 	}
 
 	if err := tx.Delete(token).Error; err != nil {
 		tx.Rollback()
-		return errors.NewDatabaseError("failed to delete token", err)
+		return errors.NewDatabaseError("delete token", err)
 	}
 
 	if err := tx.Commit().Error; err != nil {
-		return errors.NewDatabaseError("failed to commit transaction", err)
+		return errors.NewDatabaseError("commit transaction", err)
 	}
 
 	// Try to send confirmation email but don't fail if it doesn't work
@@ -300,7 +301,7 @@ func (s *SubscriptionService) processUnsubscription(subscription *models.Subscri
 	}
 
 	if err := s.emailService.SendUnsubscribeConfirmationEmailWithParams(params); err != nil {
-		slog.Warn("Failed to send unsubscribe confirmation email", "error", err, "email", subscription.Email)
+		slog.Warn("send unsubscribe confirmation email", "error", err, "email", subscription.Email)
 	}
 
 	return nil
@@ -316,14 +317,14 @@ func (s *SubscriptionService) SendWeatherUpdate(frequency string) error {
 
 	subscriptions, err := s.subscriptionRepo.GetSubscriptionsForUpdates(frequency)
 	if err != nil {
-		return errors.NewDatabaseError("failed to get subscriptions for updates", err)
+		return errors.NewDatabaseError("get subscriptions for updates", err)
 	}
 
 	slog.Debug("Found subscriptions for updates", "count", len(subscriptions), "frequency", frequency)
 
 	for _, subscription := range subscriptions {
 		if err := s.sendWeatherUpdateToSubscriber(subscription); err != nil {
-			slog.Warn("Failed to send weather update", "error", err, "email", subscription.Email, "city", subscription.City)
+			slog.Warn("send weather update", "error", err, "email", subscription.Email, "city", subscription.City)
 			continue
 		}
 	}
@@ -332,20 +333,31 @@ func (s *SubscriptionService) SendWeatherUpdate(frequency string) error {
 }
 
 func (s *SubscriptionService) sendWeatherUpdateToSubscriber(subscription models.Subscription) error {
+	slog.Debug("Sending weather update to subscriber", "email", subscription.Email, "city", subscription.City)
+
 	weather, err := s.weatherService.GetWeather(subscription.City)
 	if err != nil {
-		return fmt.Errorf("failed to get weather for %s: %w", subscription.City, err)
+		slog.Error("get weather", "error", err, "city", subscription.City)
+		return fmt.Errorf("get weather for %s: %w", subscription.City, err)
 	}
+	slog.Debug("Retrieved weather data", "weather", weather, "city", subscription.City)
 
-	token, err := s.tokenRepo.FindByToken(fmt.Sprintf("%d", subscription.ID))
+	// Try to find existing unsubscribe token
+	token, err := s.tokenRepo.FindBySubscriptionIDAndType(subscription.ID, "unsubscribe")
 	if err != nil {
+		slog.Debug("No existing unsubscribe token found, creating new one", "subscriptionID", subscription.ID)
+		// If no existing token found, create a new one
 		token, err = s.tokenRepo.CreateToken(subscription.ID, "unsubscribe", 365*24*time.Hour)
 		if err != nil {
-			return fmt.Errorf("failed to create unsubscribe token: %w", err)
+			slog.Error("create unsubscribe token", "error", err, "subscriptionID", subscription.ID)
+			return fmt.Errorf("create unsubscribe token: %w", err)
 		}
+	} else {
+		slog.Debug("Found existing unsubscribe token", "token", token.Token)
 	}
 
 	unsubscribeURL := fmt.Sprintf("%s/api/unsubscribe/%s", s.config.AppBaseURL, token.Token)
+	slog.Debug("Sending weather update email", "email", subscription.Email, "unsubscribeURL", unsubscribeURL)
 
 	params := WeatherUpdateEmailParams{
 		Email:          subscription.Email,

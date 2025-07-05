@@ -14,7 +14,7 @@ import (
 func InitDB(config config.DatabaseConfig) (*gorm.DB, error) {
 	db, err := gorm.Open(postgres.Open(config.GetDSN()), &gorm.Config{})
 	if err != nil {
-		return nil, fmt.Errorf("failed to connect to database: %w", err)
+		return nil, fmt.Errorf("connect to database: %w", err)
 	}
 
 	return db, nil

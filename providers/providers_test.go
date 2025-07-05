@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -313,4 +314,116 @@ func TestNewSMTPEmailProvider(t *testing.T) {
 	assert.Equal(t, "password", provider.smtpPassword)
 	assert.Equal(t, "Test Sender", provider.fromName)
 	assert.Equal(t, "test@example.com", provider.fromAddress)
+}
+
+// TestProviderManagerBuilder_Validation tests the validation logic in the builder pattern
+func TestProviderManagerBuilder_Validation(t *testing.T) {
+	tests := []struct {
+		name      string
+		builder   func() *ProviderManagerBuilder
+		wantError bool
+		errorMsg  string
+	}{
+		{
+			name: "ValidAccuWeatherConfiguration",
+			builder: func() *ProviderManagerBuilder {
+				return NewProviderManagerBuilder().
+					WithAccuWeatherKey("accuweather-key")
+			},
+			wantError: false,
+		},
+		{
+			name: "MissingAllAPIKeys",
+			builder: func() *ProviderManagerBuilder {
+				// Create builder but don't set any API keys (default config has empty keys)
+				builder := &ProviderManagerBuilder{
+					config: &ProviderConfiguration{
+						CacheTTL:      10 * time.Minute,
+						LogFilePath:   "logs/weather_providers.log",
+						EnableLogging: true,
+						ProviderOrder: []string{"weatherapi", "openweathermap", "accuweather"},
+						CacheConfig:   &config.CacheConfig{Type: CacheTypeMemory.String()}, // Enable caching
+						// All API keys are empty strings by default
+					},
+				}
+				return builder
+			},
+			wantError: true,
+			errorMsg:  "at least one weather provider API key must be configured",
+		},
+		{
+			name: "InvalidCacheTTL",
+			builder: func() *ProviderManagerBuilder {
+				return NewProviderManagerBuilder().
+					WithAccuWeatherKey("test-key").
+					WithCacheTTL(-1 * time.Minute)
+			},
+			wantError: true,
+			errorMsg:  "cache TTL must be positive",
+		},
+		{
+			name: "ZeroCacheTTL",
+			builder: func() *ProviderManagerBuilder {
+				return NewProviderManagerBuilder().
+					WithAccuWeatherKey("test-key").
+					WithCacheTTL(0)
+			},
+			wantError: true,
+			errorMsg:  "cache TTL must be positive",
+		},
+		{
+			name: "LoggingEnabledWithoutLogFile",
+			builder: func() *ProviderManagerBuilder {
+				return NewProviderManagerBuilder().
+					WithAccuWeatherKey("test-key").
+					WithLoggingEnabled(true).
+					WithLogFilePath("")
+			},
+			wantError: true,
+			errorMsg:  "log file path is required when logging is enabled",
+		},
+		{
+			name: "InvalidProviderInOrder",
+			builder: func() *ProviderManagerBuilder {
+				return NewProviderManagerBuilder().
+					WithAccuWeatherKey("test-key").
+					WithProviderOrder([]string{"weatherapi", "invalid-provider", "openweathermap"})
+			},
+			wantError: true,
+			errorMsg:  "invalid weather provider in order: invalid-provider",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			builder := tt.builder()
+			manager, err := builder.Build()
+
+			if tt.wantError {
+				assert.Error(t, err)
+				assert.Nil(t, manager)
+				assert.Contains(t, err.Error(), tt.errorMsg)
+			} else {
+				assert.NoError(t, err)
+				assert.NotNil(t, manager)
+			}
+		})
+	}
+}
+
+// TestProviderManagerBuilder_DefaultConfiguration tests default values
+func TestProviderManagerBuilder_DefaultConfiguration(t *testing.T) {
+	builder := NewProviderManagerBuilder()
+
+	// Test that builder starts with default configuration
+	assert.Equal(t, 10*time.Minute, builder.config.CacheTTL)
+	assert.Equal(t, "logs/weather_providers.log", builder.config.LogFilePath)
+	assert.NotNil(t, builder.config.CacheConfig) // Caching enabled by default through CacheConfig presence
+	assert.True(t, builder.config.EnableLogging)
+	assert.Equal(t, []string{"weatherapi", "openweathermap", "accuweather"}, builder.config.ProviderOrder)
+
+	// Test that API keys start empty (this is why validation fails by default)
+	assert.Empty(t, builder.config.WeatherAPIKey)
+	assert.Empty(t, builder.config.OpenWeatherMapKey)
+	assert.Empty(t, builder.config.AccuWeatherKey)
 }
