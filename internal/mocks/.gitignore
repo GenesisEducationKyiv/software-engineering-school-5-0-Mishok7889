@@ -1,0 +1,2 @@
+# Generated mock files - regenerate with `mockery --all`
+*.go

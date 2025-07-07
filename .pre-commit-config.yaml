@@ -1,4 +1,14 @@
 repos:
+- repo: local
+  hooks:
+  - id: generate-mocks
+    name: Generate mocks
+    entry: make -f Makefile.mocks mocks
+    language: system
+    files: '^internal/ports/.*\.go$'
+    pass_filenames: false
+    verbose: true
+
 - repo: https://github.com/golangci/golangci-lint
   rev: v2.1.6
   hooks:

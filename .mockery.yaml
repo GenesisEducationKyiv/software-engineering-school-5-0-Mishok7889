@@ -1,0 +1,27 @@
+# Mockery configuration for generating mocks
+with-expecter: true
+dir: "internal/mocks"
+mockname: "{{.InterfaceName}}"
+filename: "{{.MockName}}.go"
+resolve-type-alias: false
+disable-version-string: true
+issue-845-fix: true
+# Force all mocks to use the same package name
+outpkg: "mocks"
+
+packages:
+  weatherapi.app/internal/ports:
+    interfaces:
+      WeatherProvider:
+      WeatherProviderManager:
+      WeatherCache:
+      WeatherMetrics:
+      SubscriptionRepository:
+      TokenRepository:
+      EmailProvider:
+      ConfigProvider:
+      Logger:
+      CacheProvider:
+      CacheMetrics:
+      CacheSerializer:
+      MetricsCollector:

@@ -4,7 +4,7 @@
         {
             "label": "build",
             "type": "shell",
-            "command": "go build -o weatherapi .",
+            "command": "go build -o weatherapi ./cmd/app/",
             "group": {
                 "kind": "build",
                 "isDefault": true
@@ -17,7 +17,7 @@
         {
             "label": "run",
             "type": "shell",
-            "command": "go run main.go",
+            "command": "go run ./cmd/app/",
             "group": {
                 "kind": "none"
             },
@@ -30,6 +30,15 @@
             "label": "start-db",
             "type": "shell",
             "command": "docker-compose -f docker-compose.dev.yml up -d",
+            "presentation": {
+                "reveal": "always"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "stop-db",
+            "type": "shell",
+            "command": "docker-compose -f docker-compose.dev.yml down",
             "presentation": {
                 "reveal": "always"
             },
@@ -49,9 +58,45 @@
             "problemMatcher": ["$go"]
         },
         {
+            "label": "test-unit",
+            "type": "shell",
+            "command": "go test ./internal/core/... ./pkg/...",
+            "group": {
+                "kind": "test"
+            },
+            "presentation": {
+                "reveal": "always"
+            },
+            "problemMatcher": ["$go"]
+        },
+        {
+            "label": "test-adapters",
+            "type": "shell",
+            "command": "go test ./internal/adapters/...",
+            "group": {
+                "kind": "test"
+            },
+            "presentation": {
+                "reveal": "always"
+            },
+            "problemMatcher": ["$go"]
+        },
+        {
             "label": "lint",
             "type": "shell",
             "command": "golangci-lint run ./...",
+            "presentation": {
+                "reveal": "always"
+            },
+            "problemMatcher": ["$go"]
+        },
+        {
+            "label": "clean-build",
+            "type": "shell",
+            "command": "go clean && go mod tidy && go build -o weatherapi ./cmd/app/",
+            "group": {
+                "kind": "build"
+            },
             "presentation": {
                 "reveal": "always"
             },

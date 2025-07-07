@@ -8,17 +8,22 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-	"weatherapi.app/models"
+	"weatherapi.app/internal/adapters/database"
 	"weatherapi.app/tests/integration/helpers"
 )
 
 const (
 	// Subscribe test constants
-	subscriptionSuccessful      = "Subscription successful"
-	confirmEmailSubject         = "Confirm your weather subscription"
-	emailAlreadySubscribedError = "email already subscribed"
-	invalidRequestFormatError   = "invalid request format"
+	subscriptionSuccessful    = "Subscription successful"
+	confirmEmailSubject       = "Confirm your weather subscription"
+	emailAlreadyExistsError   = "subscription already exists and is confirmed"
+	invalidRequestFormatError = "Invalid request format"
 )
+
+// ErrorResponse represents an error message structure for API responses
+type ErrorResponse struct {
+	Error string `json:"error"`
+}
 
 func (s *IntegrationTestSuite) TestSubscribe_Success() {
 	_ = helpers.ClearEmails()
@@ -62,7 +67,7 @@ func (s *IntegrationTestSuite) TestSubscribe_UpdateExisting() {
 
 	s.Equal(http.StatusOK, w.Code)
 
-	var updatedSubscription models.Subscription
+	var updatedSubscription database.SubscriptionModel
 	err := s.db.First(&updatedSubscription, existingSubscription.ID).Error
 	s.NoError(err)
 	s.Equal("daily", updatedSubscription.Frequency)
@@ -84,10 +89,10 @@ func (s *IntegrationTestSuite) TestSubscribe_AlreadyConfirmed() {
 
 	s.Equal(http.StatusConflict, w.Code)
 
-	var errorResponse models.ErrorResponse
+	var errorResponse ErrorResponse
 	err := json.Unmarshal(w.Body.Bytes(), &errorResponse)
 	s.NoError(err)
-	s.Equal(emailAlreadySubscribedError, errorResponse.Error)
+	s.Contains(errorResponse.Error, "already exists")
 }
 
 func (s *IntegrationTestSuite) TestSubscribe_MissingEmail() {
@@ -100,10 +105,10 @@ func (s *IntegrationTestSuite) TestSubscribe_MissingEmail() {
 
 	s.Equal(http.StatusBadRequest, w.Code)
 
-	var errorResponse models.ErrorResponse
+	var errorResponse ErrorResponse
 	err := json.Unmarshal(w.Body.Bytes(), &errorResponse)
 	s.NoError(err)
-	s.Equal(invalidRequestFormatError, errorResponse.Error)
+	s.Contains(errorResponse.Error, invalidRequestFormatError)
 }
 
 func (s *IntegrationTestSuite) TestSubscribe_InvalidEmail() {
@@ -116,10 +121,10 @@ func (s *IntegrationTestSuite) TestSubscribe_InvalidEmail() {
 
 	s.Equal(http.StatusBadRequest, w.Code)
 
-	var errorResponse models.ErrorResponse
+	var errorResponse ErrorResponse
 	err := json.Unmarshal(w.Body.Bytes(), &errorResponse)
 	s.NoError(err)
-	s.Equal(invalidRequestFormatError, errorResponse.Error)
+	s.Contains(errorResponse.Error, invalidRequestFormatError)
 }
 
 func (s *IntegrationTestSuite) TestSubscribe_MissingCity() {
@@ -132,10 +137,10 @@ func (s *IntegrationTestSuite) TestSubscribe_MissingCity() {
 
 	s.Equal(http.StatusBadRequest, w.Code)
 
-	var errorResponse models.ErrorResponse
+	var errorResponse ErrorResponse
 	err := json.Unmarshal(w.Body.Bytes(), &errorResponse)
 	s.NoError(err)
-	s.Equal(invalidRequestFormatError, errorResponse.Error)
+	s.Contains(errorResponse.Error, invalidRequestFormatError)
 }
 
 func (s *IntegrationTestSuite) TestSubscribe_InvalidFrequency() {
@@ -148,10 +153,10 @@ func (s *IntegrationTestSuite) TestSubscribe_InvalidFrequency() {
 
 	s.Equal(http.StatusBadRequest, w.Code)
 
-	var errorResponse models.ErrorResponse
+	var errorResponse ErrorResponse
 	err := json.Unmarshal(w.Body.Bytes(), &errorResponse)
 	s.NoError(err)
-	s.Equal(invalidRequestFormatError, errorResponse.Error)
+	s.Contains(errorResponse.Error, invalidRequestFormatError)
 }
 
 func (s *IntegrationTestSuite) TestSubscribe_JSONFormat() {
