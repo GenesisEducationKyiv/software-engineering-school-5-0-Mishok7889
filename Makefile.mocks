@@ -8,6 +8,7 @@ mocks-install:
 # Generate all mocks using .mockery.yaml config
 mocks: mocks-install
 	mockery
+	go mod tidy
 
 # Clean generated mocks
 mocks-clean:

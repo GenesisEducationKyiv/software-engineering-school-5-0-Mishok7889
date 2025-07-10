@@ -41,6 +41,9 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-go-e2e-
 
+    - name: Generate mocks
+      run: make -f Makefile.mocks mocks
+
     - name: Setup E2E test environment
       run: make -f Makefile.testing _e2e-setup
 

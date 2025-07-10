@@ -7,7 +7,7 @@ E2E_COMPOSE_FILE := tests/e2e/docker/docker-compose.e2e.yml
 INTEGRATION_PROJECT := weatherapi-integration-test
 E2E_PROJECT := weatherapi-e2e-test
 INTEGRATION_PACKAGES := ./tests/integration/...
-UNIT_PACKAGES := ./service ./repository ./api .
+UNIT_PACKAGES := ./internal/... ./pkg/...
 TIMEOUT := 10m
 
 # Colors for output

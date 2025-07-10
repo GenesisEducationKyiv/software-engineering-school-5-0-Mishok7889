@@ -30,5 +30,8 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-go-
 
+      - name: Generate mocks
+        run: make -f Makefile.mocks mocks
+
       - name: Run linting
         run: make -f Makefile.testing lint
