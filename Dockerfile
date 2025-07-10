@@ -10,7 +10,7 @@ RUN go mod download
 
 COPY . .
 
-RUN CGO_ENABLED=0 GOOS=linux go build -o weatherapi .
+RUN CGO_ENABLED=0 GOOS=linux go build -o weatherapi ./cmd/app
 
 # Run tests with CGO enabled for SQLite support, but don't fail the build if tests fail
 RUN CGO_ENABLED=1 go test -v ./... || true

@@ -70,13 +70,13 @@ func TestWeatherCacheAdapter_Integration(t *testing.T) {
 				require.NoError(t, clearableCache.Clear(ctx))
 			}
 
-			// Test data
+			// Test data - use UTC to avoid timezone issues with JSON serialization
 			weatherData := &ports.WeatherData{
 				Temperature: 25.5,
 				Humidity:    65.0,
 				Description: "Partly cloudy",
 				City:        "London",
-				Timestamp:   time.Now().Truncate(time.Second), // Truncate for JSON comparison
+				Timestamp:   time.Now().UTC().Truncate(time.Second), // Use UTC for consistent JSON comparison
 			}
 
 			// Test Set and Get

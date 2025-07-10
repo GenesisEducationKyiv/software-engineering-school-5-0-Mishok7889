@@ -99,11 +99,12 @@ func TestToken_IsExpired(t *testing.T) {
 		{
 			name: "ExpiresNow",
 			setup: func() *Token {
+				// Set expiration slightly in the future to avoid race condition
 				return &Token{
-					ExpiresAt: time.Now(),
+					ExpiresAt: time.Now().Add(10 * time.Millisecond),
 				}
 			},
-			expected: false, // Should be false since it expires "now" but hasn't passed yet
+			expected: false, // Should be false since it expires slightly in the future
 		},
 		{
 			name: "ExpiresInFuture",
