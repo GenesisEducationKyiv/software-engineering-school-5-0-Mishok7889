@@ -1,0 +1,215 @@
+.PHONY: test-unit test-integration test-e2e test-all test-clean test-deps lint help
+.PHONY: _check-docker _check-node _integration-setup _integration-cleanup _e2e-setup _e2e-cleanup
+
+# Configuration
+INTEGRATION_COMPOSE_FILE := tests/docker/docker-compose.integration.yml
+E2E_COMPOSE_FILE := tests/e2e/docker/docker-compose.e2e.yml
+INTEGRATION_PROJECT := weatherapi-integration-test
+E2E_PROJECT := weatherapi-e2e-test
+INTEGRATION_PACKAGES := ./tests/integration/...
+UNIT_PACKAGES := ./service ./repository ./api .
+TIMEOUT := 10m
+
+# Colors for output
+GREEN := \033[32m
+YELLOW := \033[33m
+RED := \033[31m
+NC := \033[0m
+
+# Default target
+help:
+	@echo "$(GREEN)Weather API Testing Commands$(NC)"
+	@echo ""
+	@echo "$(YELLOW)Core Commands:$(NC)"
+	@echo "  test-unit         - Run unit tests"
+	@echo "  test-integration  - Run integration tests (auto setup/cleanup)"
+	@echo "  test-e2e          - Run E2E tests (auto setup/cleanup)"
+	@echo "  test-all          - Run all tests sequentially"
+	@echo ""
+	@echo "$(YELLOW)Utilities:$(NC)"
+	@echo "  test-clean        - Clean up all test environments"
+	@echo "  test-deps         - Install/verify test dependencies"
+	@echo "  lint              - Run code linting"
+	@echo "  help              - Show this help message"
+	@echo ""
+	@echo "$(YELLOW)Examples:$(NC)"
+	@echo "  make test-unit              # Quick unit tests"
+	@echo "  make test-integration       # Full integration testing"
+	@echo "  make test-all               # Complete test suite"
+
+# Unit Tests - Fast and simple
+test-unit:
+	@echo "$(GREEN)Running unit tests...$(NC)"
+	@go test -v -race -timeout=$(TIMEOUT) -coverprofile=coverage.out $(UNIT_PACKAGES)
+	@echo "$(GREEN)Unit tests completed$(NC)"
+
+# Integration Tests - With auto setup/cleanup
+test-integration: _check-docker _integration-setup
+	@echo "$(GREEN)Running integration tests...$(NC)"
+	@trap 'make _integration-cleanup' EXIT; \
+	go test -v -timeout=$(TIMEOUT) $(INTEGRATION_PACKAGES)
+	@echo "$(GREEN)Integration tests completed$(NC)"
+
+# E2E Tests - With auto setup/cleanup
+test-e2e: _check-docker _check-node _e2e-setup
+	@echo "$(GREEN)Running E2E tests...$(NC)"
+	@trap 'make _e2e-cleanup' EXIT; \
+	cd tests/e2e && npm test
+	@echo "$(GREEN)E2E tests completed$(NC)"
+
+# Run all tests sequentially
+test-all: test-unit test-integration test-e2e
+	@echo "$(GREEN)All tests completed successfully!$(NC)"
+
+# Linting
+lint:
+	@echo "$(GREEN)Running linter...$(NC)"
+	@if ! command -v golangci-lint >/dev/null 2>&1; then \
+		echo "$(YELLOW)Installing golangci-lint...$(NC)"; \
+		go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.1.6; \
+	fi
+	@golangci-lint run ./...
+	@echo "$(GREEN)Linting completed$(NC)"
+
+# Install/verify test dependencies
+test-deps: _check-docker _check-node
+	@echo "$(GREEN)Installing test dependencies...$(NC)"
+	@go mod download
+	@cd tests/e2e && npm install
+	@cd tests/e2e && npx playwright install chromium firefox
+	@echo "$(GREEN)Test dependencies installed$(NC)"
+
+# Clean up all test environments
+test-clean:
+	@echo "$(GREEN)Cleaning up test environments...$(NC)"
+	@make _integration-cleanup || true
+	@make _e2e-cleanup || true
+	@docker system prune -f --filter "label=weatherapi-test" 2>/dev/null || true
+	@echo "$(GREEN)Test environments cleaned$(NC)"
+
+# Internal: Check Docker availability
+_check-docker:
+	@if ! command -v docker >/dev/null 2>&1; then \
+		echo "$(RED)Error: Docker is required but not installed$(NC)"; \
+		exit 1; \
+	fi
+	@if ! docker info >/dev/null 2>&1; then \
+		echo "$(RED)Error: Docker daemon is not running$(NC)"; \
+		exit 1; \
+	fi
+
+# Internal: Check Node.js availability
+_check-node:
+	@if ! command -v node >/dev/null 2>&1; then \
+		echo "$(RED)Error: Node.js is required for E2E tests$(NC)"; \
+		exit 1; \
+	fi
+	@if ! command -v npm >/dev/null 2>&1; then \
+		echo "$(RED)Error: npm is required for E2E tests$(NC)"; \
+		exit 1; \
+	fi
+
+# Internal: Setup integration test environment
+_integration-setup:
+	@echo "$(YELLOW)Setting up integration test environment...$(NC)"
+	@docker compose -f $(INTEGRATION_COMPOSE_FILE) -p $(INTEGRATION_PROJECT) down --volumes >/dev/null 2>&1 || true
+	@docker compose -f $(INTEGRATION_COMPOSE_FILE) -p $(INTEGRATION_PROJECT) build --quiet
+	@docker compose -f $(INTEGRATION_COMPOSE_FILE) -p $(INTEGRATION_PROJECT) up -d
+	@echo "$(YELLOW)Waiting for integration services...$(NC)"
+	@for i in $$(seq 1 30); do \
+		echo "Checking services (attempt $$i/30)..."; \
+		pg_ready=false; \
+		if docker compose -f $(INTEGRATION_COMPOSE_FILE) -p $(INTEGRATION_PROJECT) exec -T postgres-test pg_isready -U test_user -d weatherapi_test >/dev/null 2>&1; then \
+			pg_ready=true; \
+		fi; \
+		api_ready=false; \
+		if curl -f http://localhost:8081/health >/dev/null 2>&1; then \
+			api_ready=true; \
+		fi; \
+		mail_ready=false; \
+		if curl -f http://localhost:8025 >/dev/null 2>&1; then \
+			mail_ready=true; \
+		fi; \
+		if [ "$$pg_ready" = "true" ] && [ "$$api_ready" = "true" ] && [ "$$mail_ready" = "true" ]; then \
+			echo "$(GREEN)Integration services ready$(NC)"; \
+			break; \
+		fi; \
+		if [ $$i -eq 30 ]; then \
+			echo "$(RED)Integration services failed to start$(NC)"; \
+			docker compose -f $(INTEGRATION_COMPOSE_FILE) -p $(INTEGRATION_PROJECT) logs; \
+			exit 1; \
+		fi; \
+		sleep 2; \
+	done
+
+# Internal: Cleanup integration test environment
+_integration-cleanup:
+	@echo "$(YELLOW)Cleaning up integration test environment...$(NC)"
+	@docker compose -f $(INTEGRATION_COMPOSE_FILE) -p $(INTEGRATION_PROJECT) down --volumes >/dev/null 2>&1 || true
+
+# Internal: Setup E2E test environment
+_e2e-setup:
+	@echo "$(YELLOW)Setting up E2E test environment...$(NC)"
+	@docker compose -f $(E2E_COMPOSE_FILE) -p $(E2E_PROJECT) down --volumes >/dev/null 2>&1 || true
+	@docker compose -f $(E2E_COMPOSE_FILE) -p $(E2E_PROJECT) build --quiet
+	@docker compose -f $(E2E_COMPOSE_FILE) -p $(E2E_PROJECT) up -d
+	@echo "$(YELLOW)Waiting for E2E services...$(NC)"
+	@for i in $$(seq 1 30); do \
+		echo "Checking E2E services (attempt $$i/30)..."; \
+		pg_ready=false; \
+		if docker compose -f $(E2E_COMPOSE_FILE) -p $(E2E_PROJECT) exec -T postgres-e2e pg_isready -U e2e_user -d weatherapi_e2e >/dev/null 2>&1; then \
+			pg_ready=true; \
+		fi; \
+		api_ready=false; \
+		if curl -f http://localhost:8082/health >/dev/null 2>&1; then \
+			api_ready=true; \
+		fi; \
+		mail_ready=false; \
+		if curl -f http://localhost:8026 >/dev/null 2>&1; then \
+			mail_ready=true; \
+		fi; \
+		if [ "$$pg_ready" = "true" ] && [ "$$api_ready" = "true" ] && [ "$$mail_ready" = "true" ]; then \
+			echo "$(GREEN)E2E services ready$(NC)"; \
+			break; \
+		fi; \
+		if [ $$i -eq 30 ]; then \
+			echo "$(RED)E2E services failed to start$(NC)"; \
+			docker compose -f $(E2E_COMPOSE_FILE) -p $(E2E_PROJECT) logs; \
+			exit 1; \
+		fi; \
+		sleep 3; \
+	done
+	@echo "$(YELLOW)Building and starting application...$(NC)"
+	@go build -o weatherapi main.go
+	@APP_BASE_URL="http://localhost:8080" \
+	DATABASE_URL="postgres://e2e_user:e2e_pass@localhost:5434/weatherapi_e2e?sslmode=disable" \
+	EMAIL_SMTP_HOST="localhost" \
+	EMAIL_SMTP_PORT="1026" \
+	EMAIL_SMTP_USERNAME="test" \
+	EMAIL_SMTP_PASSWORD="test" \
+	WEATHER_API_KEY="test-key" \
+	WEATHER_API_BASE_URL="http://localhost:8082" \
+	GIN_MODE="release" \
+	./weatherapi > /dev/null 2>&1 & echo $$! > weatherapi.pid
+	@echo "$(YELLOW)Waiting for application...$(NC)"
+	@for i in $$(seq 1 15); do \
+		if curl -f http://localhost:8080/api/debug >/dev/null 2>&1; then \
+			echo "$(GREEN)Application ready$(NC)"; \
+			break; \
+		fi; \
+		if [ $$i -eq 15 ]; then \
+			echo "$(RED)Application failed to start$(NC)"; \
+			exit 1; \
+		fi; \
+		sleep 2; \
+	done
+
+# Internal: Cleanup E2E test environment
+_e2e-cleanup:
+	@echo "$(YELLOW)Cleaning up E2E test environment...$(NC)"
+	@if [ -f weatherapi.pid ]; then \
+		kill $$(cat weatherapi.pid) 2>/dev/null || true; \
+		rm -f weatherapi.pid; \
+	fi
+	@rm -f weatherapi
+	@docker compose -f $(E2E_COMPOSE_FILE) -p $(E2E_PROJECT) down --volumes >/dev/null 2>&1 || true

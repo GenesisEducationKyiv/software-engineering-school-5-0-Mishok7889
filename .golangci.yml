@@ -1,0 +1,23 @@
+version: "2"
+
+run:
+  tests: true
+
+linters:
+  enable:
+    - gocyclo
+    - revive
+  settings:
+    revive:
+      rules:
+        - name: package-comments
+          disabled: true
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+
+issues:
+  max-same-issues: 0  # Show all duplicate issues
+  max-issues-per-linter: 0  # Show all issues per linter
