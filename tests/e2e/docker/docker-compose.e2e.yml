@@ -53,6 +53,8 @@ services:
       - DB_SSL_MODE=disable
       - WEATHER_API_KEY=test-api-key
       - WEATHER_API_BASE_URL=http://mock-weather-api-e2e:8080
+      - WEATHER_ENABLE_LOGGING=false
+      - WEATHER_ENABLE_CACHE=false
       - EMAIL_SMTP_HOST=mailhog-e2e
       - EMAIL_SMTP_PORT=1025
       - EMAIL_SMTP_USERNAME=

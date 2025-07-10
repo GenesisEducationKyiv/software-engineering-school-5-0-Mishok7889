@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 	"time"
 
@@ -18,18 +19,21 @@ import (
 	"weatherapi.app/providers"
 )
 
-// Mock Weather Provider for testing
-type mockWeatherProvider struct {
+// Mock Provider Manager for testing - implements WeatherProviderManagerInterface
+type mockProviderManager struct {
 	mock.Mock
 }
 
-func (m *mockWeatherProvider) GetCurrentWeather(city string) (*models.WeatherResponse, error) {
+func (m *mockProviderManager) GetWeather(city string) (*models.WeatherResponse, error) {
 	args := m.Called(city)
 	if args.Error(1) != nil {
 		return nil, args.Error(1)
 	}
 	return args.Get(0).(*models.WeatherResponse), nil
 }
+
+// Ensure mock implements the interface
+var _ WeatherProviderManagerInterface = (*mockProviderManager)(nil)
 
 // Mock Email Provider for testing
 type mockEmailProvider struct {
@@ -41,10 +45,10 @@ func (m *mockEmailProvider) SendEmail(to, subject, body string, isHTML bool) err
 	return args.Error(0)
 }
 
-// Test WeatherService with provider
-func TestWeatherService_GetWeather_WithProvider(t *testing.T) {
-	mockProvider := new(mockWeatherProvider)
-	weatherService := NewWeatherService(mockProvider)
+// Test WeatherService with provider manager
+func TestWeatherService_GetWeather_WithProviderManager(t *testing.T) {
+	mockManager := new(mockProviderManager)
+	weatherService := NewWeatherService(mockManager)
 
 	expectedWeather := &models.WeatherResponse{
 		Temperature: 15.0,
@@ -52,18 +56,18 @@ func TestWeatherService_GetWeather_WithProvider(t *testing.T) {
 		Description: "Partly cloudy",
 	}
 
-	mockProvider.On("GetCurrentWeather", "London").Return(expectedWeather, nil)
+	mockManager.On("GetWeather", "London").Return(expectedWeather, nil)
 
 	weather, err := weatherService.GetWeather("London")
 
 	assert.NoError(t, err)
 	assert.Equal(t, expectedWeather, weather)
-	mockProvider.AssertExpectations(t)
+	mockManager.AssertExpectations(t)
 }
 
 func TestWeatherService_GetWeather_EmptyCity(t *testing.T) {
-	mockProvider := new(mockWeatherProvider)
-	weatherService := NewWeatherService(mockProvider)
+	mockManager := new(mockProviderManager)
+	weatherService := NewWeatherService(mockManager)
 
 	weather, err := weatherService.GetWeather("")
 
@@ -76,16 +80,16 @@ func TestWeatherService_GetWeather_EmptyCity(t *testing.T) {
 }
 
 func TestWeatherService_GetWeather_ProviderError(t *testing.T) {
-	mockProvider := new(mockWeatherProvider)
-	weatherService := NewWeatherService(mockProvider)
+	mockManager := new(mockProviderManager)
+	weatherService := NewWeatherService(mockManager)
 
-	mockProvider.On("GetCurrentWeather", "InvalidCity").Return(nil, weathererr.NewNotFoundError("city not found"))
+	mockManager.On("GetWeather", "InvalidCity").Return(nil, weathererr.NewNotFoundError("city not found"))
 
 	weather, err := weatherService.GetWeather("InvalidCity")
 
 	assert.Error(t, err)
 	assert.Nil(t, weather)
-	mockProvider.AssertExpectations(t)
+	mockManager.AssertExpectations(t)
 }
 
 // Test EmailService with provider
@@ -249,6 +253,14 @@ func (m *mockTokenRepository) FindByToken(tokenStr string) (*models.Token, error
 	return args.Get(0).(*models.Token), nil
 }
 
+func (m *mockTokenRepository) FindBySubscriptionIDAndType(subscriptionID uint, tokenType string) (*models.Token, error) {
+	args := m.Called(subscriptionID, tokenType)
+	if args.Error(1) != nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.Token), nil
+}
+
 func (m *mockTokenRepository) DeleteToken(token *models.Token) error {
 	args := m.Called(token)
 	return args.Error(0)
@@ -400,4 +412,275 @@ func TestSubscriptionService_Subscribe_AlreadyExists(t *testing.T) {
 	assert.True(t, errors.As(err, &appErr))
 	assert.Equal(t, weathererr.AlreadyExistsError, appErr.Type)
 	mockSubRepo.AssertExpectations(t)
+}
+
+// Test ProviderManager Integration (Optional - demonstrates real usage)
+func TestProviderManager_Integration(t *testing.T) {
+	// This test demonstrates integration but won't make actual API calls
+	// Use AccuWeather since it has mock data and doesn't require base URL
+	manager, err := providers.NewProviderManagerBuilder().
+		WithAccuWeatherKey("test-key"). // Use AccuWeather for simple integration test
+		WithCacheTTL(5 * time.Minute).
+		WithLogFilePath("test.log").
+		WithLoggingEnabled(false).
+		WithProviderOrder([]string{"accuweather"}).
+		WithCacheType(providers.CacheTypeMemory).
+		WithCacheConfig(nil).
+		Build()
+	assert.NoError(t, err)
+	assert.NotNil(t, manager)
+
+	// Test that the provider info is returned correctly
+	info := manager.GetProviderInfo()
+	assert.NotNil(t, info)
+	assert.Equal(t, false, info["cache_enabled"])
+	assert.Equal(t, false, info["logging_enabled"])
+	assert.Equal(t, []string{"accuweather"}, info["provider_order"])
+}
+
+func TestProviderManager_ChainOfResponsibility_Complete(t *testing.T) {
+	// Test the complete Chain of Responsibility with multiple providers
+	// This demonstrates the task requirements: multiple providers with fallback
+
+	tests := []struct {
+		name           string
+		config         *providers.ProviderConfiguration
+		expectedError  bool
+		expectProvider string // Which provider should succeed
+	}{
+		{
+			name: "Primary provider fails, secondary succeeds",
+			config: &providers.ProviderConfiguration{
+				WeatherAPIKey:     "",         // Disabled - will fail
+				OpenWeatherMapKey: "",         // Disabled - will fail
+				AccuWeatherKey:    "test-key", // Enabled - will succeed with mock
+				CacheTTL:          5 * time.Minute,
+				LogFilePath:       "test.log",
+				EnableLogging:     false,
+				ProviderOrder:     []string{"weatherapi", "openweathermap", "accuweather"},
+				CacheType:         providers.CacheTypeMemory,
+				CacheConfig:       &config.CacheConfig{Type: "memory"},
+			},
+			expectedError:  false,
+			expectProvider: "accuweather", // AccuWeather uses mock data
+		},
+		{
+			name: "All providers fail",
+			config: &providers.ProviderConfiguration{
+				WeatherAPIKey:     "",
+				OpenWeatherMapKey: "",
+				AccuWeatherKey:    "",
+				CacheTTL:          5 * time.Minute,
+				LogFilePath:       "test.log",
+				EnableLogging:     false,
+				ProviderOrder:     []string{"weatherapi", "openweathermap", "accuweather"},
+				CacheType:         providers.CacheTypeMemory,
+				CacheConfig:       &config.CacheConfig{Type: "memory"},
+			},
+			expectedError: true,
+		},
+		{
+			name: "With caching enabled",
+			config: &providers.ProviderConfiguration{
+				AccuWeatherKey: "test-key",
+				CacheTTL:       1 * time.Minute,
+				LogFilePath:    "test.log",
+				EnableLogging:  false,
+				ProviderOrder:  []string{"accuweather"},
+				CacheType:      providers.CacheTypeMemory,
+				CacheConfig:    &config.CacheConfig{Type: "memory"}, // Cache config present = caching enabled
+			},
+			expectedError:  false,
+			expectProvider: "accuweather",
+		},
+		{
+			name: "With logging enabled",
+			config: &providers.ProviderConfiguration{
+				AccuWeatherKey: "test-key",
+				CacheTTL:       5 * time.Minute,
+				LogFilePath:    "test_weather.log",
+				EnableLogging:  true, // Test Decorator pattern
+				ProviderOrder:  []string{"accuweather"},
+				CacheType:      providers.CacheTypeMemory,
+				CacheConfig:    nil, // No cache config = caching disabled
+			},
+			expectedError:  false,
+			expectProvider: "accuweather",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Clean up log file if it exists
+			if tt.config.EnableLogging {
+				defer func() {
+					_ = os.Remove(tt.config.LogFilePath) // Ignore cleanup errors
+				}()
+			}
+
+			manager, err := providers.NewProviderManagerBuilder().
+				WithWeatherAPIKey(tt.config.WeatherAPIKey).
+				WithWeatherAPIBaseURL(tt.config.WeatherAPIBaseURL).
+				WithOpenWeatherMapKey(tt.config.OpenWeatherMapKey).
+				WithAccuWeatherKey(tt.config.AccuWeatherKey).
+				WithCacheTTL(tt.config.CacheTTL).
+				WithLogFilePath(tt.config.LogFilePath).
+				WithLoggingEnabled(tt.config.EnableLogging).
+				WithProviderOrder(tt.config.ProviderOrder).
+				WithCacheType(tt.config.CacheType).
+				WithCacheConfig(tt.config.CacheConfig).
+				Build()
+
+			// Handle the "All providers fail" case - now fails at creation time due to fail-fast
+			if tt.name == "All providers fail" {
+				assert.Error(t, err)
+				assert.Nil(t, manager)
+				assert.Contains(t, err.Error(), "at least one weather provider API key must be configured")
+				return // Exit early for this test case
+			}
+
+			// For all other cases, manager creation should succeed
+			assert.NoError(t, err)
+			assert.NotNil(t, manager)
+
+			weatherService := NewWeatherService(manager)
+
+			// Test the chain
+			weather, err := weatherService.GetWeather("London")
+
+			if tt.expectedError {
+				assert.Error(t, err)
+				assert.Nil(t, weather)
+				assert.Contains(t, err.Error(), "all weather providers failed")
+			} else {
+				assert.NoError(t, err)
+				assert.NotNil(t, weather)
+
+				// Verify AccuWeather mock data
+				if tt.expectProvider == "accuweather" {
+					assert.Equal(t, 22.5, weather.Temperature)
+					assert.Equal(t, 65.0, weather.Humidity)
+					assert.Equal(t, "Partly cloudy", weather.Description)
+				}
+
+				// Verify provider info from manager
+				info := manager.GetProviderInfo()
+				assert.NotNil(t, info)
+				assert.Equal(t, tt.config.CacheConfig != nil, info["cache_enabled"])
+				assert.Equal(t, tt.config.EnableLogging, info["logging_enabled"])
+
+				// Test caching if enabled
+				if tt.config.CacheConfig != nil {
+					// Second call should be cached
+					weather2, err2 := weatherService.GetWeather("London")
+					assert.NoError(t, err2)
+					assert.Equal(t, weather.Temperature, weather2.Temperature)
+				}
+
+				// Verify logging if enabled
+				if tt.config.EnableLogging {
+					time.Sleep(100 * time.Millisecond) // Allow log writing
+
+					_, err := os.Stat(tt.config.LogFilePath)
+					assert.NoError(t, err, "Log file should exist")
+
+					logData, err := os.ReadFile(tt.config.LogFilePath)
+					assert.NoError(t, err)
+					logContent := string(logData)
+
+					assert.Contains(t, logContent, "London")
+					assert.Contains(t, logContent, "response")
+					assert.Contains(t, logContent, "AccuWeather")
+				}
+			}
+		})
+	}
+}
+
+func TestProviderManager_Builder_Pattern(t *testing.T) {
+	// Test the Builder pattern for ProviderManager
+	manager, err := providers.NewProviderManagerBuilder().
+		WithAccuWeatherKey("test-key").
+		WithCacheTTL(15 * time.Minute).
+		WithLoggingEnabled(true).
+		WithLogFilePath("test_builder.log").
+		WithProviderOrder([]string{"accuweather"}).
+		WithCacheType(providers.CacheTypeMemory).
+		WithCacheConfig(&config.CacheConfig{Type: "memory"}).
+		Build()
+
+	defer func() {
+		_ = os.Remove("test_builder.log") // Ignore cleanup errors
+	}()
+
+	assert.NoError(t, err)
+	assert.NotNil(t, manager)
+
+	info := manager.GetProviderInfo()
+	assert.Equal(t, true, info["cache_enabled"])
+	assert.Equal(t, true, info["logging_enabled"])
+	assert.Equal(t, "15m0s", info["cache_ttl"])
+	assert.Equal(t, []string{"accuweather"}, info["provider_order"])
+
+	// Test that it actually works
+	weatherService := NewWeatherService(manager)
+	weather, err := weatherService.GetWeather("London")
+	assert.NoError(t, err)
+	assert.NotNil(t, weather)
+	assert.Equal(t, 22.5, weather.Temperature)
+}
+
+func TestWeatherProviders_Individual(t *testing.T) {
+	tests := []struct {
+		name     string
+		provider providers.WeatherProvider
+		city     string
+		expected *models.WeatherResponse
+		hasError bool
+	}{
+		{
+			name:     "AccuWeather with mock data",
+			provider: providers.NewAccuWeatherProvider("test-key", "http://dataservice.accuweather.com/currentconditions/v1"),
+			city:     "London",
+			expected: &models.WeatherResponse{
+				Temperature: 22.5,
+				Humidity:    65.0,
+				Description: "Partly cloudy",
+			},
+			hasError: false,
+		},
+		{
+			name:     "AccuWeather with empty city",
+			provider: providers.NewAccuWeatherProvider("test-key", "http://dataservice.accuweather.com/currentconditions/v1"),
+			city:     "",
+			expected: nil,
+			hasError: true,
+		},
+		{
+			name:     "OpenWeatherMap with invalid key (will fail)",
+			provider: providers.NewOpenWeatherMapProvider("invalid-key", "https://api.openweathermap.org/data/2.5"),
+			city:     "London",
+			expected: nil,
+			hasError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			weather, err := tt.provider.GetCurrentWeather(tt.city)
+
+			if tt.hasError {
+				assert.Error(t, err)
+				assert.Nil(t, weather)
+			} else {
+				assert.NoError(t, err)
+				assert.NotNil(t, weather)
+				if tt.expected != nil {
+					assert.Equal(t, tt.expected.Temperature, weather.Temperature)
+					assert.Equal(t, tt.expected.Humidity, weather.Humidity)
+					assert.Equal(t, tt.expected.Description, weather.Description)
+				}
+			}
+		})
+	}
 }
