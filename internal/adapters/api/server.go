@@ -9,9 +9,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"weatherapi.app/internal/core/notification"
 	"weatherapi.app/internal/core/subscription"
 	"weatherapi.app/internal/core/weather"
+	"weatherapi.app/internal/ports"
 	"weatherapi.app/pkg/errors"
 )
 
@@ -26,8 +26,8 @@ type HTTPServerAdapter struct {
 	config              ServerConfig
 	weatherUseCase      WeatherUseCase
 	subscriptionUseCase SubscriptionUseCase
-	notificationUseCase NotificationUseCase
 	metricsCollector    MetricsCollector
+	systemHealthChecker ports.SystemHealthChecker
 }
 
 // Use case interfaces that the HTTP adapter depends on
@@ -41,10 +41,6 @@ type SubscriptionUseCase interface {
 	Unsubscribe(ctx context.Context, params subscription.UnsubscribeParams) error
 }
 
-type NotificationUseCase interface {
-	SendConfirmationEmail(ctx context.Context, request notification.NotificationRequest) error
-}
-
 type MetricsCollector interface {
 	IncrementCounter(name string, labels map[string]string)
 	GetMetrics(ctx context.Context) (map[string]interface{}, error)
@@ -55,8 +51,8 @@ type ServerOptions struct {
 	Config              ServerConfig
 	WeatherUseCase      WeatherUseCase
 	SubscriptionUseCase SubscriptionUseCase
-	NotificationUseCase NotificationUseCase
 	MetricsCollector    MetricsCollector
+	SystemHealthChecker ports.SystemHealthChecker
 }
 
 // NewHTTPServerAdapter creates a new HTTP server adapter
@@ -72,8 +68,8 @@ func NewHTTPServerAdapter(opts ServerOptions) (*HTTPServerAdapter, error) {
 		config:              opts.Config,
 		weatherUseCase:      opts.WeatherUseCase,
 		subscriptionUseCase: opts.SubscriptionUseCase,
-		notificationUseCase: opts.NotificationUseCase,
 		metricsCollector:    opts.MetricsCollector,
+		systemHealthChecker: opts.SystemHealthChecker,
 	}
 
 	server.setupRoutes()
@@ -88,11 +84,11 @@ func (opts *ServerOptions) Validate() error {
 	if opts.SubscriptionUseCase == nil {
 		return errors.NewValidationError("subscription use case is required")
 	}
-	if opts.NotificationUseCase == nil {
-		return errors.NewValidationError("notification use case is required")
-	}
 	if opts.MetricsCollector == nil {
 		return errors.NewValidationError("metrics collector is required")
+	}
+	if opts.SystemHealthChecker == nil {
+		return errors.NewValidationError("system health checker is required")
 	}
 	return nil
 }
@@ -101,6 +97,8 @@ func (opts *ServerOptions) Validate() error {
 func (s *HTTPServerAdapter) setupRoutes() {
 	api := s.router.Group("/api")
 	{
+		api.GET("/health", s.getHealth)
+		api.GET("/debug", s.getDebug)
 		api.GET("/weather", s.getWeather)
 		api.POST("/subscribe", s.subscribe)
 		api.GET("/confirm/:token", s.confirmSubscription)
@@ -125,7 +123,7 @@ func (s *HTTPServerAdapter) GetRouter() *gin.Engine {
 
 // setupStaticFiles configures static file serving
 func (s *HTTPServerAdapter) setupStaticFiles() {
-	s.router.Static("/static", "./public/static")
+	s.router.Static("/static", "./public")
 	s.router.StaticFile("/", "./public/index.html")
 	s.router.StaticFile("/favicon.ico", "./public/favicon.ico")
 }

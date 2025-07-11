@@ -187,7 +187,7 @@ func TestSubscriptionHandler_Subscribe_InvalidEmail(t *testing.T) {
 	var response ErrorResponse
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	assert.NoError(t, err)
-	assert.Contains(t, response.Error, "invalid request format")
+	assert.Contains(t, response.Error, "Invalid request format")
 }
 
 func TestSubscriptionHandler_Subscribe_MissingFields(t *testing.T) {
@@ -234,7 +234,7 @@ func TestSubscriptionHandler_Subscribe_MissingFields(t *testing.T) {
 			var response ErrorResponse
 			err := json.Unmarshal(w.Body.Bytes(), &response)
 			assert.NoError(t, err)
-			assert.Contains(t, response.Error, "invalid request format")
+			assert.Contains(t, response.Error, "Invalid request format")
 		})
 	}
 }
@@ -273,7 +273,7 @@ func TestSubscriptionHandler_Subscribe_AlreadyExists(t *testing.T) {
 	var response ErrorResponse
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	assert.NoError(t, err)
-	assert.Contains(t, response.Error, "already exists")
+	assert.Contains(t, response.Error, "already subscribed")
 }
 
 func TestSubscriptionHandler_ConfirmSubscription_Success(t *testing.T) {

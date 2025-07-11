@@ -71,6 +71,9 @@ func (p *OpenWeatherMapProviderAdapter) GetCurrentWeather(ctx context.Context, c
 	}()
 
 	if resp.StatusCode != http.StatusOK {
+		if resp.StatusCode == http.StatusNotFound {
+			return nil, errors.NewNotFoundError("city not found")
+		}
 		return nil, errors.NewExternalAPIError(fmt.Sprintf("OpenWeatherMap returned status %d", resp.StatusCode), nil)
 	}
 

@@ -29,7 +29,8 @@ func (s *HTTPServerAdapter) subscribe(c *gin.Context) {
 
 	if err := c.ShouldBind(&httpReq); err != nil {
 		slog.Error("Request binding error", "error", err)
-		s.handleError(c, errors.NewValidationError("invalid request format"))
+		// Always use our custom error message to ensure consistency
+		s.handleError(c, errors.NewValidationError("Invalid request format"))
 		return
 	}
 

@@ -2,6 +2,7 @@ package external
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"net/smtp"
 
@@ -41,7 +42,7 @@ func NewSMTPEmailProviderAdapter(config EmailProviderConfig) ports.EmailProvider
 	}
 }
 
-// SendEmail sends an email using SMTP
+// SendEmail sends an email using SMTP with flexible authentication and TLS
 func (p *SMTPEmailProviderAdapter) SendEmail(ctx context.Context, params ports.EmailParams) error {
 	if params.To == "" {
 		return errors.NewValidationError("recipient email cannot be empty")
@@ -53,14 +54,64 @@ func (p *SMTPEmailProviderAdapter) SendEmail(ctx context.Context, params ports.E
 		return errors.NewValidationError("email body cannot be empty")
 	}
 
-	auth := smtp.PlainAuth("", p.username, p.password, p.host)
-
 	from := fmt.Sprintf("%s <%s>", p.fromName, p.fromAddr)
 	msg := p.buildMessage(from, params.To, params.Subject, params.Body, params.IsHTML)
-
 	addr := fmt.Sprintf("%s:%d", p.host, p.port)
-	if err := smtp.SendMail(addr, auth, p.fromAddr, []string{params.To}, []byte(msg)); err != nil {
-		return errors.NewEmailError("failed to send email", err)
+
+	// Use manual SMTP client for better control over authentication and TLS
+	client, err := smtp.Dial(addr)
+	if err != nil {
+		return errors.NewEmailError("failed to connect to SMTP server", err)
+	}
+	defer func() {
+		if closeErr := client.Close(); closeErr != nil {
+			// Intentionally ignore close errors for cleanup
+			_ = closeErr
+		}
+	}()
+
+	// Start TLS if supported
+	if ok, _ := client.Extension("STARTTLS"); ok {
+		tlsConfig := &tls.Config{
+			ServerName: p.host,
+		}
+		if err := client.StartTLS(tlsConfig); err != nil {
+			return errors.NewEmailError("failed to establish secure TLS connection", err)
+		}
+	}
+
+	// Authenticate only if credentials are provided
+	if p.username != "" && p.password != "" {
+		auth := smtp.PlainAuth("", p.username, p.password, p.host)
+		if err := client.Auth(auth); err != nil {
+			return errors.NewEmailError("failed to authenticate", err)
+		}
+	}
+
+	// Set sender
+	if err := client.Mail(p.fromAddr); err != nil {
+		return errors.NewEmailError("failed to set sender", err)
+	}
+
+	// Set recipient
+	if err := client.Rcpt(params.To); err != nil {
+		return errors.NewEmailError("failed to set recipient", err)
+	}
+
+	// Send message
+	writer, err := client.Data()
+	if err != nil {
+		return errors.NewEmailError("failed to get data writer", err)
+	}
+	defer func() {
+		if closeErr := writer.Close(); closeErr != nil {
+			// Intentionally ignore close errors for cleanup
+			_ = closeErr
+		}
+	}()
+
+	if _, err := writer.Write([]byte(msg)); err != nil {
+		return errors.NewEmailError("failed to write message", err)
 	}
 
 	return nil

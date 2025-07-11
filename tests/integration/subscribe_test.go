@@ -92,7 +92,7 @@ func (s *IntegrationTestSuite) TestSubscribe_AlreadyConfirmed() {
 	var errorResponse ErrorResponse
 	err := json.Unmarshal(w.Body.Bytes(), &errorResponse)
 	s.NoError(err)
-	s.Contains(errorResponse.Error, "already exists")
+	s.Contains(errorResponse.Error, "already subscribed")
 }
 
 func (s *IntegrationTestSuite) TestSubscribe_MissingEmail() {

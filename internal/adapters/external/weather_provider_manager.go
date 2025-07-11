@@ -104,6 +104,7 @@ func (m *WeatherProviderManagerAdapter) GetWeather(ctx context.Context, city str
 	var lastErr error
 
 	// Chain of Responsibility: try each provider in order
+	var notFoundErrors []error
 	for i, provider := range m.providers {
 		providerName := provider.GetProviderName()
 
@@ -125,6 +126,11 @@ func (m *WeatherProviderManagerAdapter) GetWeather(ctx context.Context, city str
 			return weather, nil
 		}
 
+		// If this is a NotFoundError, collect it separately
+		if errors.IsNotFoundError(err) {
+			notFoundErrors = append(notFoundErrors, err)
+		}
+
 		lastErr = err
 		if m.logger != nil {
 			m.logger.Warn("Weather provider failed, trying next",
@@ -140,6 +146,11 @@ func (m *WeatherProviderManagerAdapter) GetWeather(ctx context.Context, city str
 			ports.F("city", city),
 			ports.F("providers_tried", len(m.providers)),
 			ports.F("last_error", lastErr.Error()))
+	}
+
+	// If all providers returned NotFoundError, return NotFoundError
+	if len(notFoundErrors) == len(m.providers) {
+		return nil, errors.NewNotFoundError("city not found")
 	}
 
 	return nil, fmt.Errorf("all weather providers failed (tried %d providers): %w", len(m.providers), lastErr)

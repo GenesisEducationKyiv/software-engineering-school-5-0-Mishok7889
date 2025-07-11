@@ -73,6 +73,9 @@ func (p *WeatherAPIProviderAdapter) GetCurrentWeather(ctx context.Context, city 
 	}()
 
 	if resp.StatusCode != http.StatusOK {
+		if resp.StatusCode == http.StatusNotFound {
+			return nil, errors.NewNotFoundError("city not found")
+		}
 		return nil, errors.NewExternalAPIError(fmt.Sprintf("WeatherAPI returned status %d", resp.StatusCode), nil)
 	}
 

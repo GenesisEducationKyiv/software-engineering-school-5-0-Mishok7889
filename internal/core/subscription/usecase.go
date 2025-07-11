@@ -107,7 +107,7 @@ func (uc *UseCase) Subscribe(ctx context.Context, params SubscribeParams) error 
 	if existing != nil {
 		subscription := uc.convertFromPortsSubscription(existing)
 		if subscription.IsConfirmed() {
-			return errors.NewAlreadyExistsError("subscription already exists and is confirmed")
+			return errors.NewAlreadyExistsError("already subscribed")
 		}
 
 		// If subscription exists but is not confirmed, update it with new parameters
@@ -344,7 +344,7 @@ func (uc *UseCase) sendWelcomeEmail(ctx context.Context, subscription *Subscript
 func (uc *UseCase) sendUnsubscribeConfirmationEmail(ctx context.Context, subscription *Subscription) error {
 	emailParams := ports.EmailParams{
 		To:      subscription.Email,
-		Subject: "You have been unsubscribed",
+		Subject: "You have been unsubscribed from weather updates",
 		Body:    uc.buildUnsubscribeConfirmationBody(subscription),
 		IsHTML:  true,
 	}

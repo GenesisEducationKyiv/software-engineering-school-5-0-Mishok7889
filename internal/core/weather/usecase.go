@@ -104,6 +104,10 @@ func (uc *UseCase) getWeatherWithCache(ctx context.Context, city string) (*Weath
 func (uc *UseCase) getWeatherFromProvider(ctx context.Context, city string) (*Weather, error) {
 	providerWeather, err := uc.weatherProvider.GetWeather(ctx, city)
 	if err != nil {
+		// Preserve NotFoundError from providers
+		if errors.IsNotFoundError(err) {
+			return nil, err
+		}
 		return nil, errors.NewExternalAPIError("weather provider failed", err)
 	}
 

@@ -11,12 +11,13 @@ import (
 	"github.com/gin-gonic/gin/binding"
 	"github.com/go-playground/validator/v10"
 	"gorm.io/gorm"
+	"weatherapi.app/internal/adapters/api"
+	"weatherapi.app/internal/adapters/infrastructure"
 	"weatherapi.app/internal/config"
 	"weatherapi.app/internal/core/notification"
 	"weatherapi.app/internal/core/subscription"
 	"weatherapi.app/internal/core/weather"
 	"weatherapi.app/internal/ports"
-	"weatherapi.app/pkg/errors"
 )
 
 type Application struct {
@@ -141,233 +142,46 @@ func (a *Application) initializeAdapters() error {
 		}
 	}
 
-	// Create simple HTTP server using Gin directly for now
-	server := gin.Default()
-
-	// Store the router for testing access
-	a.router = server
-
-	// Serve static files
-	server.GET("/", func(c *gin.Context) {
-		c.File("public/index.html")
+	// Create metrics collector for HTTP adapter
+	metricsCollector := infrastructure.NewMetricsCollectorAdapter(infrastructure.MetricsCollectorConfig{
+		WeatherMetrics: a.ports.WeatherMetrics,
+		CacheMetrics:   a.ports.CacheMetrics,
 	})
-	server.Static("/static", "./public")
 
-	// API routes
-	api := server.Group("/api")
-	{
-		api.GET("/health", func(c *gin.Context) {
-			c.JSON(200, gin.H{"status": "ok"})
-		})
+	// Create health checkers
+	databaseHealthChecker := infrastructure.NewDatabaseHealthChecker(a.ports.Database.(*gorm.DB))
+	weatherAPIHealthChecker := infrastructure.NewWeatherAPIHealthChecker(a.ports.WeatherProvider)
+	emailHealthChecker := infrastructure.NewEmailHealthChecker(a.ports.ConfigProvider.GetEmailConfig())
 
-		// Weather endpoint
-		api.GET("/weather", func(c *gin.Context) {
-			city := c.Query("city")
-			if city == "" {
-				c.JSON(400, gin.H{"error": "city parameter is required"})
-				return
-			}
+	// Create system health checker
+	systemHealthChecker := infrastructure.NewSystemHealthChecker(infrastructure.SystemHealthCheckerConfig{
+		DatabaseChecker:   databaseHealthChecker,
+		WeatherAPIChecker: weatherAPIHealthChecker,
+		EmailChecker:      emailHealthChecker,
+		ConfigProvider:    a.ports.ConfigProvider,
+	})
 
-			weatherRequest := weather.WeatherRequest{City: city}
-			weatherData, err := a.weatherUseCase.GetWeather(c.Request.Context(), weatherRequest)
-			if err != nil {
-				c.JSON(500, gin.H{"error": "Failed to get weather data"})
-				return
-			}
-
-			c.JSON(200, gin.H{
-				"temperature": weatherData.Temperature,
-				"humidity":    weatherData.Humidity,
-				"description": weatherData.Description,
-			})
-		})
-
-		// Debug endpoint
-		api.GET("/debug", func(c *gin.Context) {
-			// Check database connection
-			dbConnected := true
-			if gormDB, ok := a.ports.Database.(*gorm.DB); ok {
-				if db, err := gormDB.DB(); err == nil {
-					if err := db.Ping(); err != nil {
-						dbConnected = false
-					}
-				} else {
-					dbConnected = false
-				}
-			}
-
-			// Check weather API connection (simplified)
-			weatherConnected := true // Assume connected for now
-
-			response := gin.H{
-				"database": gin.H{
-					"connected": dbConnected,
-				},
-				"weatherAPI": gin.H{
-					"connected": weatherConnected,
-				},
-				"smtp": gin.H{
-					"host": a.config.Email.SMTPHost,
-					"port": fmt.Sprintf("%d", a.config.Email.SMTPPort),
-				},
-				"config": gin.H{
-					"appBaseURL": a.config.AppBaseURL,
-				},
-			}
-
-			c.JSON(200, response)
-		})
-
-		// Metrics endpoint
-		api.GET("/metrics", func(c *gin.Context) {
-			response := gin.H{
-				"cache": gin.H{
-					"type": "memory", // or from config
-				},
-				"provider_info": gin.H{
-					"active_providers": []string{"weatherapi", "openweathermap"},
-				},
-				"endpoints": gin.H{
-					"prometheus_metrics": "/metrics",
-					"cache_metrics":      "/api/cache/metrics",
-				},
-			}
-
-			c.JSON(200, response)
-		})
-
-		// Subscription endpoints
-		api.POST("/subscribe", func(c *gin.Context) {
-			// Use a separate struct for HTTP binding to avoid parsing issues
-			var httpReq struct {
-				Email     string `json:"email" form:"email" binding:"required,email"`
-				City      string `json:"city" form:"city" binding:"required"`
-				Frequency string `json:"frequency" form:"frequency" binding:"required"`
-			}
-
-			// Log the raw request data for debugging
-			a.ports.Logger.Debug("Received subscription request",
-				ports.F("content-type", c.GetHeader("Content-Type")),
-				ports.F("method", c.Request.Method))
-
-			if err := c.ShouldBind(&httpReq); err != nil {
-				a.ports.Logger.Error("Request binding error", ports.F("error", err))
-				c.JSON(400, gin.H{"error": "Invalid request format"})
-				return
-			}
-
-			// Convert string frequency to domain type
-			frequency := subscription.FrequencyFromString(httpReq.Frequency)
-			if frequency == subscription.FrequencyUnknown {
-				a.ports.Logger.Error("Invalid frequency value", ports.F("frequency", httpReq.Frequency))
-				c.JSON(400, gin.H{"error": "Invalid request format"})
-				return
-			}
-
-			// Log the parsed request for debugging
-			a.ports.Logger.Debug("Parsed subscription request",
-				ports.F("email", httpReq.Email),
-				ports.F("city", httpReq.City),
-				ports.F("frequency", frequency))
-
-			// Convert to SubscribeParams
-			subscribeParams := subscription.SubscribeParams{
-				Email:     httpReq.Email,
-				City:      httpReq.City,
-				Frequency: frequency,
-			}
-
-			if err := a.subscriptionUseCase.Subscribe(c.Request.Context(), subscribeParams); err != nil {
-				a.ports.Logger.Error("Failed to create subscription", ports.F("error", err), ports.F("email", httpReq.Email))
-
-				// Map domain errors to HTTP status codes
-				if errors.IsAlreadyExistsError(err) {
-					c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
-					return
-				}
-				if errors.IsValidationError(err) {
-					c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request format"})
-					return
-				}
-				if errors.IsNotFoundError(err) {
-					c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
-					return
-				}
-
-				// Default to internal server error
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
-				return
-			}
-
-			c.JSON(200, gin.H{"message": "Subscription successful. Confirmation email sent."})
-		})
-
-		api.GET("/confirm/:token", func(c *gin.Context) {
-			token := c.Param("token")
-			confirmParams := subscription.ConfirmParams{
-				Token: token,
-			}
-
-			if err := a.subscriptionUseCase.ConfirmSubscription(c.Request.Context(), confirmParams); err != nil {
-				// Map specific errors to appropriate HTTP status codes
-				if errors.IsTokenError(err) {
-					c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-					return
-				}
-				if errors.IsNotFoundError(err) {
-					c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
-					return
-				}
-				if errors.IsAlreadyExistsError(err) {
-					c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
-					return
-				}
-				if errors.IsValidationError(err) {
-					c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-					return
-				}
-
-				// Default to internal server error
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
-				return
-			}
-
-			c.JSON(200, gin.H{"message": "Subscription confirmed successfully"})
-		})
-
-		api.GET("/unsubscribe/:token", func(c *gin.Context) {
-			token := c.Param("token")
-			unsubscribeParams := subscription.UnsubscribeParams{
-				Token: token,
-			}
-
-			if err := a.subscriptionUseCase.Unsubscribe(c.Request.Context(), unsubscribeParams); err != nil {
-				// Map specific errors to appropriate HTTP status codes
-				if errors.IsTokenError(err) {
-					c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-					return
-				}
-				if errors.IsNotFoundError(err) {
-					c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
-					return
-				}
-				if errors.IsValidationError(err) {
-					c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-					return
-				}
-
-				// Default to internal server error
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
-				return
-			}
-
-			c.JSON(200, gin.H{"message": "Unsubscribed successfully"})
-		})
+	// Create HTTP server adapter with proper dependency injection
+	httpAdapter, err := api.NewHTTPServerAdapter(api.ServerOptions{
+		Config: api.ServerConfig{
+			Port: a.config.Server.Port,
+		},
+		WeatherUseCase:      a.weatherUseCase,
+		SubscriptionUseCase: a.subscriptionUseCase,
+		MetricsCollector:    metricsCollector,
+		SystemHealthChecker: systemHealthChecker,
+	})
+	if err != nil {
+		return fmt.Errorf("create HTTP adapter: %w", err)
 	}
 
+	// Store router for testing access
+	a.router = httpAdapter.GetRouter()
+
+	// Create HTTP server
 	a.httpServer = &http.Server{
 		Addr:         fmt.Sprintf(":%d", a.config.Server.Port),
-		Handler:      server,
+		Handler:      httpAdapter.GetRouter(),
 		ReadTimeout:  30 * time.Second,
 		WriteTimeout: 30 * time.Second,
 		IdleTimeout:  60 * time.Second,
