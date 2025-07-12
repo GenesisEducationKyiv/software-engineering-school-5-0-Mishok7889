@@ -9,7 +9,13 @@ repos:
     pass_filenames: false
     verbose: true
 
+- repo: https://github.com/fe3dback/go-arch-lint
+  rev: v1.12.0
+  hooks:
+  - id: go-arch-lint-graph
+    args: ['--out=docs/dependency_graph.svg']
+
 - repo: https://github.com/golangci/golangci-lint
-  rev: v2.1.6
+  rev: v2.2.2
   hooks:
   - id: golangci-lint
