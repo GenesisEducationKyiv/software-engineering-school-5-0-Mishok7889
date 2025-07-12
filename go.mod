@@ -1,8 +1,6 @@
 module weatherapi.app
 
-go 1.23.0
-
-toolchain go1.24
+go 1.24
 
 require (
 	github.com/alicebob/miniredis/v2 v2.33.0

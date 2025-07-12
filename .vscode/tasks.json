@@ -101,6 +101,49 @@
                 "reveal": "always"
             },
             "problemMatcher": ["$go"]
+        },
+        {
+            "label": "arch-lint",
+            "type": "shell",
+            "command": "node",
+            "args": [".vscode/scripts/arch-lint.js"],
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            },
+            "presentation": {
+                "echo": false,
+                "reveal": "silent",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": false,
+                "clear": false
+            },
+            "problemMatcher": {
+                "owner": "go-arch-lint",
+                "fileLocation": "relative",
+                "pattern": {
+                    "regexp": "^(.+):(\\d+):(\\d+):\\s+(error|warning|info):\\s+(.+)$",
+                    "file": 1,
+                    "line": 2,
+                    "column": 3,
+                    "severity": 4,
+                    "message": 5
+                }
+            }
+        },
+        {
+            "label": "lint-all",
+            "dependsOrder": "sequence",
+            "dependsOn": ["lint", "arch-lint"],
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            },
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            }
         }
     ]
 }

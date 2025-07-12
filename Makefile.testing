@@ -1,4 +1,4 @@
-.PHONY: test-unit test-integration test-e2e test-all test-clean test-deps lint help
+.PHONY: test-unit test-integration test-e2e test-architecture test-all test-clean test-deps lint help
 .PHONY: _check-docker _check-node _integration-setup _integration-cleanup _e2e-setup _e2e-cleanup
 
 # Configuration
@@ -24,6 +24,7 @@ help:
 	@echo "  test-unit         - Run unit tests"
 	@echo "  test-integration  - Run integration tests (auto setup/cleanup)"
 	@echo "  test-e2e          - Run E2E tests (auto setup/cleanup)"
+	@echo "  test-architecture - Run architecture tests"
 	@echo "  test-all          - Run all tests sequentially"
 	@echo ""
 	@echo "$(YELLOW)Utilities:$(NC)"
@@ -56,13 +57,25 @@ test-integration: _check-docker _integration-setup
 test-e2e: _check-docker _check-node _e2e-setup
 	@echo "$(GREEN)Running E2E tests...$(NC)"
 	@set -e; \
-	ROOT_DIR=$$(pwd); \
-	trap "cd $$ROOT_DIR && make -f Makefile.testing _e2e-cleanup" EXIT; \
+	ROOT_DIR=$(pwd); \
+	trap "cd $ROOT_DIR && make -f Makefile.testing _e2e-cleanup" EXIT; \
 	cd tests/e2e && npm test
 	@echo "$(GREEN)E2E tests completed$(NC)"
 
+# Architecture Tests - Validate hexagonal architecture rules
+test-architecture:
+	@echo "$(GREEN)Running architecture tests...$(NC)"
+	@if ! command -v go-arch-lint >/dev/null 2>&1; then \
+		echo "$(YELLOW)Installing go-arch-lint...$(NC)"; \
+		go install github.com/fe3dback/go-arch-lint@latest; \
+	fi
+	@go-arch-lint check
+	@echo "$(YELLOW)Running custom architecture tests...$(NC)"
+	@go test -v ./tests/architecture/...
+	@echo "$(GREEN)Architecture tests completed$(NC)"
+
 # Run all tests sequentially
-test-all: test-unit test-integration test-e2e
+test-all: test-unit test-architecture test-integration test-e2e
 	@echo "$(GREEN)All tests completed successfully!$(NC)"
 
 # Linting
