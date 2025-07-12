@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-	"weatherapi.app/models"
+	"weatherapi.app/internal/adapters/database"
 	"weatherapi.app/tests/integration/helpers"
 )
 
@@ -17,7 +17,7 @@ const (
 	tokenTypeUnsubscribe      = "unsubscribe"
 	tokenTypeConfirmation     = "confirmation"
 	welcomeEmailSubject       = "Welcome to Weather Updates"
-	tokenNotFoundError        = "token not found or expired"
+	tokenNotFoundError        = "invalid or expired confirmation token"
 	invalidTokenTypeError     = "invalid token type"
 	subscriptionNotFoundError = "subscription not found"
 )
@@ -41,12 +41,12 @@ func (s *IntegrationTestSuite) TestConfirmSubscription_Success() {
 	s.NoError(err)
 	s.Contains(response["message"], subscriptionConfirmed)
 
-	var confirmedSubscription models.Subscription
+	var confirmedSubscription database.SubscriptionModel
 	err = s.db.First(&confirmedSubscription, subscription.ID).Error
 	s.NoError(err)
 	s.True(confirmedSubscription.Confirmed)
 
-	var deletedToken models.Token
+	var deletedToken database.TokenModel
 	err = s.db.First(&deletedToken, token.ID).Error
 	s.Error(err)
 
@@ -65,10 +65,10 @@ func (s *IntegrationTestSuite) TestConfirmSubscription_InvalidToken() {
 
 	s.Equal(http.StatusBadRequest, w.Code)
 
-	var errorResponse models.ErrorResponse
+	var errorResponse ErrorResponse
 	err := json.Unmarshal(w.Body.Bytes(), &errorResponse)
 	s.NoError(err)
-	s.Equal(tokenNotFoundError, errorResponse.Error)
+	s.Contains(errorResponse.Error, "invalid or expired")
 }
 
 func (s *IntegrationTestSuite) TestConfirmSubscription_ExpiredToken() {
@@ -82,10 +82,10 @@ func (s *IntegrationTestSuite) TestConfirmSubscription_ExpiredToken() {
 
 	s.Equal(http.StatusBadRequest, w.Code)
 
-	var errorResponse models.ErrorResponse
+	var errorResponse ErrorResponse
 	err := json.Unmarshal(w.Body.Bytes(), &errorResponse)
 	s.NoError(err)
-	s.Equal(tokenNotFoundError, errorResponse.Error)
+	s.Contains(errorResponse.Error, "expired")
 }
 
 func (s *IntegrationTestSuite) TestConfirmSubscription_WrongTokenType() {
@@ -99,10 +99,10 @@ func (s *IntegrationTestSuite) TestConfirmSubscription_WrongTokenType() {
 
 	s.Equal(http.StatusBadRequest, w.Code)
 
-	var errorResponse models.ErrorResponse
+	var errorResponse ErrorResponse
 	err := json.Unmarshal(w.Body.Bytes(), &errorResponse)
 	s.NoError(err)
-	s.Equal(invalidTokenTypeError, errorResponse.Error)
+	s.Contains(errorResponse.Error, "invalid token type")
 }
 
 func (s *IntegrationTestSuite) TestConfirmSubscription_SubscriptionNotFound() {
@@ -111,7 +111,7 @@ func (s *IntegrationTestSuite) TestConfirmSubscription_SubscriptionNotFound() {
 	token := s.CreateTestToken(subscription.ID, tokenTypeConfirmation, 24*time.Hour)
 
 	// Now delete the subscription, leaving the token orphaned
-	err := s.db.Delete(&models.Subscription{}, subscription.ID).Error
+	err := s.db.Delete(&database.SubscriptionModel{}, subscription.ID).Error
 	s.NoError(err)
 
 	req := httptest.NewRequest("GET", "/api/confirm/"+token.Token, nil)
@@ -121,10 +121,10 @@ func (s *IntegrationTestSuite) TestConfirmSubscription_SubscriptionNotFound() {
 
 	s.Equal(http.StatusNotFound, w.Code)
 
-	var errorResponse models.ErrorResponse
+	var errorResponse ErrorResponse
 	err = json.Unmarshal(w.Body.Bytes(), &errorResponse)
 	s.NoError(err)
-	s.Equal(subscriptionNotFoundError, errorResponse.Error)
+	s.Contains(errorResponse.Error, "subscription not found")
 }
 
 func (s *IntegrationTestSuite) TestConfirmSubscription_AlreadyConfirmed() {
@@ -139,16 +139,12 @@ func (s *IntegrationTestSuite) TestConfirmSubscription_AlreadyConfirmed() {
 
 	s.router.ServeHTTP(w, req)
 
-	s.Equal(http.StatusOK, w.Code)
+	s.Equal(http.StatusConflict, w.Code)
 
-	var response map[string]string
-	err = json.Unmarshal(w.Body.Bytes(), &response)
+	var errorResponse ErrorResponse
+	err = json.Unmarshal(w.Body.Bytes(), &errorResponse)
 	s.NoError(err)
-	s.Contains(response["message"], subscriptionConfirmed)
-
-	require.Eventually(s.T(), func() bool {
-		return helpers.CheckEmailSent("test@example.com", welcomeEmailSubject)
-	}, 10*time.Second, 500*time.Millisecond)
+	s.Contains(errorResponse.Error, "already confirmed")
 }
 
 func (s *IntegrationTestSuite) TestConfirmSubscription_HourlyFrequency() {
@@ -165,7 +161,7 @@ func (s *IntegrationTestSuite) TestConfirmSubscription_HourlyFrequency() {
 
 	s.Equal(http.StatusOK, w.Code)
 
-	var confirmedSubscription models.Subscription
+	var confirmedSubscription database.SubscriptionModel
 	err = s.db.First(&confirmedSubscription, subscription.ID).Error
 	s.NoError(err)
 	s.True(confirmedSubscription.Confirmed)

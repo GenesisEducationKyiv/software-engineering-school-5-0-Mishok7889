@@ -12,6 +12,9 @@ linters:
       rules:
         - name: package-comments
           disabled: true
+  exclusions:
+    paths:
+      - internal/mocks
 
 formatters:
   enable:

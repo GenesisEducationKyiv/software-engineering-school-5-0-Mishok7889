@@ -6,7 +6,7 @@
             "type": "go",
             "request": "launch",
             "mode": "auto",
-            "program": "${workspaceFolder}/main.go",
+            "program": "${workspaceFolder}/cmd/app",
             "cwd": "${workspaceFolder}",
             "env": {},
             "args": []
@@ -16,7 +16,7 @@
             "type": "go",
             "request": "launch",
             "mode": "auto",
-            "program": "${workspaceFolder}/main.go",
+            "program": "${workspaceFolder}/cmd/app",
             "cwd": "${workspaceFolder}",
             "envFile": "${workspaceFolder}/.env.dev",
             "preLaunchTask": "start-db",
@@ -27,7 +27,7 @@
             "type": "go",
             "request": "launch",
             "mode": "debug",
-            "program": "${workspaceFolder}/main.go",
+            "program": "${workspaceFolder}/cmd/app",
             "cwd": "${workspaceFolder}",
             "env": {},
             "args": []
@@ -41,6 +41,16 @@
             "preLaunchTask": "build",
             "cwd": "${workspaceFolder}",
             "env": {}
+        },
+        {
+            "name": "Run with Environment",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}/cmd/app",
+            "cwd": "${workspaceFolder}",
+            "envFile": "${workspaceFolder}/.env",
+            "args": []
         }
     ]
 }

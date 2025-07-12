@@ -95,7 +95,7 @@ test.describe('Subscription Workflow', () => {
     
     expect(response.status()).toBe(400);
     const errorData = await response.json();
-    expect(errorData.error).toContain('invalid request format');
+    expect(errorData.error).toContain('Invalid request format');
   });
 
   test('should allow same email to subscribe to different cities', async ({ page }) => {

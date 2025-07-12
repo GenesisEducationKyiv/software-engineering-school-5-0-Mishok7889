@@ -1,0 +1,103 @@
+version: 3
+workdir: ./
+
+allow:
+  depOnAnyVendor: true
+
+excludeFiles:
+  - "^.*_test\\.go$"
+  - "^.*\/test\/.*$"
+  - ".*/tests/.*"
+
+components:
+  # Core business logic
+  domain: { in: internal/core/** }
+
+  # Interface definitions
+  ports: { in: internal/ports/** }
+
+  # HTTP handlers and API adapters
+  primary_adapters: { in: internal/adapters/api/** }
+
+  # External system adapters
+  secondary_adapters_external: { in: internal/adapters/external/** }
+
+  secondary_adapters_database: { in: internal/adapters/database/** }
+
+  secondary_adapters_infrastructure: { in: internal/adapters/infrastructure/** }
+
+  # Application orchestration
+  application: { in: internal/app/** }
+
+  # Configuration management
+  config: { in: internal/config/** }
+
+  # Entry points
+  cmd: { in: cmd/** }
+
+  # Test mocks
+  mocks: { in: internal/mocks/** }
+
+  # Shared utilities (available to all components)
+  pkg: { in: pkg/** }
+
+commonComponents:
+  - mocks
+  - pkg
+
+deps:
+  domain:
+    mayDependOn:
+      - domain
+      - ports
+
+  ports:
+    mayDependOn:
+      - domain
+
+  primary_adapters:
+    mayDependOn:
+      - domain
+      - ports
+
+  secondary_adapters_external:
+    mayDependOn:
+      - domain
+      - ports
+      - config
+
+  secondary_adapters_database:
+    mayDependOn:
+      - domain
+      - ports
+      - config
+
+  secondary_adapters_infrastructure:
+    mayDependOn:
+      - domain
+      - ports
+      - config
+
+  application:
+    mayDependOn:
+      - domain
+      - ports
+      - primary_adapters
+      - secondary_adapters_external
+      - secondary_adapters_database
+      - secondary_adapters_infrastructure
+      - config
+
+  config:
+    mayDependOn:
+      - domain
+
+  cmd:
+    mayDependOn:
+      - application
+      - config
+
+  mocks:
+    mayDependOn:
+      - ports
+      - domain
