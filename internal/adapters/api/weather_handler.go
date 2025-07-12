@@ -3,11 +3,9 @@ package api
 import (
 	"net/http"
 
-	"log/slog"
-
 	"github.com/gin-gonic/gin"
 	"weatherapi.app/internal/core/weather"
-	"weatherapi.app/pkg/errors"
+	"weatherapi.app/internal/ports"
 )
 
 // WeatherResponse represents the HTTP response for weather data
@@ -22,16 +20,18 @@ type WeatherResponse struct {
 func (s *HTTPServerAdapter) getWeather(c *gin.Context) {
 	city := c.Query("city")
 	if city == "" {
-		s.handleError(c, errors.NewValidationError("city parameter is required"))
+		s.handleError(c, NewValidationError("city parameter is required"))
 		return
 	}
 
-	slog.Debug("Getting weather for city", "city", city)
+	s.logger.Debug("Getting weather for city", ports.F("city", city))
 
 	request := weather.WeatherRequest{City: city}
 	weatherData, err := s.weatherUseCase.GetWeather(c.Request.Context(), request)
 	if err != nil {
-		slog.Error("Weather use case error", "error", err, "city", city)
+		s.logger.Error("Weather use case error",
+			ports.F("error", err),
+			ports.F("city", city))
 		s.handleError(c, err)
 		return
 	}
@@ -43,6 +43,8 @@ func (s *HTTPServerAdapter) getWeather(c *gin.Context) {
 		City:        weatherData.City,
 	}
 
-	slog.Debug("Weather result", "weather", response, "city", city)
+	s.logger.Debug("Weather result",
+		ports.F("temperature", response.Temperature),
+		ports.F("city", city))
 	c.JSON(http.StatusOK, response)
 }

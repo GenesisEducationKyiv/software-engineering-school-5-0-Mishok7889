@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"weatherapi.app/internal/core/shared"
 	"weatherapi.app/internal/ports"
-	"weatherapi.app/pkg/errors"
 	"weatherapi.app/pkg/validation"
 )
 
@@ -42,19 +42,19 @@ type UnsubscribeParams struct {
 
 func NewUseCase(deps UseCaseDependencies) (*UseCase, error) {
 	if deps.SubscriptionRepo == nil {
-		return nil, errors.NewValidationError("subscription repository is required")
+		return nil, shared.NewValidationError("subscription repository is required")
 	}
 	if deps.TokenRepo == nil {
-		return nil, errors.NewValidationError("token repository is required")
+		return nil, shared.NewValidationError("token repository is required")
 	}
 	if deps.EmailProvider == nil {
-		return nil, errors.NewValidationError("email provider is required")
+		return nil, shared.NewValidationError("email provider is required")
 	}
 	if deps.Config == nil {
-		return nil, errors.NewValidationError("config is required")
+		return nil, shared.NewValidationError("config is required")
 	}
 	if deps.Logger == nil {
-		return nil, errors.NewValidationError("logger is required")
+		return nil, shared.NewValidationError("logger is required")
 	}
 
 	return &UseCase{
@@ -69,20 +69,20 @@ func NewUseCase(deps UseCaseDependencies) (*UseCase, error) {
 func (uc *UseCase) validateSubscribeParams(params SubscribeParams) error {
 	// Validate email format
 	if !validation.IsNotEmpty(params.Email) {
-		return errors.NewValidationError("email is required")
+		return shared.NewValidationError("email is required")
 	}
 	if !validation.IsValidEmail(params.Email) {
-		return errors.NewValidationError("invalid email format")
+		return shared.NewValidationError("invalid email format")
 	}
 
 	// Validate city
 	if !validation.IsNotEmpty(params.City) {
-		return errors.NewValidationError("city is required")
+		return shared.NewValidationError("city is required")
 	}
 
 	// Validate frequency
 	if !params.Frequency.IsValid() {
-		return errors.NewValidationError("invalid frequency")
+		return shared.NewValidationError("invalid frequency")
 	}
 
 	return nil
@@ -97,17 +97,17 @@ func (uc *UseCase) Subscribe(ctx context.Context, params SubscribeParams) error 
 	uc.logger.Debug("Processing subscription",
 		ports.F("email", params.Email),
 		ports.F("city", params.City),
-		ports.F("frequency", params.Frequency))
+		ports.F("frequency", params.Frequency.String()))
 
 	existing, err := uc.subscriptionRepo.FindByEmail(ctx, params.Email, params.City)
-	if err != nil && !errors.IsNotFoundError(err) {
+	if err != nil && !shared.IsNotFoundError(err) && !ports.IsNotFoundError(err) {
 		return fmt.Errorf("check existing subscription: %w", err)
 	}
 
 	if existing != nil {
 		subscription := uc.convertFromPortsSubscription(existing)
 		if subscription.IsConfirmed() {
-			return errors.NewAlreadyExistsError("already subscribed")
+			return shared.NewAlreadyExistsError("already subscribed")
 		}
 
 		// If subscription exists but is not confirmed, update it with new parameters
@@ -115,7 +115,7 @@ func (uc *UseCase) Subscribe(ctx context.Context, params SubscribeParams) error 
 			uc.logger.Debug("Updating existing unconfirmed subscription",
 				ports.F("subscriptionID", existing.ID),
 				ports.F("oldFrequency", existing.Frequency),
-				ports.F("newFrequency", params.Frequency))
+				ports.F("newFrequency", params.Frequency.String()))
 
 			// Update the existing subscription with new frequency
 			existing.Frequency = params.Frequency.String()
@@ -139,7 +139,7 @@ func (uc *UseCase) Subscribe(ctx context.Context, params SubscribeParams) error 
 			uc.logger.Debug("Existing subscription updated successfully",
 				ports.F("email", params.Email),
 				ports.F("city", params.City),
-				ports.F("frequency", params.Frequency))
+				ports.F("frequency", params.Frequency.String()))
 			return nil
 		}
 
@@ -175,38 +175,38 @@ func (uc *UseCase) Subscribe(ctx context.Context, params SubscribeParams) error 
 
 func (uc *UseCase) ConfirmSubscription(ctx context.Context, params ConfirmParams) error {
 	if params.Token == "" {
-		return errors.NewValidationError("token is required")
+		return shared.NewValidationError("token is required")
 	}
 
 	uc.logger.Debug("Confirming subscription", ports.F("token", params.Token))
 
 	tokenData, err := uc.tokenRepo.FindByToken(ctx, params.Token)
 	if err != nil {
-		if errors.IsNotFoundError(err) {
-			return errors.NewTokenError("invalid or expired confirmation token")
+		if shared.IsNotFoundError(err) || ports.IsNotFoundError(err) {
+			return shared.NewValidationError("invalid or expired confirmation token")
 		}
 		return fmt.Errorf("find token: %w", err)
 	}
 
 	if time.Now().After(tokenData.ExpiresAt) {
-		return errors.NewTokenError("invalid or expired confirmation token")
+		return shared.NewValidationError("invalid or expired confirmation token")
 	}
 
 	if tokenData.Type != "confirmation" {
-		return errors.NewTokenError("invalid token type")
+		return shared.NewValidationError("invalid token type")
 	}
 
 	subscriptionData, err := uc.subscriptionRepo.FindByID(ctx, tokenData.SubscriptionID)
 	if err != nil {
-		if errors.IsNotFoundError(err) {
-			return errors.NewNotFoundError("subscription not found")
+		if shared.IsNotFoundError(err) || ports.IsNotFoundError(err) {
+			return shared.NewNotFoundError("subscription not found")
 		}
 		return fmt.Errorf("find subscription: %w", err)
 	}
 
 	subscription := uc.convertFromPortsSubscription(subscriptionData)
 	if subscription.IsConfirmed() {
-		return errors.NewAlreadyExistsError("subscription is already confirmed")
+		return shared.NewAlreadyExistsError("subscription is already confirmed")
 	}
 
 	subscription.Confirm()
@@ -231,31 +231,31 @@ func (uc *UseCase) ConfirmSubscription(ctx context.Context, params ConfirmParams
 
 func (uc *UseCase) Unsubscribe(ctx context.Context, params UnsubscribeParams) error {
 	if params.Token == "" {
-		return errors.NewValidationError("token is required")
+		return shared.NewValidationError("token is required")
 	}
 
 	uc.logger.Debug("Unsubscribing", ports.F("token", params.Token))
 
 	tokenData, err := uc.tokenRepo.FindByToken(ctx, params.Token)
 	if err != nil {
-		if errors.IsNotFoundError(err) {
-			return errors.NewTokenError("invalid unsubscribe token")
+		if shared.IsNotFoundError(err) || ports.IsNotFoundError(err) {
+			return shared.NewValidationError("invalid unsubscribe token")
 		}
 		return fmt.Errorf("find token: %w", err)
 	}
 
 	if time.Now().After(tokenData.ExpiresAt) {
-		return errors.NewTokenError("invalid unsubscribe token")
+		return shared.NewValidationError("invalid unsubscribe token")
 	}
 
 	if tokenData.Type != "unsubscribe" {
-		return errors.NewTokenError("invalid token type")
+		return shared.NewValidationError("invalid token type")
 	}
 
 	subscriptionData, err := uc.subscriptionRepo.FindByID(ctx, tokenData.SubscriptionID)
 	if err != nil {
-		if errors.IsNotFoundError(err) {
-			return errors.NewNotFoundError("subscription not found")
+		if shared.IsNotFoundError(err) || ports.IsNotFoundError(err) {
+			return shared.NewNotFoundError("subscription not found")
 		}
 		return fmt.Errorf("find subscription: %w", err)
 	}
@@ -281,7 +281,7 @@ func (uc *UseCase) Unsubscribe(ctx context.Context, params UnsubscribeParams) er
 
 func (uc *UseCase) GetSubscriptionsForUpdates(ctx context.Context, frequency Frequency) ([]*Subscription, error) {
 	if !frequency.IsValid() {
-		return nil, errors.NewValidationError("invalid frequency")
+		return nil, shared.NewValidationError("invalid frequency")
 	}
 
 	subscriptionsData, err := uc.subscriptionRepo.GetConfirmedByFrequency(ctx, frequency.String())

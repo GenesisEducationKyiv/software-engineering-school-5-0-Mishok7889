@@ -8,8 +8,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
+	"weatherapi.app/internal/adapters/infrastructure"
 	"weatherapi.app/internal/ports"
-	"weatherapi.app/pkg/errors"
 )
 
 func setupTestDB(t *testing.T) *gorm.DB {
@@ -94,10 +94,7 @@ func TestSubscriptionRepository_FindByID_NotFound(t *testing.T) {
 	found, err := repo.FindByID(ctx, 999)
 	assert.Error(t, err)
 	assert.Nil(t, found)
-
-	var appErr *errors.AppError
-	assert.ErrorAs(t, err, &appErr)
-	assert.Equal(t, errors.NotFoundError, appErr.Type)
+	assert.True(t, ports.IsNotFoundError(err))
 }
 
 func TestSubscriptionRepository_FindByEmail(t *testing.T) {
@@ -129,10 +126,7 @@ func TestSubscriptionRepository_FindByEmail_NotFound(t *testing.T) {
 	found, err := repo.FindByEmail(ctx, "nonexistent@example.com", "London")
 	assert.Error(t, err)
 	assert.Nil(t, found)
-
-	var appErr *errors.AppError
-	assert.ErrorAs(t, err, &appErr)
-	assert.Equal(t, errors.NotFoundError, appErr.Type)
+	assert.True(t, ports.IsNotFoundError(err))
 }
 
 func TestSubscriptionRepository_Delete(t *testing.T) {
@@ -272,9 +266,9 @@ func TestSubscriptionRepository_ValidationErrors(t *testing.T) {
 			err := tt.test()
 			assert.Error(t, err)
 
-			var appErr *errors.AppError
-			assert.ErrorAs(t, err, &appErr)
-			assert.Equal(t, errors.ValidationError, appErr.Type)
+			var infraErr *infrastructure.InfrastructureError
+			assert.ErrorAs(t, err, &infraErr)
+			assert.Equal(t, "DATABASE_ERROR", infraErr.Type)
 		})
 	}
 }

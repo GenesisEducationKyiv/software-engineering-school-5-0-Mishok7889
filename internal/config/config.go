@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/kelseyhightower/envconfig"
-	"weatherapi.app/pkg/errors"
 )
 
 const (
@@ -140,7 +139,7 @@ type SchedulerConfig struct {
 func LoadConfig() (*Config, error) {
 	var config Config
 	if err := envconfig.Process("", &config); err != nil {
-		return nil, errors.NewConfigurationError("error processing config", err)
+		return nil, fmt.Errorf("error processing config: %w", err)
 	}
 
 	if err := config.Validate(); err != nil {
@@ -177,33 +176,33 @@ func (c *Config) Validate() error {
 
 func (c *Config) validateAppBaseURL() error {
 	if c.AppBaseURL == "" {
-		return errors.NewConfigurationError("APP_URL cannot be empty", nil)
+		return fmt.Errorf("APP_URL cannot be empty")
 	}
 	if !strings.HasPrefix(c.AppBaseURL, "http://") && !strings.HasPrefix(c.AppBaseURL, "https://") {
-		return errors.NewConfigurationError("APP_URL must start with http:// or https://", nil)
+		return fmt.Errorf("APP_URL must start with http:// or https://")
 	}
 	return nil
 }
 
 func (s *ServerConfig) Validate() error {
 	if s.Port < 1 || s.Port > maxPortNumber {
-		return errors.NewConfigurationError("SERVER_PORT must be between 1 and 65535", nil)
+		return fmt.Errorf("SERVER_PORT must be between 1 and 65535")
 	}
 	return nil
 }
 
 func (d *DatabaseConfig) Validate() error {
 	if d.Host == "" {
-		return errors.NewConfigurationError("DB_HOST cannot be empty", nil)
+		return fmt.Errorf("DB_HOST cannot be empty")
 	}
 	if d.Port < 1 || d.Port > maxPortNumber {
-		return errors.NewConfigurationError("DB_PORT must be between 1 and 65535", nil)
+		return fmt.Errorf("DB_PORT must be between 1 and 65535")
 	}
 	if d.User == "" {
-		return errors.NewConfigurationError("DB_USER cannot be empty", nil)
+		return fmt.Errorf("DB_USER cannot be empty")
 	}
 	if d.Name == "" {
-		return errors.NewConfigurationError("DB_NAME cannot be empty", nil)
+		return fmt.Errorf("DB_NAME cannot be empty")
 	}
 	if err := d.ValidateSSLMode(); err != nil {
 		return err
@@ -218,26 +217,25 @@ func (d *DatabaseConfig) ValidateSSLMode() error {
 			return nil
 		}
 	}
-	return errors.NewConfigurationError(
-		fmt.Sprintf("DB_SSL_MODE must be one of: %s", strings.Join(validSSLModes, ", ")), nil)
+	return fmt.Errorf("DB_SSL_MODE must be one of: %s", strings.Join(validSSLModes, ", "))
 }
 
 func (w *WeatherConfig) Validate() error {
 	if w.APIKey == "" && w.OpenWeatherMapKey == "" && w.AccuWeatherKey == "" {
-		return errors.NewConfigurationError("at least one weather provider API key must be configured", nil)
+		return fmt.Errorf("at least one weather provider API key must be configured")
 	}
 
 	if w.APIKey != "" {
 		if w.BaseURL == "" {
-			return errors.NewConfigurationError("WEATHER_API_BASE_URL cannot be empty when WEATHER_API_KEY is set", nil)
+			return fmt.Errorf("WEATHER_API_BASE_URL cannot be empty when WEATHER_API_KEY is set")
 		}
 		if !strings.HasPrefix(w.BaseURL, "http://") && !strings.HasPrefix(w.BaseURL, "https://") {
-			return errors.NewConfigurationError("WEATHER_API_BASE_URL must start with http:// or https://", nil)
+			return fmt.Errorf("WEATHER_API_BASE_URL must start with http:// or https://")
 		}
 	}
 
 	if w.CacheTTLMinutes < 1 || w.CacheTTLMinutes > maxCacheTTLMinutes {
-		return errors.NewConfigurationError("WEATHER_CACHE_TTL_MINUTES must be between 1 and 1440 minutes", nil)
+		return fmt.Errorf("WEATHER_CACHE_TTL_MINUTES must be between 1 and 1440 minutes")
 	}
 
 	validProviders := map[string]bool{
@@ -248,7 +246,7 @@ func (w *WeatherConfig) Validate() error {
 
 	for _, provider := range w.ProviderOrder {
 		if !validProviders[provider] {
-			return errors.NewConfigurationError(fmt.Sprintf("invalid weather provider in order: %s", provider), nil)
+			return fmt.Errorf("invalid weather provider in order: %s", provider)
 		}
 	}
 
@@ -257,7 +255,7 @@ func (w *WeatherConfig) Validate() error {
 
 func (c *CacheConfig) Validate() error {
 	if !c.Type.IsValid() {
-		return errors.NewConfigurationError("CACHE_TYPE must be one of: memory, redis", nil)
+		return fmt.Errorf("CACHE_TYPE must be one of: memory, redis")
 	}
 
 	if c.Type == CacheTypeRedis {
@@ -269,57 +267,57 @@ func (c *CacheConfig) Validate() error {
 
 func (r *RedisConfig) Validate() error {
 	if r.Addr == "" {
-		return errors.NewConfigurationError("REDIS_ADDR cannot be empty when using Redis cache", nil)
+		return fmt.Errorf("REDIS_ADDR cannot be empty when using Redis cache")
 	}
 	if r.DB < 0 || r.DB > maxRedisDB {
-		return errors.NewConfigurationError("REDIS_DB must be between 0 and 15", nil)
+		return fmt.Errorf("REDIS_DB must be between 0 and 15")
 	}
 	if r.DialTimeout < 1 {
-		return errors.NewConfigurationError("REDIS_DIAL_TIMEOUT must be at least 1 second", nil)
+		return fmt.Errorf("REDIS_DIAL_TIMEOUT must be at least 1 second")
 	}
 	if r.ReadTimeout < 1 {
-		return errors.NewConfigurationError("REDIS_READ_TIMEOUT must be at least 1 second", nil)
+		return fmt.Errorf("REDIS_READ_TIMEOUT must be at least 1 second")
 	}
 	if r.WriteTimeout < 1 {
-		return errors.NewConfigurationError("REDIS_WRITE_TIMEOUT must be at least 1 second", nil)
+		return fmt.Errorf("REDIS_WRITE_TIMEOUT must be at least 1 second")
 	}
 	return nil
 }
 
 func (e *EmailConfig) Validate() error {
 	if e.SMTPHost == "" {
-		return errors.NewConfigurationError("EMAIL_SMTP_HOST cannot be empty", nil)
+		return fmt.Errorf("EMAIL_SMTP_HOST cannot be empty")
 	}
 	if e.SMTPPort < 1 || e.SMTPPort > maxPortNumber {
-		return errors.NewConfigurationError("EMAIL_SMTP_PORT must be between 1 and 65535", nil)
+		return fmt.Errorf("EMAIL_SMTP_PORT must be between 1 and 65535")
 	}
 	if (e.SMTPUsername == "") != (e.SMTPPassword == "") {
-		return errors.NewConfigurationError("EMAIL_SMTP_USERNAME and EMAIL_SMTP_PASSWORD must both be provided or both be empty", nil)
+		return fmt.Errorf("EMAIL_SMTP_USERNAME and EMAIL_SMTP_PASSWORD must both be provided or both be empty")
 	}
 	if e.FromName == "" {
-		return errors.NewConfigurationError("EMAIL_FROM_NAME cannot be empty", nil)
+		return fmt.Errorf("EMAIL_FROM_NAME cannot be empty")
 	}
 	if e.FromAddress == "" {
-		return errors.NewConfigurationError("EMAIL_FROM_ADDRESS cannot be empty", nil)
+		return fmt.Errorf("EMAIL_FROM_ADDRESS cannot be empty")
 	}
 	if !strings.Contains(e.FromAddress, "@") {
-		return errors.NewConfigurationError("EMAIL_FROM_ADDRESS must be a valid email address", nil)
+		return fmt.Errorf("EMAIL_FROM_ADDRESS must be a valid email address")
 	}
 	return nil
 }
 
 func (s *SchedulerConfig) Validate() error {
 	if s.HourlyInterval < 1 {
-		return errors.NewConfigurationError("HOURLY_INTERVAL must be at least 1 minute", nil)
+		return fmt.Errorf("HOURLY_INTERVAL must be at least 1 minute")
 	}
 	if s.DailyInterval < 1 {
-		return errors.NewConfigurationError("DAILY_INTERVAL must be at least 1 minute", nil)
+		return fmt.Errorf("DAILY_INTERVAL must be at least 1 minute")
 	}
 	if s.HourlyInterval > maxCacheTTLMinutes {
-		return errors.NewConfigurationError("HOURLY_INTERVAL cannot exceed 1440 minutes (24 hours)", nil)
+		return fmt.Errorf("HOURLY_INTERVAL cannot exceed 1440 minutes (24 hours)")
 	}
 	if s.DailyInterval > maxDailyInterval {
-		return errors.NewConfigurationError("DAILY_INTERVAL cannot exceed 10080 minutes (7 days)", nil)
+		return fmt.Errorf("DAILY_INTERVAL cannot exceed 10080 minutes (7 days)")
 	}
 	return nil
 }

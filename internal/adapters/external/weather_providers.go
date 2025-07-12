@@ -9,8 +9,8 @@ import (
 	"net/http"
 	"time"
 
+	"weatherapi.app/internal/adapters/infrastructure"
 	"weatherapi.app/internal/ports"
-	"weatherapi.app/pkg/errors"
 )
 
 // WeatherAPIProviderAdapter implements WeatherProvider port for WeatherAPI.com
@@ -57,14 +57,14 @@ func NewWeatherAPIProviderAdapter(params WeatherAPIProviderParams) ports.Weather
 // GetCurrentWeather retrieves weather data from WeatherAPI.com
 func (p *WeatherAPIProviderAdapter) GetCurrentWeather(ctx context.Context, city string) (*ports.WeatherData, error) {
 	if city == "" {
-		return nil, errors.NewValidationError("city cannot be empty")
+		return nil, infrastructure.NewValidationError("city cannot be empty")
 	}
 
 	url := fmt.Sprintf("%s/current.json?key=%s&q=%s", p.baseURL, p.apiKey, city)
 
 	resp, err := p.client.Get(url)
 	if err != nil {
-		return nil, errors.NewExternalAPIError("failed to call WeatherAPI", err)
+		return nil, infrastructure.NewExternalAPIError("failed to call WeatherAPI", err)
 	}
 	defer func() {
 		if closeErr := resp.Body.Close(); closeErr != nil {
@@ -74,14 +74,14 @@ func (p *WeatherAPIProviderAdapter) GetCurrentWeather(ctx context.Context, city 
 
 	if resp.StatusCode != http.StatusOK {
 		if resp.StatusCode == http.StatusNotFound {
-			return nil, errors.NewNotFoundError("city not found")
+			return nil, ports.NewNotFoundError("city not found")
 		}
-		return nil, errors.NewExternalAPIError(fmt.Sprintf("WeatherAPI returned status %d", resp.StatusCode), nil)
+		return nil, infrastructure.NewExternalAPIError(fmt.Sprintf("WeatherAPI returned status %d", resp.StatusCode), nil)
 	}
 
 	var apiResp WeatherAPIResponse
 	if err := json.NewDecoder(resp.Body).Decode(&apiResp); err != nil {
-		return nil, errors.NewExternalAPIError("failed to decode WeatherAPI response", err)
+		return nil, infrastructure.NewExternalAPIError("failed to decode WeatherAPI response", err)
 	}
 
 	return &ports.WeatherData{

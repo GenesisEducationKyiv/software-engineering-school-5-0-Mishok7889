@@ -33,8 +33,9 @@ type Application struct {
 	router     *gin.Engine
 
 	// Infrastructure
-	ports    *ports.ApplicationPorts
-	stopChan chan struct{}
+	ports        *ports.ApplicationPorts
+	depContainer *DependencyContainer
+	stopChan     chan struct{}
 }
 
 // validateFrequency validates the frequency enum value
@@ -84,6 +85,7 @@ func (a *Application) initializePorts() error {
 	}
 
 	a.ports = deps.ApplicationPorts()
+	a.depContainer = deps
 	slog.Info("Application ports initialized successfully")
 	return nil
 }
@@ -92,11 +94,11 @@ func (a *Application) initializeUseCases() error {
 	slog.Info("Initializing use cases...")
 
 	weatherUseCase, err := weather.NewUseCase(weather.UseCaseDependencies{
-		WeatherProvider: a.ports.WeatherProvider,
-		Cache:           a.ports.WeatherCache,
-		Config:          a.ports.ConfigProvider,
-		Logger:          a.ports.Logger,
-		Metrics:         a.ports.WeatherMetrics,
+		WeatherProvider: a.ports.Weather.Provider,
+		Cache:           a.ports.Weather.Cache,
+		Config:          a.ports.Infrastructure.ConfigProvider,
+		Logger:          a.ports.Infrastructure.Logger,
+		Metrics:         a.ports.Weather.Metrics,
 	})
 	if err != nil {
 		return fmt.Errorf("create weather use case: %w", err)
@@ -104,24 +106,33 @@ func (a *Application) initializeUseCases() error {
 	a.weatherUseCase = weatherUseCase
 
 	subscriptionUseCase, err := subscription.NewUseCase(subscription.UseCaseDependencies{
-		SubscriptionRepo: a.ports.SubscriptionRepository,
-		TokenRepo:        a.ports.TokenRepository,
-		EmailProvider:    a.ports.EmailProvider,
-		Config:           a.ports.ConfigProvider,
-		Logger:           a.ports.Logger,
+		SubscriptionRepo: a.ports.Subscription.Repository,
+		TokenRepo:        a.ports.Infrastructure.TokenRepo,
+		EmailProvider:    a.ports.Notification.EmailProvider,
+		Config:           a.ports.Infrastructure.ConfigProvider,
+		Logger:           a.ports.Infrastructure.Logger,
 	})
 	if err != nil {
 		return fmt.Errorf("create subscription use case: %w", err)
 	}
 	a.subscriptionUseCase = subscriptionUseCase
 
+	// Create service adapters
+	weatherService := CreateWeatherServiceFromUseCase(a.weatherUseCase)
+	a.depContainer.SetWeatherService(weatherService)
+
+	subscriptionService := a.depContainer.CreateSubscriptionServiceFromRepository()
+	a.depContainer.SetSubscriptionService(subscriptionService)
+
+	// Create notification use case with service ports
 	notificationUseCase, err := notification.NewUseCase(notification.UseCaseDependencies{
-		SubscriptionRepo: a.ports.SubscriptionRepository,
-		TokenRepo:        a.ports.TokenRepository,
-		EmailProvider:    a.ports.EmailProvider,
-		WeatherUseCase:   a.weatherUseCase,
-		Config:           a.ports.ConfigProvider,
-		Logger:           a.ports.Logger,
+		WeatherService:      weatherService,
+		SubscriptionService: subscriptionService,
+		EmailProvider:       a.ports.Notification.EmailProvider,
+		TokenRepo:           a.ports.Infrastructure.TokenRepo,
+		SubscriptionRepo:    a.ports.Subscription.Repository,
+		Config:              a.ports.Infrastructure.ConfigProvider,
+		Logger:              a.ports.Infrastructure.Logger,
 	})
 	if err != nil {
 		return fmt.Errorf("create notification use case: %w", err)
@@ -144,21 +155,21 @@ func (a *Application) initializeAdapters() error {
 
 	// Create metrics collector for HTTP adapter
 	metricsCollector := infrastructure.NewMetricsCollectorAdapter(infrastructure.MetricsCollectorConfig{
-		WeatherMetrics: a.ports.WeatherMetrics,
-		CacheMetrics:   a.ports.CacheMetrics,
+		WeatherMetrics: a.ports.Weather.Metrics,
+		CacheMetrics:   a.ports.Infrastructure.CacheMetrics,
 	})
 
 	// Create health checkers
-	databaseHealthChecker := infrastructure.NewDatabaseHealthChecker(a.ports.Database.(*gorm.DB))
-	weatherAPIHealthChecker := infrastructure.NewWeatherAPIHealthChecker(a.ports.WeatherProvider)
-	emailHealthChecker := infrastructure.NewEmailHealthChecker(a.ports.ConfigProvider.GetEmailConfig())
+	databaseHealthChecker := infrastructure.NewDatabaseHealthChecker(a.ports.Infrastructure.Database.(*gorm.DB))
+	weatherAPIHealthChecker := infrastructure.NewWeatherAPIHealthChecker(a.ports.Weather.Provider)
+	emailHealthChecker := infrastructure.NewEmailHealthChecker(a.ports.Infrastructure.ConfigProvider.GetEmailConfig())
 
 	// Create system health checker
 	systemHealthChecker := infrastructure.NewSystemHealthChecker(infrastructure.SystemHealthCheckerConfig{
 		DatabaseChecker:   databaseHealthChecker,
 		WeatherAPIChecker: weatherAPIHealthChecker,
 		EmailChecker:      emailHealthChecker,
-		ConfigProvider:    a.ports.ConfigProvider,
+		ConfigProvider:    a.ports.Infrastructure.ConfigProvider,
 	})
 
 	// Create HTTP server adapter with proper dependency injection
@@ -170,6 +181,7 @@ func (a *Application) initializeAdapters() error {
 		SubscriptionUseCase: a.subscriptionUseCase,
 		MetricsCollector:    metricsCollector,
 		SystemHealthChecker: systemHealthChecker,
+		Logger:              a.ports.Infrastructure.Logger,
 	})
 	if err != nil {
 		return fmt.Errorf("create HTTP adapter: %w", err)
@@ -192,13 +204,11 @@ func (a *Application) initializeAdapters() error {
 }
 
 func (a *Application) Start(ctx context.Context) error {
-	slog.Info("Starting application...")
+	a.ports.Infrastructure.Logger.Info("Starting application...")
 
-	// Start background scheduler
 	go a.startScheduler(ctx)
 
-	// Start HTTP server
-	slog.Info("Starting HTTP server", "port", a.config.Server.Port)
+	a.ports.Infrastructure.Logger.Info("Starting HTTP server", ports.F("port", a.config.Server.Port))
 	if err := a.httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		return fmt.Errorf("HTTP server error: %w", err)
 	}
@@ -207,7 +217,7 @@ func (a *Application) Start(ctx context.Context) error {
 }
 
 func (a *Application) startScheduler(ctx context.Context) {
-	slog.Info("Starting notification scheduler...")
+	a.ports.Infrastructure.Logger.Info("Starting notification scheduler...")
 
 	hourlyTicker := time.NewTicker(time.Duration(a.config.Scheduler.HourlyInterval) * time.Minute)
 	dailyTicker := time.NewTicker(time.Duration(a.config.Scheduler.DailyInterval) * time.Minute)
@@ -218,54 +228,50 @@ func (a *Application) startScheduler(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			slog.Info("Scheduler stopped due to context cancellation")
+			a.ports.Infrastructure.Logger.Info("Scheduler stopped due to context cancellation")
 			return
 		case <-a.stopChan:
-			slog.Info("Scheduler stopped")
+			a.ports.Infrastructure.Logger.Info("Scheduler stopped")
 			return
 		case <-hourlyTicker.C:
 			params := notification.SendWeatherUpdateParams{
-				Frequency: subscription.FrequencyHourly,
+				Frequency: "hourly",
 			}
 			if err := a.notificationUseCase.SendWeatherUpdates(ctx, params); err != nil {
-				slog.Error("Error sending hourly notifications", "error", err)
+				a.ports.Infrastructure.Logger.Error("Error sending hourly notifications", ports.F("error", err))
 			}
 		case <-dailyTicker.C:
 			params := notification.SendWeatherUpdateParams{
-				Frequency: subscription.FrequencyDaily,
+				Frequency: "daily",
 			}
 			if err := a.notificationUseCase.SendWeatherUpdates(ctx, params); err != nil {
-				slog.Error("Error sending daily notifications", "error", err)
+				a.ports.Infrastructure.Logger.Error("Error sending daily notifications", ports.F("error", err))
 			}
 		}
 	}
 }
 
 func (a *Application) Shutdown(ctx context.Context) error {
-	slog.Info("Shutting down application...")
+	a.ports.Infrastructure.Logger.Info("Shutting down application...")
 
-	// Signal scheduler to stop
 	close(a.stopChan)
 
-	// Shutdown HTTP server
 	if err := a.httpServer.Shutdown(ctx); err != nil {
-		slog.Error("Error shutting down HTTP server", "error", err)
+		a.ports.Infrastructure.Logger.Error("Error shutting down HTTP server", ports.F("error", err))
 		return fmt.Errorf("shutdown HTTP server: %w", err)
 	}
 
-	// Close database connections and other resources
-	if a.ports != nil && a.ports.Database != nil {
-		// Type assert to *gorm.DB to access DB() method
-		if gormDB, ok := a.ports.Database.(*gorm.DB); ok {
+	if a.ports != nil && a.ports.Infrastructure.Database != nil {
+		if gormDB, ok := a.ports.Infrastructure.Database.(*gorm.DB); ok {
 			if db, err := gormDB.DB(); err == nil {
 				if err := db.Close(); err != nil {
-					slog.Warn("Error closing database", "error", err)
+					a.ports.Infrastructure.Logger.Warn("Error closing database", ports.F("error", err))
 				}
 			}
 		}
 	}
 
-	slog.Info("Application shutdown complete")
+	a.ports.Infrastructure.Logger.Info("Application shutdown complete")
 	return nil
 }
 
@@ -297,9 +303,10 @@ func (a *Application) GetNotificationUseCase() *notification.UseCase {
 // NewApplicationWithDependencies creates an application with provided dependencies (for testing)
 func NewApplicationWithDependencies(cfg *config.Config, depContainer *DependencyContainer) (*Application, error) {
 	app := &Application{
-		config:   cfg,
-		stopChan: make(chan struct{}),
-		ports:    depContainer.ApplicationPorts(),
+		config:       cfg,
+		stopChan:     make(chan struct{}),
+		ports:        depContainer.ApplicationPorts(),
+		depContainer: depContainer,
 	}
 
 	if err := app.initializeUseCases(); err != nil {

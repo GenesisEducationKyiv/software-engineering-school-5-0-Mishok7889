@@ -5,14 +5,12 @@ package api
 import (
 	"context"
 	"fmt"
-	"log/slog"
 
 	"github.com/gin-gonic/gin"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"weatherapi.app/internal/core/subscription"
 	"weatherapi.app/internal/core/weather"
 	"weatherapi.app/internal/ports"
-	"weatherapi.app/pkg/errors"
 )
 
 // ServerConfig represents HTTP server configuration
@@ -28,6 +26,7 @@ type HTTPServerAdapter struct {
 	subscriptionUseCase SubscriptionUseCase
 	metricsCollector    MetricsCollector
 	systemHealthChecker ports.SystemHealthChecker
+	logger              ports.Logger
 }
 
 // Use case interfaces that the HTTP adapter depends on
@@ -53,6 +52,7 @@ type ServerOptions struct {
 	SubscriptionUseCase SubscriptionUseCase
 	MetricsCollector    MetricsCollector
 	SystemHealthChecker ports.SystemHealthChecker
+	Logger              ports.Logger
 }
 
 // NewHTTPServerAdapter creates a new HTTP server adapter
@@ -70,6 +70,7 @@ func NewHTTPServerAdapter(opts ServerOptions) (*HTTPServerAdapter, error) {
 		subscriptionUseCase: opts.SubscriptionUseCase,
 		metricsCollector:    opts.MetricsCollector,
 		systemHealthChecker: opts.SystemHealthChecker,
+		logger:              opts.Logger,
 	}
 
 	server.setupRoutes()
@@ -79,16 +80,19 @@ func NewHTTPServerAdapter(opts ServerOptions) (*HTTPServerAdapter, error) {
 // Validate checks if all required dependencies are provided
 func (opts *ServerOptions) Validate() error {
 	if opts.WeatherUseCase == nil {
-		return errors.NewValidationError("weather use case is required")
+		return NewValidationError("weather use case is required")
 	}
 	if opts.SubscriptionUseCase == nil {
-		return errors.NewValidationError("subscription use case is required")
+		return NewValidationError("subscription use case is required")
 	}
 	if opts.MetricsCollector == nil {
-		return errors.NewValidationError("metrics collector is required")
+		return NewValidationError("metrics collector is required")
 	}
 	if opts.SystemHealthChecker == nil {
-		return errors.NewValidationError("system health checker is required")
+		return NewValidationError("system health checker is required")
+	}
+	if opts.Logger == nil {
+		return NewValidationError("logger is required")
 	}
 	return nil
 }
@@ -112,7 +116,7 @@ func (s *HTTPServerAdapter) setupRoutes() {
 
 // Start begins the HTTP server
 func (s *HTTPServerAdapter) Start(ctx context.Context) error {
-	slog.Info("Starting HTTP server", "port", s.config.Port)
+	s.logger.Info("Starting HTTP server", ports.F("port", s.config.Port))
 	return s.router.Run(fmt.Sprintf(":%d", s.config.Port))
 }
 

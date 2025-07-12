@@ -4,10 +4,9 @@ import (
 	"errors"
 	"net/http"
 
-	"log/slog"
-
 	"github.com/gin-gonic/gin"
-	errorspkg "weatherapi.app/pkg/errors"
+	"weatherapi.app/internal/core/shared"
+	"weatherapi.app/internal/ports"
 )
 
 // ErrorResponse represents an error message structure for API responses
@@ -17,54 +16,82 @@ type ErrorResponse struct {
 
 // handleError handles different types of application errors
 func (s *HTTPServerAdapter) handleError(c *gin.Context, err error) {
-	var appErr *errorspkg.AppError
 	var statusCode int
 	var message string
 
-	if !errors.As(err, &appErr) {
-		statusCode = http.StatusInternalServerError
-		message = "Internal server error"
+	// Handle API-specific errors
+	var apiErr *APIError
+	if errors.As(err, &apiErr) {
+		switch apiErr.Type {
+		case "API_VALIDATION_ERROR":
+			statusCode = http.StatusBadRequest
+			message = apiErr.Message
+		default:
+			statusCode = http.StatusInternalServerError
+			message = "Internal server error"
+		}
 		c.JSON(statusCode, ErrorResponse{Error: message})
 		return
 	}
 
-	switch appErr.Type {
-	case errorspkg.ValidationError:
-		statusCode = http.StatusBadRequest
-		message = appErr.Message
-	case errorspkg.NotFoundError:
-		statusCode = http.StatusNotFound
-		message = appErr.Message
-	case errorspkg.AlreadyExistsError:
-		statusCode = http.StatusConflict
-		message = appErr.Message
-	case errorspkg.ExternalAPIError:
-		statusCode = http.StatusServiceUnavailable
-		message = "External service unavailable"
-	case errorspkg.DatabaseError:
-		statusCode = http.StatusInternalServerError
-		message = "Internal server error"
-	case errorspkg.EmailError:
-		statusCode = http.StatusServiceUnavailable
-		message = "Unable to send email"
-	case errorspkg.TokenError:
-		statusCode = http.StatusBadRequest
-		message = appErr.Message
-	default:
-		statusCode = http.StatusInternalServerError
-		message = "Internal server error"
+	// Handle domain errors
+	var domainErr *shared.DomainError
+	if errors.As(err, &domainErr) {
+		switch domainErr.Code {
+		case shared.ErrCodeValidation:
+			statusCode = http.StatusBadRequest
+			message = domainErr.Message
+		case shared.ErrCodeNotFound:
+			statusCode = http.StatusNotFound
+			message = domainErr.Message
+		case shared.ErrCodeAlreadyExists:
+			statusCode = http.StatusConflict
+			message = domainErr.Message
+		case shared.ErrCodeUnauthorized:
+			statusCode = http.StatusUnauthorized
+			message = domainErr.Message
+		case shared.ErrCodeExternalService:
+			statusCode = http.StatusServiceUnavailable
+			message = "External service unavailable"
+		case shared.ErrCodeInternal:
+			statusCode = http.StatusInternalServerError
+			message = "Internal server error"
+		default:
+			statusCode = http.StatusInternalServerError
+			message = "Internal server error"
+		}
+		c.JSON(statusCode, ErrorResponse{Error: message})
+		return
 	}
 
+	// Handle port-level errors
+	if ports.IsNotFoundError(err) {
+		statusCode = http.StatusNotFound
+		message = err.Error()
+		c.JSON(statusCode, ErrorResponse{Error: message})
+		return
+	}
+
+	if ports.IsAlreadyExistsError(err) {
+		statusCode = http.StatusConflict
+		message = err.Error()
+		c.JSON(statusCode, ErrorResponse{Error: message})
+		return
+	}
+
+	// Default error handling
+	statusCode = http.StatusInternalServerError
+	message = "Internal server error"
 	c.JSON(statusCode, ErrorResponse{Error: message})
 }
 
 // getMetrics handles GET /api/metrics requests
 func (s *HTTPServerAdapter) getMetrics(c *gin.Context) {
-	slog.Debug("Metrics endpoint called")
+	s.logger.Debug("Metrics endpoint called")
 
 	metrics, err := s.metricsCollector.GetMetrics(c.Request.Context())
 	if err != nil {
-		slog.Error("Error getting metrics", "error", err)
+		s.logger.Error("Error getting metrics", ports.F("error", err))
 		s.handleError(c, err)
 		return
 	}
@@ -79,12 +106,10 @@ func (s *HTTPServerAdapter) getHealth(c *gin.Context) {
 
 // getDebug handles GET /api/debug requests
 func (s *HTTPServerAdapter) getDebug(c *gin.Context) {
-	slog.Debug("Debug endpoint called")
+	s.logger.Debug("Debug endpoint called")
 
-	// Perform health checks on all system components
 	healthStatuses := s.systemHealthChecker.CheckAll(c.Request.Context())
 
-	// Transform health statuses to the expected format
 	response := gin.H{}
 
 	for component, status := range healthStatuses {

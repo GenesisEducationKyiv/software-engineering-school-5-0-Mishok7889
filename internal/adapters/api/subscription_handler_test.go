@@ -17,20 +17,17 @@ import (
 	"weatherapi.app/internal/core/subscription"
 	"weatherapi.app/internal/mocks"
 	"weatherapi.app/internal/ports"
-	"weatherapi.app/pkg/errors"
 )
 
 func setupSubscriptionTestRouter(t *testing.T) (*gin.Engine, *mocks.SubscriptionRepository, *mocks.TokenRepository, *mocks.EmailProvider) {
 	gin.SetMode(gin.TestMode)
 
-	// Mock the dependencies
 	mockSubscriptionRepo := mocks.NewSubscriptionRepository(t)
 	mockTokenRepo := mocks.NewTokenRepository(t)
 	mockEmailProvider := mocks.NewEmailProvider(t)
 	mockConfig := mocks.NewConfigProvider(t)
 	mockLogger := mocks.NewLogger(t)
 
-	// Allow logger calls without strict expectations - handle variadic field parameters
 	mockLogger.EXPECT().Debug(mock.Anything, mock.Anything).Maybe()
 	mockLogger.EXPECT().Debug(mock.Anything, mock.Anything, mock.Anything).Maybe()
 	mockLogger.EXPECT().Debug(mock.Anything, mock.Anything, mock.Anything, mock.Anything).Maybe()
@@ -45,12 +42,10 @@ func setupSubscriptionTestRouter(t *testing.T) (*gin.Engine, *mocks.Subscription
 	mockLogger.EXPECT().Error(mock.Anything, mock.Anything, mock.Anything).Maybe()
 	mockLogger.EXPECT().Error(mock.Anything, mock.Anything, mock.Anything, mock.Anything).Maybe()
 
-	// Mock config provider
 	mockConfig.EXPECT().GetAppConfig().Return(ports.AppConfig{
 		BaseURL: "http://localhost:8080",
 	}).Maybe()
 
-	// Create real use case with mocked dependencies
 	subscriptionUseCase, err := subscription.NewUseCase(subscription.UseCaseDependencies{
 		SubscriptionRepo: mockSubscriptionRepo,
 		TokenRepo:        mockTokenRepo,
@@ -62,6 +57,7 @@ func setupSubscriptionTestRouter(t *testing.T) (*gin.Engine, *mocks.Subscription
 
 	server := &HTTPServerAdapter{
 		subscriptionUseCase: subscriptionUseCase,
+		logger:              mockLogger,
 	}
 
 	router := gin.New()
@@ -78,7 +74,7 @@ func TestSubscriptionHandler_Subscribe_Success_JSON(t *testing.T) {
 	// Mock the repository calls
 	mockSubscriptionRepo.EXPECT().
 		FindByEmail(mock.Anything, "test@example.com", "London").
-		Return(nil, errors.NewNotFoundError("not found"))
+		Return(nil, ports.NewNotFoundError("not found"))
 
 	mockSubscriptionRepo.EXPECT().
 		Save(mock.Anything, mock.MatchedBy(func(sub *ports.SubscriptionData) bool {
@@ -126,7 +122,7 @@ func TestSubscriptionHandler_Subscribe_Success_Form(t *testing.T) {
 	// Mock the repository calls
 	mockSubscriptionRepo.EXPECT().
 		FindByEmail(mock.Anything, "test@example.com", "London").
-		Return(nil, errors.NewNotFoundError("not found"))
+		Return(nil, ports.NewNotFoundError("not found"))
 
 	mockSubscriptionRepo.EXPECT().
 		Save(mock.Anything, mock.MatchedBy(func(sub *ports.SubscriptionData) bool {
@@ -345,7 +341,7 @@ func TestSubscriptionHandler_ConfirmSubscription_InvalidToken(t *testing.T) {
 
 	mockTokenRepo.EXPECT().
 		FindByToken(mock.Anything, "invalid-token").
-		Return(nil, errors.NewNotFoundError("token not found"))
+		Return(nil, ports.NewNotFoundError("token not found"))
 
 	req := httptest.NewRequest("GET", "/api/confirm/invalid-token", nil)
 	w := httptest.NewRecorder()
@@ -421,7 +417,7 @@ func TestSubscriptionHandler_Unsubscribe_InvalidToken(t *testing.T) {
 
 	mockTokenRepo.EXPECT().
 		FindByToken(mock.Anything, "invalid-token").
-		Return(nil, errors.NewNotFoundError("token not found"))
+		Return(nil, ports.NewNotFoundError("token not found"))
 
 	req := httptest.NewRequest("GET", "/api/unsubscribe/invalid-token", nil)
 	w := httptest.NewRecorder()

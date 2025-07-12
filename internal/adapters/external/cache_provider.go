@@ -5,8 +5,8 @@ import (
 	"sync"
 	"time"
 
+	"weatherapi.app/internal/adapters/infrastructure"
 	"weatherapi.app/internal/ports"
-	"weatherapi.app/pkg/errors"
 )
 
 // MemoryCacheProviderAdapter implements WeatherCache port using in-memory storage
@@ -41,17 +41,16 @@ func (c *MemoryCacheProviderAdapter) Get(ctx context.Context, key string) (*port
 
 	if !exists || time.Now().After(item.expiresAt) {
 		c.RecordMiss()
-		return nil, errors.NewNotFoundError("cache miss")
+		return nil, ports.NewNotFoundError("cache miss")
 	}
 
 	c.RecordHit()
 	return item.data, nil
 }
 
-// Set stores weather data in cache
 func (c *MemoryCacheProviderAdapter) Set(ctx context.Context, key string, weather *ports.WeatherData, ttl time.Duration) error {
 	if weather == nil {
-		return errors.NewValidationError("weather data cannot be nil")
+		return infrastructure.NewValidationError("weather data cannot be nil")
 	}
 
 	c.mutex.Lock()

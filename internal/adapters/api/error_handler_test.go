@@ -8,7 +8,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
-	"weatherapi.app/pkg/errors"
+	"weatherapi.app/internal/core/shared"
+	"weatherapi.app/internal/ports"
 )
 
 func setupErrorTestRouter() *gin.Engine {
@@ -20,35 +21,47 @@ func setupErrorTestRouter() *gin.Engine {
 
 	// Test endpoints for different error types
 	router.GET("/test/validation", func(c *gin.Context) {
-		server.handleError(c, errors.NewValidationError("validation failed"))
+		server.handleError(c, shared.NewValidationError("validation failed"))
 	})
 
 	router.GET("/test/not-found", func(c *gin.Context) {
-		server.handleError(c, errors.NewNotFoundError("resource not found"))
+		server.handleError(c, shared.NewNotFoundError("resource not found"))
 	})
 
 	router.GET("/test/already-exists", func(c *gin.Context) {
-		server.handleError(c, errors.NewAlreadyExistsError("resource already exists"))
+		server.handleError(c, shared.NewAlreadyExistsError("resource already exists"))
 	})
 
 	router.GET("/test/external-api", func(c *gin.Context) {
-		server.handleError(c, errors.NewExternalAPIError("external service failed", nil))
+		server.handleError(c, shared.NewExternalServiceError("external service failed"))
 	})
 
 	router.GET("/test/internal", func(c *gin.Context) {
-		server.handleError(c, errors.NewDatabaseError("internal server error", nil))
+		server.handleError(c, shared.NewDomainError(shared.ErrCodeInternal, "internal server error"))
 	})
 
 	router.GET("/test/database", func(c *gin.Context) {
-		server.handleError(c, errors.NewDatabaseError("database connection failed", nil))
+		server.handleError(c, shared.NewDomainError(shared.ErrCodeInternal, "database connection failed"))
 	})
 
 	router.GET("/test/configuration", func(c *gin.Context) {
-		server.handleError(c, errors.NewConfigurationError("configuration error", nil))
+		server.handleError(c, shared.NewDomainError(shared.ErrCodeInternal, "configuration error"))
+	})
+
+	router.GET("/test/api-validation", func(c *gin.Context) {
+		server.handleError(c, NewValidationError("API validation failed"))
 	})
 
 	router.GET("/test/generic", func(c *gin.Context) {
-		server.handleError(c, errors.New(errors.ErrorTypeUnknown, "generic error"))
+		server.handleError(c, shared.NewDomainError(shared.ErrCodeInternal, "generic error"))
+	})
+
+	router.GET("/test/port-not-found", func(c *gin.Context) {
+		server.handleError(c, ports.NewNotFoundError("port not found"))
+	})
+
+	router.GET("/test/port-already-exists", func(c *gin.Context) {
+		server.handleError(c, ports.NewAlreadyExistsError("port already exists"))
 	})
 
 	return router
@@ -102,7 +115,7 @@ func TestHTTPServerAdapter_HandleError_AlreadyExistsError(t *testing.T) {
 	assert.Equal(t, "resource already exists", response.Error)
 }
 
-func TestHTTPServerAdapter_HandleError_ExternalAPIError(t *testing.T) {
+func TestHTTPServerAdapter_HandleError_ExternalServiceError(t *testing.T) {
 	router := setupErrorTestRouter()
 
 	req := httptest.NewRequest("GET", "/test/external-api", nil)
@@ -116,6 +129,22 @@ func TestHTTPServerAdapter_HandleError_ExternalAPIError(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	assert.NoError(t, err)
 	assert.Equal(t, "External service unavailable", response.Error)
+}
+
+func TestHTTPServerAdapter_HandleError_APIValidationError(t *testing.T) {
+	router := setupErrorTestRouter()
+
+	req := httptest.NewRequest("GET", "/test/api-validation", nil)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+
+	var response ErrorResponse
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	assert.NoError(t, err)
+	assert.Equal(t, "API validation failed", response.Error)
 }
 
 func TestHTTPServerAdapter_HandleError_InternalError(t *testing.T) {
@@ -180,6 +209,38 @@ func TestHTTPServerAdapter_HandleError_GenericError(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	assert.NoError(t, err)
 	assert.Equal(t, "Internal server error", response.Error)
+}
+
+func TestHTTPServerAdapter_HandleError_PortNotFoundError(t *testing.T) {
+	router := setupErrorTestRouter()
+
+	req := httptest.NewRequest("GET", "/test/port-not-found", nil)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusNotFound, w.Code)
+
+	var response ErrorResponse
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	assert.NoError(t, err)
+	assert.Equal(t, "port not found", response.Error)
+}
+
+func TestHTTPServerAdapter_HandleError_PortAlreadyExistsError(t *testing.T) {
+	router := setupErrorTestRouter()
+
+	req := httptest.NewRequest("GET", "/test/port-already-exists", nil)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusConflict, w.Code)
+
+	var response ErrorResponse
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	assert.NoError(t, err)
+	assert.Equal(t, "port already exists", response.Error)
 }
 
 func TestHTTPServerAdapter_HandleError_ErrorResponseStructure(t *testing.T) {

@@ -10,10 +10,10 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"weatherapi.app/internal/core/shared"
 	"weatherapi.app/internal/core/weather"
 	"weatherapi.app/internal/mocks"
 	"weatherapi.app/internal/ports"
-	"weatherapi.app/pkg/errors"
 )
 
 func setupWeatherTestRouter(t *testing.T) (*gin.Engine, *mocks.WeatherProviderManager, *mocks.WeatherCache) {
@@ -47,7 +47,6 @@ func setupWeatherTestRouter(t *testing.T) (*gin.Engine, *mocks.WeatherProviderMa
 		CacheTTL:    5 * time.Minute,
 	}).Maybe()
 
-	// Create real use case with mocked dependencies
 	weatherUseCase, err := weather.NewUseCase(weather.UseCaseDependencies{
 		WeatherProvider: mockWeatherProvider,
 		Cache:           mockWeatherCache,
@@ -59,6 +58,7 @@ func setupWeatherTestRouter(t *testing.T) (*gin.Engine, *mocks.WeatherProviderMa
 
 	server := &HTTPServerAdapter{
 		weatherUseCase: weatherUseCase,
+		logger:         mockLogger,
 	}
 
 	router := gin.New()
@@ -73,7 +73,7 @@ func TestWeatherHandler_GetWeather_Success(t *testing.T) {
 	// Mock cache miss
 	mockWeatherCache.EXPECT().
 		Get(mock.Anything, "weather:London").
-		Return(nil, errors.NewNotFoundError("not found"))
+		Return(nil, ports.NewNotFoundError("not found"))
 
 	// Mock weather provider response
 	expectedWeatherData := &ports.WeatherData{
@@ -177,12 +177,12 @@ func TestWeatherHandler_GetWeather_WeatherProviderError(t *testing.T) {
 	// Mock cache miss
 	mockWeatherCache.EXPECT().
 		Get(mock.Anything, "weather:InvalidCity").
-		Return(nil, errors.NewNotFoundError("not found"))
+		Return(nil, ports.NewNotFoundError("not found"))
 
 	// Mock weather provider error
 	mockWeatherProvider.EXPECT().
 		GetWeather(mock.Anything, "InvalidCity").
-		Return(nil, errors.NewExternalAPIError("city not found", nil))
+		Return(nil, shared.NewExternalServiceErrorWithCause("city not found", nil))
 
 	req := httptest.NewRequest("GET", "/api/weather?city=InvalidCity", nil)
 	w := httptest.NewRecorder()
@@ -219,7 +219,7 @@ func TestWeatherHandler_GetWeather_CacheError(t *testing.T) {
 	// Mock cache miss
 	mockWeatherCache.EXPECT().
 		Get(mock.Anything, "weather:London").
-		Return(nil, errors.NewNotFoundError("not found"))
+		Return(nil, ports.NewNotFoundError("not found"))
 
 	// Mock weather provider success
 	expectedWeatherData := &ports.WeatherData{
@@ -236,7 +236,7 @@ func TestWeatherHandler_GetWeather_CacheError(t *testing.T) {
 	// Mock cache set error (should not fail the request)
 	mockWeatherCache.EXPECT().
 		Set(mock.Anything, "weather:London", mock.Anything, mock.Anything).
-		Return(errors.NewDatabaseError("cache error", nil))
+		Return(shared.NewDomainError(shared.ErrCodeInternal, "cache error"))
 
 	req := httptest.NewRequest("GET", "/api/weather?city=London", nil)
 	w := httptest.NewRecorder()

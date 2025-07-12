@@ -6,8 +6,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"weatherapi.app/internal/adapters/infrastructure"
 	"weatherapi.app/internal/mocks"
-	"weatherapi.app/pkg/errors"
 )
 
 // Helper function to set up logger mock with variadic argument expectations
@@ -68,10 +68,11 @@ func TestAccuWeatherProvider_GetCurrentWeather_EmptyCity(t *testing.T) {
 	assert.Error(t, err)
 	assert.Nil(t, weather)
 
-	var appErr *errors.AppError
-	assert.ErrorAs(t, err, &appErr)
-	assert.Equal(t, errors.ValidationError, appErr.Type)
-	assert.Contains(t, appErr.Message, "city cannot be empty")
+	var infraErr *infrastructure.InfrastructureError
+	if assert.ErrorAs(t, err, &infraErr) {
+		assert.Equal(t, "VALIDATION_ERROR", infraErr.Type)
+		assert.Contains(t, infraErr.Message, "city cannot be empty")
+	}
 }
 
 func TestAccuWeatherProvider_GetCurrentWeather_NoAPIKey(t *testing.T) {
@@ -89,10 +90,11 @@ func TestAccuWeatherProvider_GetCurrentWeather_NoAPIKey(t *testing.T) {
 	assert.Error(t, err)
 	assert.Nil(t, weather)
 
-	var appErr *errors.AppError
-	assert.ErrorAs(t, err, &appErr)
-	assert.Equal(t, errors.ExternalAPIError, appErr.Type)
-	assert.Contains(t, appErr.Message, "API key not configured")
+	var infraErr *infrastructure.InfrastructureError
+	if assert.ErrorAs(t, err, &infraErr) {
+		assert.Equal(t, "EXTERNAL_API_ERROR", infraErr.Type)
+		assert.Contains(t, infraErr.Message, "API key not configured")
+	}
 }
 
 func TestAccuWeatherProvider_GetCurrentWeather_DefaultBaseURL(t *testing.T) {

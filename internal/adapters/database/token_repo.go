@@ -7,8 +7,8 @@ import (
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"weatherapi.app/internal/adapters/infrastructure"
 	"weatherapi.app/internal/ports"
-	"weatherapi.app/pkg/errors"
 )
 
 // TokenModel represents the database model for tokens
@@ -39,7 +39,7 @@ func NewTokenRepositoryAdapter(db *gorm.DB) ports.TokenRepository {
 // Save persists a token to the database
 func (r *TokenRepositoryAdapter) Save(ctx context.Context, token *ports.TokenData) error {
 	if token == nil {
-		return errors.NewValidationError("token cannot be nil")
+		return infrastructure.NewDatabaseError("token cannot be nil", nil)
 	}
 
 	model := r.dataToModel(token)
@@ -53,7 +53,7 @@ func (r *TokenRepositoryAdapter) Save(ctx context.Context, token *ports.TokenDat
 	}
 
 	if result.Error != nil {
-		return errors.NewDatabaseError("failed to save token", result.Error)
+		return infrastructure.NewDatabaseError("failed to save token", result.Error)
 	}
 
 	return nil
@@ -62,28 +62,33 @@ func (r *TokenRepositoryAdapter) Save(ctx context.Context, token *ports.TokenDat
 // FindByToken retrieves a token by its string value
 func (r *TokenRepositoryAdapter) FindByToken(ctx context.Context, tokenStr string) (*ports.TokenData, error) {
 	if tokenStr == "" {
-		return nil, errors.NewValidationError("token cannot be empty")
+		return nil, infrastructure.NewDatabaseError("token cannot be empty", nil)
 	}
 
 	var model TokenModel
 	result := r.db.WithContext(ctx).Where("token = ? AND expires_at > ?", tokenStr, time.Now()).First(&model)
 	if result.Error != nil {
 		if result.Error == gorm.ErrRecordNotFound {
-			return nil, errors.NewNotFoundError("token not found or expired")
+			return nil, ports.NewNotFoundError("token not found or expired")
 		}
-		return nil, errors.NewDatabaseError("failed to find token", result.Error)
+		return nil, infrastructure.NewDatabaseError("failed to find token", result.Error)
 	}
 
 	return r.modelToData(&model), nil
 }
 
+// FindBySubscriptionID retrieves a token by subscription ID and type (alias for FindBySubscriptionIDAndType)
+func (r *TokenRepositoryAdapter) FindBySubscriptionID(ctx context.Context, subscriptionID uint, tokenType string) (*ports.TokenData, error) {
+	return r.FindBySubscriptionIDAndType(ctx, subscriptionID, tokenType)
+}
+
 // FindBySubscriptionIDAndType retrieves a token by subscription ID and type
 func (r *TokenRepositoryAdapter) FindBySubscriptionIDAndType(ctx context.Context, subscriptionID uint, tokenType string) (*ports.TokenData, error) {
 	if subscriptionID == 0 {
-		return nil, errors.NewValidationError("subscription ID cannot be zero")
+		return nil, infrastructure.NewDatabaseError("subscription ID cannot be zero", nil)
 	}
 	if tokenType == "" {
-		return nil, errors.NewValidationError("token type cannot be empty")
+		return nil, infrastructure.NewDatabaseError("token type cannot be empty", nil)
 	}
 
 	var model TokenModel
@@ -91,9 +96,9 @@ func (r *TokenRepositoryAdapter) FindBySubscriptionIDAndType(ctx context.Context
 		subscriptionID, tokenType, time.Now()).First(&model)
 	if result.Error != nil {
 		if result.Error == gorm.ErrRecordNotFound {
-			return nil, errors.NewNotFoundError("token not found or expired")
+			return nil, ports.NewNotFoundError("token not found or expired")
 		}
-		return nil, errors.NewDatabaseError("failed to find token", result.Error)
+		return nil, infrastructure.NewDatabaseError("failed to find token", result.Error)
 	}
 
 	return r.modelToData(&model), nil
@@ -102,15 +107,15 @@ func (r *TokenRepositoryAdapter) FindBySubscriptionIDAndType(ctx context.Context
 // Delete removes a token from the database
 func (r *TokenRepositoryAdapter) Delete(ctx context.Context, token *ports.TokenData) error {
 	if token == nil {
-		return errors.NewValidationError("token cannot be nil")
+		return infrastructure.NewDatabaseError("token cannot be nil", nil)
 	}
 	if token.ID == 0 {
-		return errors.NewValidationError("token ID cannot be zero for delete")
+		return infrastructure.NewDatabaseError("token ID cannot be zero for delete", nil)
 	}
 
 	result := r.db.WithContext(ctx).Delete(&TokenModel{}, token.ID)
 	if result.Error != nil {
-		return errors.NewDatabaseError("failed to delete token", result.Error)
+		return infrastructure.NewDatabaseError("failed to delete token", result.Error)
 	}
 
 	return nil
@@ -120,7 +125,7 @@ func (r *TokenRepositoryAdapter) Delete(ctx context.Context, token *ports.TokenD
 func (r *TokenRepositoryAdapter) DeleteExpiredTokens(ctx context.Context) (int64, error) {
 	result := r.db.WithContext(ctx).Where("expires_at < ?", time.Now()).Delete(&TokenModel{})
 	if result.Error != nil {
-		return 0, errors.NewDatabaseError("failed to delete expired tokens", result.Error)
+		return 0, infrastructure.NewDatabaseError("failed to delete expired tokens", result.Error)
 	}
 
 	return result.RowsAffected, nil
@@ -129,7 +134,7 @@ func (r *TokenRepositoryAdapter) DeleteExpiredTokens(ctx context.Context) (int64
 // CreateConfirmationToken creates a new confirmation token
 func (r *TokenRepositoryAdapter) CreateConfirmationToken(ctx context.Context, subscriptionID uint, expiresIn time.Duration) (*ports.TokenData, error) {
 	if subscriptionID == 0 {
-		return nil, errors.NewValidationError("subscription ID cannot be zero")
+		return nil, infrastructure.NewDatabaseError("subscription ID cannot be zero", nil)
 	}
 
 	token := &ports.TokenData{
@@ -150,7 +155,7 @@ func (r *TokenRepositoryAdapter) CreateConfirmationToken(ctx context.Context, su
 // CreateUnsubscribeToken creates a new unsubscribe token
 func (r *TokenRepositoryAdapter) CreateUnsubscribeToken(ctx context.Context, subscriptionID uint, expiresIn time.Duration) (*ports.TokenData, error) {
 	if subscriptionID == 0 {
-		return nil, errors.NewValidationError("subscription ID cannot be zero")
+		return nil, infrastructure.NewDatabaseError("subscription ID cannot be zero", nil)
 	}
 
 	token := &ports.TokenData{

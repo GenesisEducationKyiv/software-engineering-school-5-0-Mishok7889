@@ -1,24 +1,38 @@
 package ports
 
-// ApplicationPorts aggregates all ports for dependency injection
+// ApplicationPorts aggregates all ports grouped by bounded context for dependency injection
 type ApplicationPorts struct {
-	// Weather
-	WeatherProvider WeatherProviderManager
-	WeatherCache    WeatherCache
-	WeatherMetrics  WeatherMetrics
+	Weather        WeatherPorts
+	Subscription   SubscriptionPorts
+	Notification   NotificationPorts
+	Infrastructure InfrastructurePorts
+}
 
-	// Subscription
-	SubscriptionRepository SubscriptionRepository
-	TokenRepository        TokenRepository
+// WeatherPorts groups weather-related ports
+type WeatherPorts struct {
+	Provider WeatherProviderManager
+	Cache    WeatherCache
+	Metrics  WeatherMetrics
+	Service  WeatherService
+}
 
-	// Communication
+// SubscriptionPorts groups subscription-related ports
+type SubscriptionPorts struct {
+	Repository SubscriptionRepository
+	Service    SubscriptionService
+}
+
+// NotificationPorts groups notification-related ports
+type NotificationPorts struct {
 	EmailProvider EmailProvider
+	Service       NotificationService
+}
 
-	// Cache
-	CacheMetrics CacheMetrics
-
-	// Infrastructure
+// InfrastructurePorts groups infrastructure-related ports
+type InfrastructurePorts struct {
 	ConfigProvider ConfigProvider
 	Logger         Logger
 	Database       interface{}
+	TokenRepo      TokenRepository
+	CacheMetrics   CacheMetrics
 }

@@ -8,8 +8,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"weatherapi.app/internal/adapters/infrastructure"
 	"weatherapi.app/internal/mocks"
-	"weatherapi.app/pkg/errors"
 )
 
 // Helper function to set up logger mock with variadic argument expectations
@@ -93,16 +93,16 @@ func TestOpenWeatherMapProvider_GetCurrentWeather_EmptyCity(t *testing.T) {
 	assert.Error(t, err)
 	assert.Nil(t, weather)
 
-	var appErr *errors.AppError
-	assert.ErrorAs(t, err, &appErr)
-	assert.Equal(t, errors.ValidationError, appErr.Type)
-	assert.Contains(t, appErr.Message, "city cannot be empty")
+	var infraErr *infrastructure.InfrastructureError
+	if assert.ErrorAs(t, err, &infraErr) {
+		assert.Equal(t, "VALIDATION_ERROR", infraErr.Type)
+		assert.Contains(t, infraErr.Message, "city cannot be empty")
+	}
 }
 
 func TestOpenWeatherMapProvider_GetCurrentWeather_APIError(t *testing.T) {
 	mockLogger := setupLoggerMockOpenWeatherMap(t)
 
-	// Create a mock server that returns an error
 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
 		_, err := w.Write([]byte(`{"message": "Invalid API key"}`))
@@ -122,16 +122,16 @@ func TestOpenWeatherMapProvider_GetCurrentWeather_APIError(t *testing.T) {
 	assert.Error(t, err)
 	assert.Nil(t, weather)
 
-	var appErr *errors.AppError
-	assert.ErrorAs(t, err, &appErr)
-	assert.Equal(t, errors.ExternalAPIError, appErr.Type)
-	assert.Contains(t, appErr.Message, "returned status 401")
+	var infraErr *infrastructure.InfrastructureError
+	if assert.ErrorAs(t, err, &infraErr) {
+		assert.Equal(t, "EXTERNAL_API_ERROR", infraErr.Type)
+		assert.Contains(t, infraErr.Message, "returned status 401")
+	}
 }
 
 func TestOpenWeatherMapProvider_GetCurrentWeather_InvalidJSON(t *testing.T) {
 	mockLogger := setupLoggerMockOpenWeatherMap(t)
 
-	// Create a mock server that returns invalid JSON
 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
@@ -152,10 +152,11 @@ func TestOpenWeatherMapProvider_GetCurrentWeather_InvalidJSON(t *testing.T) {
 	assert.Error(t, err)
 	assert.Nil(t, weather)
 
-	var appErr *errors.AppError
-	assert.ErrorAs(t, err, &appErr)
-	assert.Equal(t, errors.ExternalAPIError, appErr.Type)
-	assert.Contains(t, appErr.Message, "failed to decode")
+	var infraErr *infrastructure.InfrastructureError
+	if assert.ErrorAs(t, err, &infraErr) {
+		assert.Equal(t, "EXTERNAL_API_ERROR", infraErr.Type)
+		assert.Contains(t, infraErr.Message, "failed to decode")
+	}
 }
 
 func TestOpenWeatherMapProvider_GetCurrentWeather_NoWeatherData(t *testing.T) {
@@ -222,11 +223,9 @@ func TestOpenWeatherMapProvider_GetProviderName(t *testing.T) {
 func TestOpenWeatherMapProvider_NetworkError(t *testing.T) {
 	mockLogger := setupLoggerMockOpenWeatherMap(t)
 
-	// Use a URL that will cause a connection timeout/network error
-	// Using a non-routable IP address to ensure network failure
 	provider := NewOpenWeatherMapProviderAdapter(OpenWeatherMapProviderParams{
 		APIKey:  "test-api-key",
-		BaseURL: "http://192.0.2.1:9999", // Non-routable IP address (RFC 5737)
+		BaseURL: "http://192.0.2.1:9999",
 		Logger:  mockLogger,
 	})
 
@@ -236,8 +235,9 @@ func TestOpenWeatherMapProvider_NetworkError(t *testing.T) {
 	assert.Error(t, err)
 	assert.Nil(t, weather)
 
-	var appErr *errors.AppError
-	assert.ErrorAs(t, err, &appErr)
-	assert.Equal(t, errors.ExternalAPIError, appErr.Type)
-	assert.Contains(t, appErr.Message, "failed to call OpenWeatherMap")
+	var infraErr *infrastructure.InfrastructureError
+	if assert.ErrorAs(t, err, &infraErr) {
+		assert.Equal(t, "EXTERNAL_API_ERROR", infraErr.Type)
+		assert.Contains(t, infraErr.Message, "failed to call OpenWeatherMap")
+	}
 }

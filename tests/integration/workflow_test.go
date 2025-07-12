@@ -11,7 +11,6 @@ import (
 
 	"weatherapi.app/internal/adapters/database"
 	"weatherapi.app/internal/core/notification"
-	"weatherapi.app/internal/core/subscription"
 	"weatherapi.app/tests/integration/helpers"
 )
 
@@ -159,7 +158,7 @@ func (s *IntegrationTestSuite) TestWeatherUpdateWorkflow() {
 
 	// Send daily updates
 	dailyParams := notification.SendWeatherUpdateParams{
-		Frequency: subscription.FrequencyDaily,
+		Frequency: "daily",
 	}
 	err = notificationUseCase.SendWeatherUpdates(ctx, dailyParams)
 	s.NoError(err)
@@ -174,7 +173,7 @@ func (s *IntegrationTestSuite) TestWeatherUpdateWorkflow() {
 	// Clear emails and send hourly updates
 	_ = helpers.ClearEmails()
 	hourlyParams := notification.SendWeatherUpdateParams{
-		Frequency: subscription.FrequencyHourly,
+		Frequency: "hourly",
 	}
 	err = notificationUseCase.SendWeatherUpdates(ctx, hourlyParams)
 	s.NoError(err)

@@ -5,8 +5,8 @@ import (
 	"sync"
 	"time"
 
+	"weatherapi.app/internal/adapters/infrastructure"
 	"weatherapi.app/internal/ports"
-	"weatherapi.app/pkg/errors"
 )
 
 type MemoryCacheProvider struct {
@@ -32,7 +32,7 @@ func NewMemoryCacheProvider() *MemoryCacheProvider {
 
 func (c *MemoryCacheProvider) Get(ctx context.Context, key string) ([]byte, error) {
 	if key == "" {
-		return nil, errors.NewValidationError("cache key cannot be empty")
+		return nil, infrastructure.NewValidationError("cache key cannot be empty")
 	}
 
 	c.mutex.RLock()
@@ -41,7 +41,7 @@ func (c *MemoryCacheProvider) Get(ctx context.Context, key string) ([]byte, erro
 
 	if !exists || time.Now().After(item.expiresAt) {
 		c.recordMiss()
-		return nil, errors.NewNotFoundError("cache miss")
+		return nil, ports.NewNotFoundError("cache miss")
 	}
 
 	c.recordHit()
@@ -50,13 +50,13 @@ func (c *MemoryCacheProvider) Get(ctx context.Context, key string) ([]byte, erro
 
 func (c *MemoryCacheProvider) Set(ctx context.Context, key string, value []byte, ttl time.Duration) error {
 	if key == "" {
-		return errors.NewValidationError("cache key cannot be empty")
+		return infrastructure.NewValidationError("cache key cannot be empty")
 	}
 	if value == nil {
-		return errors.NewValidationError("cache value cannot be nil")
+		return infrastructure.NewValidationError("cache value cannot be nil")
 	}
 	if ttl <= 0 {
-		return errors.NewValidationError("cache TTL must be positive")
+		return infrastructure.NewValidationError("cache TTL must be positive")
 	}
 
 	c.mutex.Lock()
@@ -72,7 +72,7 @@ func (c *MemoryCacheProvider) Set(ctx context.Context, key string, value []byte,
 
 func (c *MemoryCacheProvider) Delete(ctx context.Context, key string) error {
 	if key == "" {
-		return errors.NewValidationError("cache key cannot be empty")
+		return infrastructure.NewValidationError("cache key cannot be empty")
 	}
 
 	c.mutex.Lock()
@@ -84,7 +84,7 @@ func (c *MemoryCacheProvider) Delete(ctx context.Context, key string) error {
 
 func (c *MemoryCacheProvider) Exists(ctx context.Context, key string) (bool, error) {
 	if key == "" {
-		return false, errors.NewValidationError("cache key cannot be empty")
+		return false, infrastructure.NewValidationError("cache key cannot be empty")
 	}
 
 	c.mutex.RLock()

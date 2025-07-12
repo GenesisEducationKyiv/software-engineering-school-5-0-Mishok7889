@@ -9,7 +9,9 @@ import (
 	"weatherapi.app/internal/adapters/database"
 	"weatherapi.app/internal/adapters/external"
 	"weatherapi.app/internal/adapters/infrastructure"
+	"weatherapi.app/internal/adapters/services"
 	"weatherapi.app/internal/config"
+	"weatherapi.app/internal/core/weather"
 	"weatherapi.app/internal/ports"
 )
 
@@ -147,25 +149,27 @@ func (c *DependencyContainer) initializePorts(appConfig *config.Config) error {
 	weatherMetrics := external.NewWeatherMetricsAdapter(weatherCacheProvider, providerManager)
 
 	c.ports = &ports.ApplicationPorts{
-		// Weather
-		WeatherProvider: providerManager,
-		WeatherCache:    weatherCacheProvider,
-		WeatherMetrics:  weatherMetrics,
-
-		// Subscription
-		SubscriptionRepository: subscriptionRepo,
-		TokenRepository:        tokenRepo,
-
-		// Communication
-		EmailProvider: emailProvider,
-
-		// Cache
-		CacheMetrics: genericCacheProvider.(ports.CacheMetrics),
-
-		// Infrastructure
-		ConfigProvider: configProvider,
-		Logger:         logger,
-		Database:       c.db,
+		Weather: ports.WeatherPorts{
+			Provider: providerManager,
+			Cache:    weatherCacheProvider,
+			Metrics:  weatherMetrics,
+			Service:  nil, // Will be set after use cases are created
+		},
+		Subscription: ports.SubscriptionPorts{
+			Repository: subscriptionRepo,
+			Service:    nil, // Will be set after use cases are created
+		},
+		Notification: ports.NotificationPorts{
+			EmailProvider: emailProvider,
+			Service:       nil, // Will be set after use cases are created
+		},
+		Infrastructure: ports.InfrastructurePorts{
+			ConfigProvider: configProvider,
+			Logger:         logger,
+			Database:       c.db,
+			TokenRepo:      tokenRepo,
+			CacheMetrics:   genericCacheProvider.(ports.CacheMetrics),
+		},
 	}
 
 	slog.Info("Ports initialized successfully")
@@ -246,4 +250,27 @@ func (c *DependencyContainer) Cleanup() error {
 		}
 	}
 	return nil
+}
+
+// SetWeatherService sets the weather service in the application ports
+func (c *DependencyContainer) SetWeatherService(service ports.WeatherService) {
+	c.ports.Weather.Service = service
+}
+
+// SetSubscriptionService sets the subscription service in the application ports
+func (c *DependencyContainer) SetSubscriptionService(service ports.SubscriptionService) {
+	c.ports.Subscription.Service = service
+}
+
+// CreateWeatherServiceFromUseCase creates a weather service adapter from a use case
+func CreateWeatherServiceFromUseCase(weatherUseCase *weather.UseCase) ports.WeatherService {
+	return services.NewWeatherServiceAdapter(weatherUseCase)
+}
+
+// CreateSubscriptionServiceFromRepository creates a subscription service adapter
+func (c *DependencyContainer) CreateSubscriptionServiceFromRepository() ports.SubscriptionService {
+	return services.NewSubscriptionServiceAdapter(
+		c.ports.Subscription.Repository,
+		c.ports.Infrastructure.TokenRepo,
+	)
 }

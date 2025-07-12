@@ -7,17 +7,40 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"weatherapi.app/internal/core/shared"
 	mocks "weatherapi.app/internal/mocks"
 	"weatherapi.app/internal/ports"
-	"weatherapi.app/pkg/errors"
 )
+
+// Helper function to set up flexible logger mock expectations
+func setupLoggerMock(t *testing.T) *mocks.Logger {
+	mockLogger := mocks.NewLogger(t)
+
+	// Set up flexible mock expectations for variadic logger calls
+	mockLogger.EXPECT().Debug(mock.Anything, mock.Anything).Maybe()
+	mockLogger.EXPECT().Debug(mock.Anything, mock.Anything, mock.Anything).Maybe()
+	mockLogger.EXPECT().Debug(mock.Anything, mock.Anything, mock.Anything, mock.Anything).Maybe()
+	mockLogger.EXPECT().Debug(mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Maybe()
+	mockLogger.EXPECT().Info(mock.Anything, mock.Anything).Maybe()
+	mockLogger.EXPECT().Info(mock.Anything, mock.Anything, mock.Anything).Maybe()
+	mockLogger.EXPECT().Info(mock.Anything, mock.Anything, mock.Anything, mock.Anything).Maybe()
+	mockLogger.EXPECT().Info(mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Maybe()
+	mockLogger.EXPECT().Error(mock.Anything, mock.Anything).Maybe()
+	mockLogger.EXPECT().Error(mock.Anything, mock.Anything, mock.Anything).Maybe()
+	mockLogger.EXPECT().Error(mock.Anything, mock.Anything, mock.Anything, mock.Anything).Maybe()
+	mockLogger.EXPECT().Warn(mock.Anything, mock.Anything).Maybe()
+	mockLogger.EXPECT().Warn(mock.Anything, mock.Anything, mock.Anything).Maybe()
+	mockLogger.EXPECT().Warn(mock.Anything, mock.Anything, mock.Anything, mock.Anything).Maybe()
+
+	return mockLogger
+}
 
 func TestUseCase_GetWeather_Success(t *testing.T) {
 	// Create mocks using mockery
 	mockWeatherProviderManager := mocks.NewWeatherProviderManager(t)
 	mockWeatherCache := mocks.NewWeatherCache(t)
 	mockConfig := mocks.NewConfigProvider(t)
-	mockLogger := mocks.NewLogger(t)
+	mockLogger := setupLoggerMock(t)
 	mockMetrics := mocks.NewWeatherMetrics(t)
 
 	// Setup mock expectations
@@ -35,16 +58,9 @@ func TestUseCase_GetWeather_Success(t *testing.T) {
 	})
 
 	// Cache miss, then provider success
-	mockWeatherCache.EXPECT().Get(mock.Anything, "weather:London").Return((*ports.WeatherData)(nil), errors.NewNotFoundError("cache miss"))
+	mockWeatherCache.EXPECT().Get(mock.Anything, "weather:London").Return((*ports.WeatherData)(nil), shared.NewNotFoundError("cache miss"))
 	mockWeatherProviderManager.EXPECT().GetWeather(mock.Anything, "London").Return(expectedWeatherData, nil)
 	mockWeatherCache.EXPECT().Set(mock.Anything, "weather:London", expectedWeatherData, mock.Anything).Return(nil)
-
-	// Allow logger calls with variadic arguments (2 or 3 arguments)
-	mockLogger.EXPECT().Debug(mock.Anything, mock.Anything).Maybe()
-	mockLogger.EXPECT().Debug(mock.Anything, mock.Anything, mock.Anything).Maybe()
-	mockLogger.EXPECT().Info(mock.Anything, mock.Anything).Maybe()
-	mockLogger.EXPECT().Info(mock.Anything, mock.Anything, mock.Anything).Maybe()
-	mockLogger.EXPECT().Warn(mock.Anything, mock.Anything, mock.Anything).Maybe()
 
 	// Create use case with mocked dependencies
 	uc, err := NewUseCase(UseCaseDependencies{
@@ -79,7 +95,7 @@ func TestUseCase_GetWeather_ValidationError(t *testing.T) {
 	mockWeatherProviderManager := mocks.NewWeatherProviderManager(t)
 	mockWeatherCache := mocks.NewWeatherCache(t)
 	mockConfig := mocks.NewConfigProvider(t)
-	mockLogger := mocks.NewLogger(t)
+	mockLogger := setupLoggerMock(t)
 	mockMetrics := mocks.NewWeatherMetrics(t)
 
 	// No mock expectations needed - validation should fail before any calls
@@ -102,9 +118,13 @@ func TestUseCase_GetWeather_ValidationError(t *testing.T) {
 	assert.Error(t, err)
 	assert.Nil(t, result)
 
-	var appErr *errors.AppError
-	assert.ErrorAs(t, err, &appErr)
-	assert.Equal(t, errors.ValidationError, appErr.Type)
+	var domainErr *shared.DomainError
+	if assert.ErrorAs(t, err, &domainErr) {
+		assert.Equal(t, shared.ErrCodeValidation, domainErr.Code)
+	} else {
+		// If it's not a domain error, check if it's a validation error by message
+		assert.Contains(t, err.Error(), "invalid weather request")
+	}
 
 	// Verify no unexpected calls were made
 	mockWeatherProviderManager.AssertExpectations(t)
@@ -118,7 +138,7 @@ func TestUseCase_GetWeather_ProviderError(t *testing.T) {
 	mockWeatherProviderManager := mocks.NewWeatherProviderManager(t)
 	mockWeatherCache := mocks.NewWeatherCache(t)
 	mockConfig := mocks.NewConfigProvider(t)
-	mockLogger := mocks.NewLogger(t)
+	mockLogger := setupLoggerMock(t)
 	mockMetrics := mocks.NewWeatherMetrics(t)
 
 	// Mock config to enable cache
@@ -128,14 +148,8 @@ func TestUseCase_GetWeather_ProviderError(t *testing.T) {
 	})
 
 	// Cache miss, then provider error
-	mockWeatherCache.EXPECT().Get(mock.Anything, "weather:NonExistentCity").Return((*ports.WeatherData)(nil), errors.NewNotFoundError("cache miss"))
-	mockWeatherProviderManager.EXPECT().GetWeather(mock.Anything, "NonExistentCity").Return((*ports.WeatherData)(nil), errors.NewExternalAPIError("city not found", nil))
-
-	// Allow logger calls with variadic arguments (2 or 3 arguments)
-	mockLogger.EXPECT().Debug(mock.Anything, mock.Anything).Maybe()
-	mockLogger.EXPECT().Debug(mock.Anything, mock.Anything, mock.Anything).Maybe()
-	mockLogger.EXPECT().Error(mock.Anything, mock.Anything, mock.Anything).Maybe()
-	mockLogger.EXPECT().Warn(mock.Anything, mock.Anything, mock.Anything).Maybe()
+	mockWeatherCache.EXPECT().Get(mock.Anything, "weather:NonExistentCity").Return((*ports.WeatherData)(nil), shared.NewNotFoundError("cache miss"))
+	mockWeatherProviderManager.EXPECT().GetWeather(mock.Anything, "NonExistentCity").Return((*ports.WeatherData)(nil), shared.NewDomainErrorWithCause(shared.ErrCodeInternal, "city not found", nil))
 
 	uc, err := NewUseCase(UseCaseDependencies{
 		WeatherProvider: mockWeatherProviderManager,
@@ -152,9 +166,12 @@ func TestUseCase_GetWeather_ProviderError(t *testing.T) {
 	assert.Error(t, err)
 	assert.Nil(t, result)
 
-	var appErr *errors.AppError
-	assert.ErrorAs(t, err, &appErr)
-	assert.Equal(t, errors.ExternalAPIError, appErr.Type)
+	var domainErr *shared.DomainError
+	if assert.ErrorAs(t, err, &domainErr) {
+		assert.Equal(t, shared.ErrCodeExternalService, domainErr.Code)
+	} else {
+		assert.Contains(t, err.Error(), "weather provider failed")
+	}
 
 	mockWeatherProviderManager.AssertExpectations(t)
 	mockWeatherCache.AssertExpectations(t)

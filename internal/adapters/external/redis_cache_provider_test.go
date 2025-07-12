@@ -8,9 +8,9 @@ import (
 	"github.com/alicebob/miniredis/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"weatherapi.app/internal/adapters/infrastructure"
 	"weatherapi.app/internal/config"
 	"weatherapi.app/internal/ports"
-	"weatherapi.app/pkg/errors"
 )
 
 // setupMockRedis creates a mock Redis server for testing
@@ -39,13 +39,18 @@ func TestRedisCacheProviderAdapter_NewRedisCacheProviderAdapter(t *testing.T) {
 		name        string
 		config      *config.RedisConfig
 		expectError bool
-		errorType   errors.ErrorType
+		checkError  func(t *testing.T, err error)
 	}{
 		{
 			name:        "NilConfig",
 			config:      nil,
 			expectError: true,
-			errorType:   errors.ErrorTypeConfiguration,
+			checkError: func(t *testing.T, err error) {
+				var infraErr *infrastructure.InfrastructureError
+				if assert.ErrorAs(t, err, &infraErr) {
+					assert.Equal(t, "CONFIGURATION_ERROR", infraErr.Type)
+				}
+			},
 		},
 		{
 			name: "ValidConfig",
@@ -66,7 +71,12 @@ func TestRedisCacheProviderAdapter_NewRedisCacheProviderAdapter(t *testing.T) {
 				WriteTimeout: 3,
 			},
 			expectError: true,
-			errorType:   errors.ErrorTypeExternalAPI,
+			checkError: func(t *testing.T, err error) {
+				var infraErr *infrastructure.InfrastructureError
+				if assert.ErrorAs(t, err, &infraErr) {
+					assert.Equal(t, "EXTERNAL_API_ERROR", infraErr.Type)
+				}
+			},
 		},
 	}
 
@@ -77,11 +87,8 @@ func TestRedisCacheProviderAdapter_NewRedisCacheProviderAdapter(t *testing.T) {
 			if tt.expectError {
 				assert.Error(t, err)
 				assert.Nil(t, adapter)
-				if tt.errorType != errors.ErrorTypeUnknown {
-					var appErr *errors.AppError
-					if assert.ErrorAs(t, err, &appErr) {
-						assert.Equal(t, tt.errorType, appErr.Type)
-					}
+				if tt.checkError != nil {
+					tt.checkError(t, err)
 				}
 			} else {
 				assert.NoError(t, err)
@@ -128,10 +135,7 @@ func TestRedisCacheProviderAdapter_Operations(t *testing.T) {
 		assert.Error(t, err)
 		assert.Nil(t, retrieved)
 
-		var appErr *errors.AppError
-		if assert.ErrorAs(t, err, &appErr) {
-			assert.Equal(t, errors.ErrorTypeNotFound, appErr.Type)
-		}
+		assert.True(t, ports.IsNotFoundError(err))
 	})
 
 	t.Run("Delete", func(t *testing.T) {
@@ -198,9 +202,9 @@ func TestRedisCacheProviderAdapter_ValidationErrors(t *testing.T) {
 	ctx := context.Background()
 
 	tests := []struct {
-		name      string
-		operation func() error
-		errorType errors.ErrorType
+		name       string
+		operation  func() error
+		checkError func(t *testing.T, err error)
 	}{
 		{
 			name: "GetEmptyKey",
@@ -208,42 +212,72 @@ func TestRedisCacheProviderAdapter_ValidationErrors(t *testing.T) {
 				_, err := adapter.Get(ctx, "")
 				return err
 			},
-			errorType: errors.ErrorTypeValidation,
+			checkError: func(t *testing.T, err error) {
+				var infraErr *infrastructure.InfrastructureError
+				if assert.ErrorAs(t, err, &infraErr) {
+					assert.Equal(t, "VALIDATION_ERROR", infraErr.Type)
+				}
+			},
 		},
 		{
 			name: "SetEmptyKey",
 			operation: func() error {
 				return adapter.Set(ctx, "", []byte("value"), time.Minute)
 			},
-			errorType: errors.ErrorTypeValidation,
+			checkError: func(t *testing.T, err error) {
+				var infraErr *infrastructure.InfrastructureError
+				if assert.ErrorAs(t, err, &infraErr) {
+					assert.Equal(t, "VALIDATION_ERROR", infraErr.Type)
+				}
+			},
 		},
 		{
 			name: "SetNilValue",
 			operation: func() error {
 				return adapter.Set(ctx, "key", nil, time.Minute)
 			},
-			errorType: errors.ErrorTypeValidation,
+			checkError: func(t *testing.T, err error) {
+				var infraErr *infrastructure.InfrastructureError
+				if assert.ErrorAs(t, err, &infraErr) {
+					assert.Equal(t, "VALIDATION_ERROR", infraErr.Type)
+				}
+			},
 		},
 		{
 			name: "SetZeroTTL",
 			operation: func() error {
 				return adapter.Set(ctx, "key", []byte("value"), 0)
 			},
-			errorType: errors.ErrorTypeValidation,
+			checkError: func(t *testing.T, err error) {
+				var infraErr *infrastructure.InfrastructureError
+				if assert.ErrorAs(t, err, &infraErr) {
+					assert.Equal(t, "VALIDATION_ERROR", infraErr.Type)
+				}
+			},
 		},
 		{
 			name: "SetNegativeTTL",
 			operation: func() error {
 				return adapter.Set(ctx, "key", []byte("value"), -time.Minute)
 			},
-			errorType: errors.ErrorTypeValidation,
+			checkError: func(t *testing.T, err error) {
+				var infraErr *infrastructure.InfrastructureError
+				if assert.ErrorAs(t, err, &infraErr) {
+					assert.Equal(t, "VALIDATION_ERROR", infraErr.Type)
+				}
+			},
 		},
 		{
 			name: "DeleteEmptyKey",
 			operation: func() error {
 				return adapter.Delete(ctx, "")
 			},
-			errorType: errors.ErrorTypeValidation,
+			checkError: func(t *testing.T, err error) {
+				var infraErr *infrastructure.InfrastructureError
+				if assert.ErrorAs(t, err, &infraErr) {
+					assert.Equal(t, "VALIDATION_ERROR", infraErr.Type)
+				}
+			},
 		},
 		{
 			name: "ExistsEmptyKey",
@@ -251,7 +285,12 @@ func TestRedisCacheProviderAdapter_ValidationErrors(t *testing.T) {
 				_, err := adapter.Exists(ctx, "")
 				return err
 			},
-			errorType: errors.ErrorTypeValidation,
+			checkError: func(t *testing.T, err error) {
+				var infraErr *infrastructure.InfrastructureError
+				if assert.ErrorAs(t, err, &infraErr) {
+					assert.Equal(t, "VALIDATION_ERROR", infraErr.Type)
+				}
+			},
 		},
 	}
 
@@ -260,9 +299,8 @@ func TestRedisCacheProviderAdapter_ValidationErrors(t *testing.T) {
 			err := tt.operation()
 			assert.Error(t, err)
 
-			var appErr *errors.AppError
-			if assert.ErrorAs(t, err, &appErr) {
-				assert.Equal(t, tt.errorType, appErr.Type)
+			if tt.checkError != nil {
+				tt.checkError(t, err)
 			}
 		})
 	}

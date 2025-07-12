@@ -9,7 +9,6 @@ import (
 	"github.com/stretchr/testify/mock"
 	"weatherapi.app/internal/adapters/infrastructure"
 	"weatherapi.app/internal/mocks"
-	appErrors "weatherapi.app/pkg/errors"
 )
 
 // Helper function to set up logger mock with variadic argument expectations
@@ -117,9 +116,9 @@ func TestWeatherProviderManager_ValidationError(t *testing.T) {
 	assert.Error(t, err)
 	assert.Nil(t, weather)
 
-	var appErr *appErrors.AppError
-	if errors.As(err, &appErr) {
-		assert.Equal(t, appErrors.ValidationError, appErr.Type)
+	var infraErr *infrastructure.InfrastructureError
+	if errors.As(err, &infraErr) {
+		assert.Equal(t, "VALIDATION_ERROR", infraErr.Type)
 	}
 }
 

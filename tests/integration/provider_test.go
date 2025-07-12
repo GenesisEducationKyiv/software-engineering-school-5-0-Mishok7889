@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"weatherapi.app/internal/core/notification"
-	"weatherapi.app/internal/core/subscription"
 	"weatherapi.app/internal/core/weather"
 	"weatherapi.app/tests/integration/helpers"
 )
@@ -136,7 +135,7 @@ func (s *IntegrationTestSuite) TestWeatherProviderWithSubscription() {
 	// Send weather update (this should use the weather provider internally)
 	ctx := context.Background()
 	dailyParams := notification.SendWeatherUpdateParams{
-		Frequency: subscription.FrequencyDaily,
+		Frequency: "daily",
 	}
 	err = notificationUseCase.SendWeatherUpdates(ctx, dailyParams)
 	s.NoError(err, "Weather update should succeed")

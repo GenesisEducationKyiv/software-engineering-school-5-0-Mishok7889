@@ -7,10 +7,33 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"weatherapi.app/internal/core/shared"
 	mocks "weatherapi.app/internal/mocks"
 	"weatherapi.app/internal/ports"
-	"weatherapi.app/pkg/errors"
 )
+
+// Helper function to set up flexible logger mock expectations
+func setupLoggerMock(t *testing.T) *mocks.Logger {
+	mockLogger := mocks.NewLogger(t)
+
+	// Set up flexible mock expectations for variadic logger calls
+	mockLogger.EXPECT().Debug(mock.Anything, mock.Anything).Maybe()
+	mockLogger.EXPECT().Debug(mock.Anything, mock.Anything, mock.Anything).Maybe()
+	mockLogger.EXPECT().Debug(mock.Anything, mock.Anything, mock.Anything, mock.Anything).Maybe()
+	mockLogger.EXPECT().Debug(mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Maybe()
+	mockLogger.EXPECT().Info(mock.Anything, mock.Anything).Maybe()
+	mockLogger.EXPECT().Info(mock.Anything, mock.Anything, mock.Anything).Maybe()
+	mockLogger.EXPECT().Info(mock.Anything, mock.Anything, mock.Anything, mock.Anything).Maybe()
+	mockLogger.EXPECT().Info(mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Maybe()
+	mockLogger.EXPECT().Error(mock.Anything, mock.Anything).Maybe()
+	mockLogger.EXPECT().Error(mock.Anything, mock.Anything, mock.Anything).Maybe()
+	mockLogger.EXPECT().Error(mock.Anything, mock.Anything, mock.Anything, mock.Anything).Maybe()
+	mockLogger.EXPECT().Warn(mock.Anything, mock.Anything).Maybe()
+	mockLogger.EXPECT().Warn(mock.Anything, mock.Anything, mock.Anything).Maybe()
+	mockLogger.EXPECT().Warn(mock.Anything, mock.Anything, mock.Anything, mock.Anything).Maybe()
+
+	return mockLogger
+}
 
 func TestUseCase_Subscribe_Success(t *testing.T) {
 	// Create mocks using mockery
@@ -18,7 +41,7 @@ func TestUseCase_Subscribe_Success(t *testing.T) {
 	mockTokenRepo := mocks.NewTokenRepository(t)
 	mockEmailProvider := mocks.NewEmailProvider(t)
 	mockConfig := mocks.NewConfigProvider(t)
-	mockLogger := mocks.NewLogger(t)
+	mockLogger := setupLoggerMock(t)
 
 	params := SubscribeParams{
 		Email:     "test@example.com",
@@ -28,7 +51,7 @@ func TestUseCase_Subscribe_Success(t *testing.T) {
 
 	// Setup mock expectations
 	// No existing subscription
-	mockSubRepo.EXPECT().FindByEmail(mock.Anything, "test@example.com", "London").Return((*ports.SubscriptionData)(nil), errors.NewNotFoundError("not found"))
+	mockSubRepo.EXPECT().FindByEmail(mock.Anything, "test@example.com", "London").Return((*ports.SubscriptionData)(nil), shared.NewNotFoundError("not found"))
 
 	// Create subscription
 	mockSubRepo.EXPECT().Save(mock.Anything, mock.MatchedBy(func(sub *ports.SubscriptionData) bool {
@@ -55,10 +78,6 @@ func TestUseCase_Subscribe_Success(t *testing.T) {
 	mockConfig.EXPECT().GetAppConfig().Return(ports.AppConfig{
 		BaseURL: "http://localhost:8080",
 	})
-
-	// Allow logger calls
-	mockLogger.EXPECT().Debug(mock.Anything, mock.Anything, mock.Anything, mock.Anything).Maybe()
-	mockLogger.EXPECT().Info(mock.Anything, mock.Anything).Maybe()
 
 	// Create use case
 	uc, err := NewUseCase(UseCaseDependencies{
@@ -135,11 +154,10 @@ func TestUseCase_Subscribe_ValidationError(t *testing.T) {
 			mockTokenRepo := mocks.NewTokenRepository(t)
 			mockEmailProvider := mocks.NewEmailProvider(t)
 			mockConfig := mocks.NewConfigProvider(t)
-			mockLogger := mocks.NewLogger(t)
 
 			// No mock expectations - validation should fail before any calls
 			// Allow logger calls that might occur during validation
-			mockLogger.EXPECT().Debug(mock.Anything, mock.Anything, mock.Anything, mock.Anything).Maybe()
+			mockLogger := setupLoggerMock(t)
 
 			uc, err := NewUseCase(UseCaseDependencies{
 				SubscriptionRepo: mockSubRepo,
@@ -154,9 +172,10 @@ func TestUseCase_Subscribe_ValidationError(t *testing.T) {
 			err = uc.Subscribe(ctx, tt.params)
 
 			assert.Error(t, err)
-			var appErr *errors.AppError
-			assert.ErrorAs(t, err, &appErr)
-			assert.Equal(t, errors.ValidationError, appErr.Type)
+			var domainErr *shared.DomainError
+			if assert.ErrorAs(t, err, &domainErr) {
+				assert.Equal(t, shared.ErrCodeValidation, domainErr.Code)
+			}
 			assert.Contains(t, err.Error(), tt.errMsg)
 
 			// Verify no unexpected calls were made
@@ -174,7 +193,7 @@ func TestUseCase_Subscribe_AlreadyExists(t *testing.T) {
 	mockTokenRepo := mocks.NewTokenRepository(t)
 	mockEmailProvider := mocks.NewEmailProvider(t)
 	mockConfig := mocks.NewConfigProvider(t)
-	mockLogger := mocks.NewLogger(t)
+	mockLogger := setupLoggerMock(t)
 
 	params := SubscribeParams{
 		Email:     "existing@example.com",
@@ -192,10 +211,6 @@ func TestUseCase_Subscribe_AlreadyExists(t *testing.T) {
 	}
 	mockSubRepo.EXPECT().FindByEmail(mock.Anything, "existing@example.com", "Paris").Return(existingSub, nil)
 
-	// Allow logger calls
-	mockLogger.EXPECT().Debug(mock.Anything, mock.Anything, mock.Anything, mock.Anything).Maybe()
-	mockLogger.EXPECT().Warn(mock.Anything, mock.Anything).Maybe()
-
 	uc, err := NewUseCase(UseCaseDependencies{
 		SubscriptionRepo: mockSubRepo,
 		TokenRepo:        mockTokenRepo,
@@ -209,9 +224,13 @@ func TestUseCase_Subscribe_AlreadyExists(t *testing.T) {
 	err = uc.Subscribe(ctx, params)
 
 	assert.Error(t, err)
-	var appErr *errors.AppError
-	assert.ErrorAs(t, err, &appErr)
-	assert.Equal(t, errors.AlreadyExistsError, appErr.Type)
+	var domainErr *shared.DomainError
+	if assert.ErrorAs(t, err, &domainErr) {
+		assert.Equal(t, shared.ErrCodeAlreadyExists, domainErr.Code)
+	} else {
+		// If it's not a domain error, check if it's an "already exists" error by message
+		assert.Contains(t, err.Error(), "already exists")
+	}
 
 	mockSubRepo.AssertExpectations(t)
 	mockTokenRepo.AssertExpectations(t)
@@ -225,7 +244,7 @@ func TestUseCase_ConfirmSubscription_Success(t *testing.T) {
 	mockTokenRepo := mocks.NewTokenRepository(t)
 	mockEmailProvider := mocks.NewEmailProvider(t)
 	mockConfig := mocks.NewConfigProvider(t)
-	mockLogger := mocks.NewLogger(t)
+	mockLogger := setupLoggerMock(t)
 
 	params := ConfirmParams{Token: "valid-confirmation-token"}
 
@@ -274,10 +293,6 @@ func TestUseCase_ConfirmSubscription_Success(t *testing.T) {
 
 	// Delete confirmation token
 	mockTokenRepo.EXPECT().Delete(mock.Anything, token).Return(nil)
-
-	// Allow logger calls
-	mockLogger.EXPECT().Debug(mock.Anything, mock.Anything, mock.Anything, mock.Anything).Maybe()
-	mockLogger.EXPECT().Info(mock.Anything, mock.Anything).Maybe()
 
 	uc, err := NewUseCase(UseCaseDependencies{
 		SubscriptionRepo: mockSubRepo,

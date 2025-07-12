@@ -57,8 +57,8 @@ test-integration: _check-docker _integration-setup
 test-e2e: _check-docker _check-node _e2e-setup
 	@echo "$(GREEN)Running E2E tests...$(NC)"
 	@set -e; \
-	ROOT_DIR=$(pwd); \
-	trap "cd $ROOT_DIR && make -f Makefile.testing _e2e-cleanup" EXIT; \
+	ROOT_DIR=$$(pwd); \
+	trap "cd $$ROOT_DIR && make -f Makefile.testing _e2e-cleanup" EXIT; \
 	cd tests/e2e && npm test
 	@echo "$(GREEN)E2E tests completed$(NC)"
 

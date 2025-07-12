@@ -34,6 +34,8 @@ type SubscriptionRepository interface {
 	Update(ctx context.Context, sub *SubscriptionData) error
 	Delete(ctx context.Context, sub *SubscriptionData) error
 	GetConfirmedByFrequency(ctx context.Context, frequency string) ([]*SubscriptionData, error)
+	FindActiveByFrequency(ctx context.Context, frequency string) ([]*SubscriptionData, error)
+	FindConfirmedByFrequency(ctx context.Context, frequency string) ([]*SubscriptionData, error)
 	CountByFrequency(ctx context.Context, frequency string) (int64, error)
 	CountConfirmed(ctx context.Context) (int64, error)
 }
@@ -42,6 +44,7 @@ type SubscriptionRepository interface {
 type TokenRepository interface {
 	Save(ctx context.Context, token *TokenData) error
 	FindByToken(ctx context.Context, tokenStr string) (*TokenData, error)
+	FindBySubscriptionID(ctx context.Context, subscriptionID uint, tokenType string) (*TokenData, error)
 	FindBySubscriptionIDAndType(ctx context.Context, subscriptionID uint, tokenType string) (*TokenData, error)
 	Delete(ctx context.Context, token *TokenData) error
 	DeleteExpiredTokens(ctx context.Context) (int64, error)

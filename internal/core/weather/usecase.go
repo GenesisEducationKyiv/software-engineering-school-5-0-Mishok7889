@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"weatherapi.app/internal/core/shared"
 	"weatherapi.app/internal/ports"
-	"weatherapi.app/pkg/errors"
 )
 
 type UseCase struct {
@@ -26,19 +26,19 @@ type UseCaseDependencies struct {
 
 func NewUseCase(deps UseCaseDependencies) (*UseCase, error) {
 	if deps.WeatherProvider == nil {
-		return nil, errors.NewValidationError("weather provider is required")
+		return nil, shared.NewValidationError("weather provider is required")
 	}
 	if deps.Cache == nil {
-		return nil, errors.NewValidationError("cache is required")
+		return nil, shared.NewValidationError("cache is required")
 	}
 	if deps.Config == nil {
-		return nil, errors.NewValidationError("config is required")
+		return nil, shared.NewValidationError("config is required")
 	}
 	if deps.Logger == nil {
-		return nil, errors.NewValidationError("logger is required")
+		return nil, shared.NewValidationError("logger is required")
 	}
 	if deps.Metrics == nil {
-		return nil, errors.NewValidationError("metrics is required")
+		return nil, shared.NewValidationError("metrics is required")
 	}
 
 	return &UseCase{
@@ -52,7 +52,7 @@ func NewUseCase(deps UseCaseDependencies) (*UseCase, error) {
 
 func (uc *UseCase) GetWeather(ctx context.Context, request WeatherRequest) (*Weather, error) {
 	if err := request.IsValid(); err != nil {
-		return nil, errors.NewValidationError("invalid weather request: " + err.Error())
+		return nil, shared.NewValidationError("invalid weather request: " + err.Error())
 	}
 
 	request.NormalizeCity()
@@ -104,16 +104,20 @@ func (uc *UseCase) getWeatherWithCache(ctx context.Context, city string) (*Weath
 func (uc *UseCase) getWeatherFromProvider(ctx context.Context, city string) (*Weather, error) {
 	providerWeather, err := uc.weatherProvider.GetWeather(ctx, city)
 	if err != nil {
-		// Preserve NotFoundError from providers
-		if errors.IsNotFoundError(err) {
+		// Check for ports.NotFoundError first
+		if ports.IsNotFoundError(err) {
+			return nil, shared.NewNotFoundError(err.Error())
+		}
+		// Check for shared.DomainError NotFound
+		if shared.IsNotFoundError(err) {
 			return nil, err
 		}
-		return nil, errors.NewExternalAPIError("weather provider failed", err)
+		return nil, shared.NewExternalServiceErrorWithCause("weather provider failed", err)
 	}
 
 	domainWeather := uc.convertFromPortsWeather(providerWeather)
 	if err := domainWeather.IsValid(); err != nil {
-		return nil, errors.NewValidationError("invalid weather data from provider: " + err.Error())
+		return nil, shared.NewValidationError("invalid weather data from provider: " + err.Error())
 	}
 
 	return domainWeather, nil

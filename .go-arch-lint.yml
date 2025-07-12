@@ -26,6 +26,9 @@ components:
 
   secondary_adapters_infrastructure: { in: internal/adapters/infrastructure/** }
 
+  # Service adapters for cross-context communication
+  services: { in: internal/adapters/services/** }
+
   # Application orchestration
   application: { in: internal/app/** }
 
@@ -51,10 +54,6 @@ deps:
       - domain
       - ports
 
-  ports:
-    mayDependOn:
-      - domain
-
   primary_adapters:
     mayDependOn:
       - domain
@@ -65,18 +64,25 @@ deps:
       - domain
       - ports
       - config
+      - secondary_adapters_infrastructure
 
   secondary_adapters_database:
     mayDependOn:
       - domain
       - ports
       - config
+      - secondary_adapters_infrastructure
 
   secondary_adapters_infrastructure:
     mayDependOn:
       - domain
       - ports
       - config
+
+  services:
+    mayDependOn:
+      - domain
+      - ports
 
   application:
     mayDependOn:
@@ -86,6 +92,7 @@ deps:
       - secondary_adapters_external
       - secondary_adapters_database
       - secondary_adapters_infrastructure
+      - services
       - config
 
   config:

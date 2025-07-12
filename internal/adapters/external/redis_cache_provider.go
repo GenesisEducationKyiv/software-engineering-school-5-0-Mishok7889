@@ -6,9 +6,9 @@ import (
 	"time"
 
 	"github.com/go-redis/redis/v8"
+	"weatherapi.app/internal/adapters/infrastructure"
 	"weatherapi.app/internal/config"
 	"weatherapi.app/internal/ports"
-	"weatherapi.app/pkg/errors"
 )
 
 // RedisCacheProviderAdapter implements CacheProvider port using Redis
@@ -24,7 +24,7 @@ type RedisCacheProviderAdapter struct {
 // NewRedisCacheProviderAdapter creates a new Redis cache provider adapter
 func NewRedisCacheProviderAdapter(config *config.RedisConfig) (*RedisCacheProviderAdapter, error) {
 	if config == nil {
-		return nil, errors.NewConfigurationError("redis config cannot be nil", nil)
+		return nil, infrastructure.NewConfigurationError("redis config cannot be nil")
 	}
 
 	client := redis.NewClient(&redis.Options{
@@ -40,7 +40,7 @@ func NewRedisCacheProviderAdapter(config *config.RedisConfig) (*RedisCacheProvid
 	defer cancel()
 
 	if err := client.Ping(ctx).Err(); err != nil {
-		return nil, errors.NewExternalAPIError("failed to connect to Redis", err)
+		return nil, infrastructure.NewExternalAPIError("failed to connect to Redis", err)
 	}
 
 	return &RedisCacheProviderAdapter{
@@ -51,16 +51,16 @@ func NewRedisCacheProviderAdapter(config *config.RedisConfig) (*RedisCacheProvid
 // Get retrieves a value from Redis cache
 func (r *RedisCacheProviderAdapter) Get(ctx context.Context, key string) ([]byte, error) {
 	if key == "" {
-		return nil, errors.NewValidationError("cache key cannot be empty")
+		return nil, infrastructure.NewValidationError("cache key cannot be empty")
 	}
 
 	val, err := r.client.Get(ctx, key).Result()
 	if err != nil {
 		if err == redis.Nil {
 			r.recordMiss()
-			return nil, errors.NewNotFoundError("cache miss")
+			return nil, ports.NewNotFoundError("cache miss")
 		}
-		return nil, errors.NewExternalAPIError("redis get operation failed", err)
+		return nil, infrastructure.NewExternalAPIError("redis get operation failed", err)
 	}
 
 	r.recordHit()
@@ -70,17 +70,17 @@ func (r *RedisCacheProviderAdapter) Get(ctx context.Context, key string) ([]byte
 // Set stores a value in Redis cache with TTL
 func (r *RedisCacheProviderAdapter) Set(ctx context.Context, key string, value []byte, ttl time.Duration) error {
 	if key == "" {
-		return errors.NewValidationError("cache key cannot be empty")
+		return infrastructure.NewValidationError("cache key cannot be empty")
 	}
 	if value == nil {
-		return errors.NewValidationError("cache value cannot be nil")
+		return infrastructure.NewValidationError("cache value cannot be nil")
 	}
 	if ttl <= 0 {
-		return errors.NewValidationError("cache TTL must be positive")
+		return infrastructure.NewValidationError("cache TTL must be positive")
 	}
 
 	if err := r.client.Set(ctx, key, value, ttl).Err(); err != nil {
-		return errors.NewExternalAPIError("redis set operation failed", err)
+		return infrastructure.NewExternalAPIError("redis set operation failed", err)
 	}
 
 	return nil
@@ -89,11 +89,11 @@ func (r *RedisCacheProviderAdapter) Set(ctx context.Context, key string, value [
 // Delete removes a value from Redis cache
 func (r *RedisCacheProviderAdapter) Delete(ctx context.Context, key string) error {
 	if key == "" {
-		return errors.NewValidationError("cache key cannot be empty")
+		return infrastructure.NewValidationError("cache key cannot be empty")
 	}
 
 	if err := r.client.Del(ctx, key).Err(); err != nil {
-		return errors.NewExternalAPIError("redis delete operation failed", err)
+		return infrastructure.NewExternalAPIError("redis delete operation failed", err)
 	}
 
 	return nil
@@ -102,12 +102,12 @@ func (r *RedisCacheProviderAdapter) Delete(ctx context.Context, key string) erro
 // Exists checks if a key exists in Redis cache
 func (r *RedisCacheProviderAdapter) Exists(ctx context.Context, key string) (bool, error) {
 	if key == "" {
-		return false, errors.NewValidationError("cache key cannot be empty")
+		return false, infrastructure.NewValidationError("cache key cannot be empty")
 	}
 
 	count, err := r.client.Exists(ctx, key).Result()
 	if err != nil {
-		return false, errors.NewExternalAPIError("redis exists operation failed", err)
+		return false, infrastructure.NewExternalAPIError("redis exists operation failed", err)
 	}
 
 	return count > 0, nil
@@ -116,7 +116,7 @@ func (r *RedisCacheProviderAdapter) Exists(ctx context.Context, key string) (boo
 // Clear removes all keys from the Redis database
 func (r *RedisCacheProviderAdapter) Clear(ctx context.Context) error {
 	if err := r.client.FlushDB(ctx).Err(); err != nil {
-		return errors.NewExternalAPIError("redis clear operation failed", err)
+		return infrastructure.NewExternalAPIError("redis clear operation failed", err)
 	}
 
 	return nil
@@ -175,7 +175,7 @@ func (r *RedisCacheProviderAdapter) recordMiss() {
 // Close closes the Redis client connection
 func (r *RedisCacheProviderAdapter) Close() error {
 	if err := r.client.Close(); err != nil {
-		return errors.NewExternalAPIError("failed to close Redis connection", err)
+		return infrastructure.NewExternalAPIError("failed to close Redis connection", err)
 	}
 	return nil
 }
@@ -183,7 +183,7 @@ func (r *RedisCacheProviderAdapter) Close() error {
 // Ping checks if Redis connection is alive
 func (r *RedisCacheProviderAdapter) Ping(ctx context.Context) error {
 	if err := r.client.Ping(ctx).Err(); err != nil {
-		return errors.NewExternalAPIError("Redis ping failed", err)
+		return infrastructure.NewExternalAPIError("Redis ping failed", err)
 	}
 	return nil
 }

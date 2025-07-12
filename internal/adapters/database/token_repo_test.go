@@ -9,8 +9,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
+	"weatherapi.app/internal/adapters/infrastructure"
 	"weatherapi.app/internal/ports"
-	"weatherapi.app/pkg/errors"
 )
 
 func setupTokenTestDB(t *testing.T) *gorm.DB {
@@ -70,10 +70,7 @@ func TestTokenRepository_FindByToken_NotFound(t *testing.T) {
 	found, err := repo.FindByToken(ctx, "nonexistent-token")
 	assert.Error(t, err)
 	assert.Nil(t, found)
-
-	var appErr *errors.AppError
-	assert.ErrorAs(t, err, &appErr)
-	assert.Equal(t, errors.NotFoundError, appErr.Type)
+	assert.True(t, ports.IsNotFoundError(err))
 }
 
 func TestTokenRepository_FindByToken_Expired(t *testing.T) {
@@ -94,10 +91,7 @@ func TestTokenRepository_FindByToken_Expired(t *testing.T) {
 	found, err := repo.FindByToken(ctx, "expired-token")
 	assert.Error(t, err)
 	assert.Nil(t, found)
-
-	var appErr *errors.AppError
-	assert.ErrorAs(t, err, &appErr)
-	assert.Equal(t, errors.NotFoundError, appErr.Type)
+	assert.True(t, ports.IsNotFoundError(err))
 }
 
 func TestTokenRepository_FindBySubscriptionIDAndType(t *testing.T) {
@@ -274,9 +268,9 @@ func TestTokenRepository_ValidationErrors(t *testing.T) {
 			err := tt.test()
 			assert.Error(t, err)
 
-			var appErr *errors.AppError
-			assert.ErrorAs(t, err, &appErr)
-			assert.Equal(t, errors.ValidationError, appErr.Type)
+			var infraErr *infrastructure.InfrastructureError
+			assert.ErrorAs(t, err, &infraErr)
+			assert.Equal(t, "DATABASE_ERROR", infraErr.Type)
 		})
 	}
 }

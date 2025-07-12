@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"weatherapi.app/internal/adapters/infrastructure"
 	"weatherapi.app/internal/ports"
-	"weatherapi.app/pkg/errors"
 )
 
 // WeatherProviderManagerAdapter implements Chain of Responsibility pattern for weather providers
@@ -98,12 +98,11 @@ func (m *WeatherProviderManagerAdapter) createProviderMap(config ProviderManager
 // GetWeather implements Chain of Responsibility - tries each provider until one succeeds
 func (m *WeatherProviderManagerAdapter) GetWeather(ctx context.Context, city string) (*ports.WeatherData, error) {
 	if len(m.providers) == 0 {
-		return nil, errors.NewExternalAPIError("no weather providers configured", nil)
+		return nil, infrastructure.NewExternalAPIError("no weather providers configured", nil)
 	}
 
 	var lastErr error
 
-	// Chain of Responsibility: try each provider in order
 	var notFoundErrors []error
 	for i, provider := range m.providers {
 		providerName := provider.GetProviderName()
@@ -126,8 +125,7 @@ func (m *WeatherProviderManagerAdapter) GetWeather(ctx context.Context, city str
 			return weather, nil
 		}
 
-		// If this is a NotFoundError, collect it separately
-		if errors.IsNotFoundError(err) {
+		if ports.IsNotFoundError(err) {
 			notFoundErrors = append(notFoundErrors, err)
 		}
 
@@ -140,7 +138,6 @@ func (m *WeatherProviderManagerAdapter) GetWeather(ctx context.Context, city str
 		}
 	}
 
-	// All providers failed
 	if m.logger != nil {
 		m.logger.Error("All weather providers failed",
 			ports.F("city", city),
@@ -148,9 +145,8 @@ func (m *WeatherProviderManagerAdapter) GetWeather(ctx context.Context, city str
 			ports.F("last_error", lastErr.Error()))
 	}
 
-	// If all providers returned NotFoundError, return NotFoundError
 	if len(notFoundErrors) == len(m.providers) {
-		return nil, errors.NewNotFoundError("city not found")
+		return nil, ports.NewNotFoundError("city not found")
 	}
 
 	return nil, fmt.Errorf("all weather providers failed (tried %d providers): %w", len(m.providers), lastErr)
