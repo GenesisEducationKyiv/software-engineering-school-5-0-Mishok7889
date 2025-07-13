@@ -22,19 +22,36 @@ type cachedItem struct {
 }
 
 type cacheStats struct {
-	hits   int64
-	misses int64
+	hits       int64
+	misses     int64
+	operations map[string]*operationStats
+}
+
+type operationStats struct {
+	count        int64
+	totalLatency time.Duration
+	avgLatency   time.Duration
+	maxLatency   time.Duration
+	minLatency   time.Duration
 }
 
 // NewMemoryCacheProviderAdapter creates a new in-memory cache adapter
 func NewMemoryCacheProviderAdapter() *MemoryCacheProviderAdapter {
 	return &MemoryCacheProviderAdapter{
 		data: make(map[string]cachedItem),
+		stats: cacheStats{
+			operations: make(map[string]*operationStats),
+		},
 	}
 }
 
 // Get retrieves weather data from cache
 func (c *MemoryCacheProviderAdapter) Get(ctx context.Context, key string) (*ports.WeatherData, error) {
+	start := time.Now()
+	defer func() {
+		c.RecordOperation("weather_get", time.Since(start))
+	}()
+
 	c.mutex.RLock()
 	item, exists := c.data[key]
 	c.mutex.RUnlock()
@@ -49,6 +66,11 @@ func (c *MemoryCacheProviderAdapter) Get(ctx context.Context, key string) (*port
 }
 
 func (c *MemoryCacheProviderAdapter) Set(ctx context.Context, key string, weather *ports.WeatherData, ttl time.Duration) error {
+	start := time.Now()
+	defer func() {
+		c.RecordOperation("weather_set", time.Since(start))
+	}()
+
 	if weather == nil {
 		return infrastructure.NewValidationError("weather data cannot be nil")
 	}
@@ -98,9 +120,48 @@ func (c *MemoryCacheProviderAdapter) RecordMiss() {
 	c.stats.misses++
 }
 
-// RecordOperation records a cache operation (placeholder for future metrics)
+// RecordOperation records a cache operation with duration metrics
 func (c *MemoryCacheProviderAdapter) RecordOperation(operation string, duration time.Duration) {
-	// Placeholder - can be extended with operation-specific metrics
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
+	stats, exists := c.stats.operations[operation]
+	if !exists {
+		stats = &operationStats{
+			minLatency: duration,
+			maxLatency: duration,
+		}
+		c.stats.operations[operation] = stats
+	}
+
+	stats.count++
+	stats.totalLatency += duration
+	stats.avgLatency = time.Duration(int64(stats.totalLatency) / stats.count)
+
+	if duration > stats.maxLatency {
+		stats.maxLatency = duration
+	}
+	if duration < stats.minLatency {
+		stats.minLatency = duration
+	}
+}
+
+// GetOperationMetrics returns operation-specific performance metrics
+func (c *MemoryCacheProviderAdapter) GetOperationMetrics() map[string]ports.OperationMetrics {
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+
+	result := make(map[string]ports.OperationMetrics)
+	for operation, stats := range c.stats.operations {
+		result[operation] = ports.OperationMetrics{
+			Count:        stats.count,
+			TotalLatency: stats.totalLatency,
+			AvgLatency:   stats.avgLatency,
+			MaxLatency:   stats.maxLatency,
+			MinLatency:   stats.minLatency,
+		}
+	}
+	return result
 }
 
 // WeatherMetricsAdapter implements WeatherMetrics port

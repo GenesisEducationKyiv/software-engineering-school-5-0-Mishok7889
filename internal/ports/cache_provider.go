@@ -20,6 +20,16 @@ type CacheMetrics interface {
 	RecordHit()
 	RecordMiss()
 	RecordOperation(operation string, duration time.Duration)
+	GetOperationMetrics() map[string]OperationMetrics
+}
+
+// OperationMetrics represents metrics for a specific cache operation
+type OperationMetrics struct {
+	Count        int64         `json:"count"`
+	TotalLatency time.Duration `json:"total_latency"`
+	AvgLatency   time.Duration `json:"avg_latency"`
+	MaxLatency   time.Duration `json:"max_latency"`
+	MinLatency   time.Duration `json:"min_latency"`
 }
 
 // CacheSerializer defines the contract for data serialization

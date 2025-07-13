@@ -82,7 +82,7 @@ func (p *OpenWeatherMapProviderAdapter) GetCurrentWeather(ctx context.Context, c
 		return nil, infrastructure.NewExternalAPIError("failed to decode OpenWeatherMap response", err)
 	}
 
-	description := "Clear"
+	description := "N/A"
 	if len(apiResp.Weather) > 0 {
 		description = apiResp.Weather[0].Description
 	}

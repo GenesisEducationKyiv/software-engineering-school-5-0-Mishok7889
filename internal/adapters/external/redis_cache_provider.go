@@ -15,10 +15,19 @@ import (
 type RedisCacheProviderAdapter struct {
 	client *redis.Client
 	stats  struct {
-		hits   int64
-		misses int64
-		mutex  sync.RWMutex
+		hits       int64
+		misses     int64
+		operations map[string]*redisOperationMetrics
+		mutex      sync.RWMutex
 	}
+}
+
+type redisOperationMetrics struct {
+	count        int64
+	totalLatency time.Duration
+	avgLatency   time.Duration
+	maxLatency   time.Duration
+	minLatency   time.Duration
 }
 
 // NewRedisCacheProviderAdapter creates a new Redis cache provider adapter
@@ -45,11 +54,24 @@ func NewRedisCacheProviderAdapter(config *config.RedisConfig) (*RedisCacheProvid
 
 	return &RedisCacheProviderAdapter{
 		client: client,
+		stats: struct {
+			hits       int64
+			misses     int64
+			operations map[string]*redisOperationMetrics
+			mutex      sync.RWMutex
+		}{
+			operations: make(map[string]*redisOperationMetrics),
+		},
 	}, nil
 }
 
 // Get retrieves a value from Redis cache
 func (r *RedisCacheProviderAdapter) Get(ctx context.Context, key string) ([]byte, error) {
+	start := time.Now()
+	defer func() {
+		r.RecordOperation("get", time.Since(start))
+	}()
+
 	if key == "" {
 		return nil, infrastructure.NewValidationError("cache key cannot be empty")
 	}
@@ -69,6 +91,11 @@ func (r *RedisCacheProviderAdapter) Get(ctx context.Context, key string) ([]byte
 
 // Set stores a value in Redis cache with TTL
 func (r *RedisCacheProviderAdapter) Set(ctx context.Context, key string, value []byte, ttl time.Duration) error {
+	start := time.Now()
+	defer func() {
+		r.RecordOperation("set", time.Since(start))
+	}()
+
 	if key == "" {
 		return infrastructure.NewValidationError("cache key cannot be empty")
 	}
@@ -88,6 +115,11 @@ func (r *RedisCacheProviderAdapter) Set(ctx context.Context, key string, value [
 
 // Delete removes a value from Redis cache
 func (r *RedisCacheProviderAdapter) Delete(ctx context.Context, key string) error {
+	start := time.Now()
+	defer func() {
+		r.RecordOperation("delete", time.Since(start))
+	}()
+
 	if key == "" {
 		return infrastructure.NewValidationError("cache key cannot be empty")
 	}
@@ -101,6 +133,11 @@ func (r *RedisCacheProviderAdapter) Delete(ctx context.Context, key string) erro
 
 // Exists checks if a key exists in Redis cache
 func (r *RedisCacheProviderAdapter) Exists(ctx context.Context, key string) (bool, error) {
+	start := time.Now()
+	defer func() {
+		r.RecordOperation("exists", time.Since(start))
+	}()
+
 	if key == "" {
 		return false, infrastructure.NewValidationError("cache key cannot be empty")
 	}
@@ -115,6 +152,11 @@ func (r *RedisCacheProviderAdapter) Exists(ctx context.Context, key string) (boo
 
 // Clear removes all keys from the Redis database
 func (r *RedisCacheProviderAdapter) Clear(ctx context.Context) error {
+	start := time.Now()
+	defer func() {
+		r.RecordOperation("clear", time.Since(start))
+	}()
+
 	if err := r.client.FlushDB(ctx).Err(); err != nil {
 		return infrastructure.NewExternalAPIError("redis clear operation failed", err)
 	}
@@ -152,10 +194,48 @@ func (r *RedisCacheProviderAdapter) RecordMiss() {
 	r.recordMiss()
 }
 
-// RecordOperation records a cache operation with duration
+// RecordOperation records a cache operation with duration metrics
 func (r *RedisCacheProviderAdapter) RecordOperation(operation string, duration time.Duration) {
-	// Placeholder for future metrics implementation
-	// Could be extended to track operation-specific metrics
+	r.stats.mutex.Lock()
+	defer r.stats.mutex.Unlock()
+
+	metrics, exists := r.stats.operations[operation]
+	if !exists {
+		metrics = &redisOperationMetrics{
+			minLatency: duration,
+			maxLatency: duration,
+		}
+		r.stats.operations[operation] = metrics
+	}
+
+	metrics.count++
+	metrics.totalLatency += duration
+	metrics.avgLatency = time.Duration(int64(metrics.totalLatency) / metrics.count)
+
+	if duration > metrics.maxLatency {
+		metrics.maxLatency = duration
+	}
+	if duration < metrics.minLatency {
+		metrics.minLatency = duration
+	}
+}
+
+// GetOperationMetrics returns operation-specific performance metrics
+func (r *RedisCacheProviderAdapter) GetOperationMetrics() map[string]ports.OperationMetrics {
+	r.stats.mutex.RLock()
+	defer r.stats.mutex.RUnlock()
+
+	result := make(map[string]ports.OperationMetrics)
+	for operation, metrics := range r.stats.operations {
+		result[operation] = ports.OperationMetrics{
+			Count:        metrics.count,
+			TotalLatency: metrics.totalLatency,
+			AvgLatency:   metrics.avgLatency,
+			MaxLatency:   metrics.maxLatency,
+			MinLatency:   metrics.minLatency,
+		}
+	}
+	return result
 }
 
 // recordHit increments the cache hit counter (internal method)

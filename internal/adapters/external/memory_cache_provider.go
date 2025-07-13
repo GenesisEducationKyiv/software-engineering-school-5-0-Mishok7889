@@ -13,10 +13,19 @@ type MemoryCacheProvider struct {
 	data  map[string]memoryCacheItem
 	mutex sync.RWMutex
 	stats struct {
-		hits   int64
-		misses int64
-		mutex  sync.RWMutex
+		hits       int64
+		misses     int64
+		operations map[string]*operationMetrics
+		mutex      sync.RWMutex
 	}
+}
+
+type operationMetrics struct {
+	count        int64
+	totalLatency time.Duration
+	avgLatency   time.Duration
+	maxLatency   time.Duration
+	minLatency   time.Duration
 }
 
 type memoryCacheItem struct {
@@ -27,10 +36,23 @@ type memoryCacheItem struct {
 func NewMemoryCacheProvider() *MemoryCacheProvider {
 	return &MemoryCacheProvider{
 		data: make(map[string]memoryCacheItem),
+		stats: struct {
+			hits       int64
+			misses     int64
+			operations map[string]*operationMetrics
+			mutex      sync.RWMutex
+		}{
+			operations: make(map[string]*operationMetrics),
+		},
 	}
 }
 
 func (c *MemoryCacheProvider) Get(ctx context.Context, key string) ([]byte, error) {
+	start := time.Now()
+	defer func() {
+		c.RecordOperation("get", time.Since(start))
+	}()
+
 	if key == "" {
 		return nil, infrastructure.NewValidationError("cache key cannot be empty")
 	}
@@ -49,6 +71,11 @@ func (c *MemoryCacheProvider) Get(ctx context.Context, key string) ([]byte, erro
 }
 
 func (c *MemoryCacheProvider) Set(ctx context.Context, key string, value []byte, ttl time.Duration) error {
+	start := time.Now()
+	defer func() {
+		c.RecordOperation("set", time.Since(start))
+	}()
+
 	if key == "" {
 		return infrastructure.NewValidationError("cache key cannot be empty")
 	}
@@ -71,6 +98,11 @@ func (c *MemoryCacheProvider) Set(ctx context.Context, key string, value []byte,
 }
 
 func (c *MemoryCacheProvider) Delete(ctx context.Context, key string) error {
+	start := time.Now()
+	defer func() {
+		c.RecordOperation("delete", time.Since(start))
+	}()
+
 	if key == "" {
 		return infrastructure.NewValidationError("cache key cannot be empty")
 	}
@@ -83,6 +115,11 @@ func (c *MemoryCacheProvider) Delete(ctx context.Context, key string) error {
 }
 
 func (c *MemoryCacheProvider) Exists(ctx context.Context, key string) (bool, error) {
+	start := time.Now()
+	defer func() {
+		c.RecordOperation("exists", time.Since(start))
+	}()
+
 	if key == "" {
 		return false, infrastructure.NewValidationError("cache key cannot be empty")
 	}
@@ -99,6 +136,11 @@ func (c *MemoryCacheProvider) Exists(ctx context.Context, key string) (bool, err
 }
 
 func (c *MemoryCacheProvider) Clear(ctx context.Context) error {
+	start := time.Now()
+	defer func() {
+		c.RecordOperation("clear", time.Since(start))
+	}()
+
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
@@ -134,7 +176,46 @@ func (c *MemoryCacheProvider) RecordMiss() {
 }
 
 func (c *MemoryCacheProvider) RecordOperation(operation string, duration time.Duration) {
-	// Placeholder for future metrics implementation
+	c.stats.mutex.Lock()
+	defer c.stats.mutex.Unlock()
+
+	metrics, exists := c.stats.operations[operation]
+	if !exists {
+		metrics = &operationMetrics{
+			minLatency: duration,
+			maxLatency: duration,
+		}
+		c.stats.operations[operation] = metrics
+	}
+
+	metrics.count++
+	metrics.totalLatency += duration
+	metrics.avgLatency = time.Duration(int64(metrics.totalLatency) / metrics.count)
+
+	if duration > metrics.maxLatency {
+		metrics.maxLatency = duration
+	}
+	if duration < metrics.minLatency {
+		metrics.minLatency = duration
+	}
+}
+
+// GetOperationMetrics returns operation-specific performance metrics
+func (c *MemoryCacheProvider) GetOperationMetrics() map[string]ports.OperationMetrics {
+	c.stats.mutex.RLock()
+	defer c.stats.mutex.RUnlock()
+
+	result := make(map[string]ports.OperationMetrics)
+	for operation, metrics := range c.stats.operations {
+		result[operation] = ports.OperationMetrics{
+			Count:        metrics.count,
+			TotalLatency: metrics.totalLatency,
+			AvgLatency:   metrics.avgLatency,
+			MaxLatency:   metrics.maxLatency,
+			MinLatency:   metrics.minLatency,
+		}
+	}
+	return result
 }
 
 // recordHit increments the cache hit counter (internal method)
