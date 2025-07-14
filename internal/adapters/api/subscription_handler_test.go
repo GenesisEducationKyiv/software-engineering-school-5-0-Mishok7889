@@ -25,6 +25,7 @@ type SubscriptionTestDependencies struct {
 	Router           *gin.Engine
 	SubscriptionRepo *mocks.SubscriptionRepository
 	TokenRepo        *mocks.TokenRepository
+	TokenGenerator   *mocks.TokenGenerator
 	EmailProvider    *mocks.EmailProvider
 }
 
@@ -33,6 +34,7 @@ func setupSubscriptionTestRouter(t *testing.T) SubscriptionTestDependencies {
 
 	mockSubscriptionRepo := mocks.NewSubscriptionRepository(t)
 	mockTokenRepo := mocks.NewTokenRepository(t)
+	mockTokenGenerator := mocks.NewTokenGenerator(t)
 	mockEmailProvider := mocks.NewEmailProvider(t)
 	mockConfig := mocks.NewConfigProvider(t)
 	mockLogger := mocks.NewLogger(t)
@@ -58,6 +60,7 @@ func setupSubscriptionTestRouter(t *testing.T) SubscriptionTestDependencies {
 	subscriptionUseCase, err := subscription.NewUseCase(subscription.UseCaseDependencies{
 		SubscriptionRepo: mockSubscriptionRepo,
 		TokenRepo:        mockTokenRepo,
+		TokenGenerator:   mockTokenGenerator,
 		EmailProvider:    mockEmailProvider,
 		Config:           mockConfig,
 		Logger:           mockLogger,
@@ -79,6 +82,7 @@ func setupSubscriptionTestRouter(t *testing.T) SubscriptionTestDependencies {
 		Router:           router,
 		SubscriptionRepo: mockSubscriptionRepo,
 		TokenRepo:        mockTokenRepo,
+		TokenGenerator:   mockTokenGenerator,
 		EmailProvider:    mockEmailProvider,
 	}
 }
@@ -101,10 +105,17 @@ func TestSubscriptionHandler_Subscribe_Success_JSON(t *testing.T) {
 		})
 
 	deps.TokenRepo.EXPECT().
-		CreateConfirmationToken(mock.Anything, uint(1), mock.Anything).
-		Return(&ports.TokenData{
-			Value: "test-token",
-		}, nil)
+		Save(mock.Anything, mock.MatchedBy(func(token *ports.TokenData) bool {
+			return token.SubscriptionID == uint(1) && token.Type == "confirmation"
+		})).
+		Return(nil).
+		Run(func(ctx context.Context, token *ports.TokenData) {
+			token.Value = "test-token" // Simulate token generation
+		})
+
+	deps.TokenGenerator.EXPECT().
+		GenerateToken().
+		Return("test-token")
 
 	deps.EmailProvider.EXPECT().
 		SendEmail(mock.Anything, mock.Anything).
@@ -149,10 +160,17 @@ func TestSubscriptionHandler_Subscribe_Success_Form(t *testing.T) {
 		})
 
 	deps.TokenRepo.EXPECT().
-		CreateConfirmationToken(mock.Anything, uint(1), mock.Anything).
-		Return(&ports.TokenData{
-			Value: "test-token",
-		}, nil)
+		Save(mock.Anything, mock.MatchedBy(func(token *ports.TokenData) bool {
+			return token.SubscriptionID == uint(1) && token.Type == "confirmation"
+		})).
+		Return(nil).
+		Run(func(ctx context.Context, token *ports.TokenData) {
+			token.Value = "test-token" // Simulate token generation
+		})
+
+	deps.TokenGenerator.EXPECT().
+		GenerateToken().
+		Return("test-token")
 
 	deps.EmailProvider.EXPECT().
 		SendEmail(mock.Anything, mock.Anything).
@@ -329,10 +347,17 @@ func TestSubscriptionHandler_ConfirmSubscription_Success(t *testing.T) {
 
 	// Mock welcome email
 	deps.TokenRepo.EXPECT().
-		CreateUnsubscribeToken(mock.Anything, uint(1), mock.Anything).
-		Return(&ports.TokenData{
-			Value: "unsubscribe-token",
-		}, nil)
+		Save(mock.Anything, mock.MatchedBy(func(token *ports.TokenData) bool {
+			return token.SubscriptionID == uint(1) && token.Type == "unsubscribe"
+		})).
+		Return(nil).
+		Run(func(ctx context.Context, token *ports.TokenData) {
+			token.Value = "unsubscribe-token" // Simulate token generation
+		})
+
+	deps.TokenGenerator.EXPECT().
+		GenerateToken().
+		Return("unsubscribe-token")
 
 	deps.EmailProvider.EXPECT().
 		SendEmail(mock.Anything, mock.Anything).

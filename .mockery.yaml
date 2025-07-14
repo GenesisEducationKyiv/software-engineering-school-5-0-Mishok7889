@@ -27,3 +27,4 @@ packages:
       CacheMetrics:
       CacheSerializer:
       MetricsCollector:
+      TokenGenerator:

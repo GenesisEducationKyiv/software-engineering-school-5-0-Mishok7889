@@ -39,6 +39,7 @@ func TestUseCase_Subscribe_Success(t *testing.T) {
 	// Create mocks using mockery
 	mockSubRepo := mocks.NewSubscriptionRepository(t)
 	mockTokenRepo := mocks.NewTokenRepository(t)
+	mockTokenGenerator := mocks.NewTokenGenerator(t)
 	mockEmailProvider := mocks.NewEmailProvider(t)
 	mockConfig := mocks.NewConfigProvider(t)
 	mockLogger := setupLoggerMock(t)
@@ -59,15 +60,21 @@ func TestUseCase_Subscribe_Success(t *testing.T) {
 			sub.City == "London" &&
 			sub.Frequency == FrequencyDaily.String() &&
 			!sub.Confirmed
-	})).Return(nil)
+	})).Return(nil).Run(func(ctx context.Context, sub *ports.SubscriptionData) {
+		// Simulate database setting the ID
+		sub.ID = 1
+	})
 
 	// Create confirmation token
-	expectedToken := &ports.TokenData{
-		ID:    1,
-		Value: "test-confirmation-token",
-		Type:  "confirmation",
-	}
-	mockTokenRepo.EXPECT().CreateConfirmationToken(mock.Anything, mock.Anything, mock.Anything).Return(expectedToken, nil)
+	mockTokenGenerator.EXPECT().
+		GenerateToken().
+		Return("test-confirmation-token")
+
+	mockTokenRepo.EXPECT().
+		Save(mock.Anything, mock.MatchedBy(func(token *ports.TokenData) bool {
+			return token.Type == TokenTypeConfirmation.String() && token.Value == "test-confirmation-token"
+		})).
+		Return(nil)
 
 	// Send confirmation email
 	mockEmailProvider.EXPECT().SendEmail(mock.Anything, mock.MatchedBy(func(params ports.EmailParams) bool {
@@ -83,6 +90,7 @@ func TestUseCase_Subscribe_Success(t *testing.T) {
 	uc, err := NewUseCase(UseCaseDependencies{
 		SubscriptionRepo: mockSubRepo,
 		TokenRepo:        mockTokenRepo,
+		TokenGenerator:   mockTokenGenerator,
 		EmailProvider:    mockEmailProvider,
 		Config:           mockConfig,
 		Logger:           mockLogger,
@@ -152,6 +160,7 @@ func TestUseCase_Subscribe_ValidationError(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			mockSubRepo := mocks.NewSubscriptionRepository(t)
 			mockTokenRepo := mocks.NewTokenRepository(t)
+			mockTokenGenerator := mocks.NewTokenGenerator(t)
 			mockEmailProvider := mocks.NewEmailProvider(t)
 			mockConfig := mocks.NewConfigProvider(t)
 
@@ -162,6 +171,7 @@ func TestUseCase_Subscribe_ValidationError(t *testing.T) {
 			uc, err := NewUseCase(UseCaseDependencies{
 				SubscriptionRepo: mockSubRepo,
 				TokenRepo:        mockTokenRepo,
+				TokenGenerator:   mockTokenGenerator,
 				EmailProvider:    mockEmailProvider,
 				Config:           mockConfig,
 				Logger:           mockLogger,
@@ -191,6 +201,7 @@ func TestUseCase_Subscribe_ValidationError(t *testing.T) {
 func TestUseCase_Subscribe_AlreadyExists(t *testing.T) {
 	mockSubRepo := mocks.NewSubscriptionRepository(t)
 	mockTokenRepo := mocks.NewTokenRepository(t)
+	mockTokenGenerator := mocks.NewTokenGenerator(t)
 	mockEmailProvider := mocks.NewEmailProvider(t)
 	mockConfig := mocks.NewConfigProvider(t)
 	mockLogger := setupLoggerMock(t)
@@ -214,6 +225,7 @@ func TestUseCase_Subscribe_AlreadyExists(t *testing.T) {
 	uc, err := NewUseCase(UseCaseDependencies{
 		SubscriptionRepo: mockSubRepo,
 		TokenRepo:        mockTokenRepo,
+		TokenGenerator:   mockTokenGenerator,
 		EmailProvider:    mockEmailProvider,
 		Config:           mockConfig,
 		Logger:           mockLogger,
@@ -242,6 +254,7 @@ func TestUseCase_Subscribe_AlreadyExists(t *testing.T) {
 func TestUseCase_ConfirmSubscription_Success(t *testing.T) {
 	mockSubRepo := mocks.NewSubscriptionRepository(t)
 	mockTokenRepo := mocks.NewTokenRepository(t)
+	mockTokenGenerator := mocks.NewTokenGenerator(t)
 	mockEmailProvider := mocks.NewEmailProvider(t)
 	mockConfig := mocks.NewConfigProvider(t)
 	mockLogger := setupLoggerMock(t)
@@ -253,7 +266,7 @@ func TestUseCase_ConfirmSubscription_Success(t *testing.T) {
 		ID:             1,
 		Value:          "valid-confirmation-token",
 		SubscriptionID: 1,
-		Type:           "confirmation",
+		Type:           TokenTypeConfirmation.String(),
 		ExpiresAt:      time.Now().Add(24 * time.Hour), // Set expiration in the future
 	}
 	mockTokenRepo.EXPECT().FindByToken(mock.Anything, "valid-confirmation-token").Return(token, nil)
@@ -274,12 +287,15 @@ func TestUseCase_ConfirmSubscription_Success(t *testing.T) {
 	})).Return(nil)
 
 	// Create unsubscribe token
-	unsubToken := &ports.TokenData{
-		ID:    2,
-		Value: "unsubscribe-token",
-		Type:  "unsubscribe",
-	}
-	mockTokenRepo.EXPECT().CreateUnsubscribeToken(mock.Anything, uint(1), mock.Anything).Return(unsubToken, nil)
+	mockTokenGenerator.EXPECT().
+		GenerateToken().
+		Return("unsubscribe-token")
+
+	mockTokenRepo.EXPECT().
+		Save(mock.Anything, mock.MatchedBy(func(token *ports.TokenData) bool {
+			return token.SubscriptionID == uint(1) && token.Type == TokenTypeUnsubscribe.String() && token.Value == "unsubscribe-token"
+		})).
+		Return(nil)
 
 	// Send welcome email
 	mockEmailProvider.EXPECT().SendEmail(mock.Anything, mock.MatchedBy(func(params ports.EmailParams) bool {
@@ -297,6 +313,7 @@ func TestUseCase_ConfirmSubscription_Success(t *testing.T) {
 	uc, err := NewUseCase(UseCaseDependencies{
 		SubscriptionRepo: mockSubRepo,
 		TokenRepo:        mockTokenRepo,
+		TokenGenerator:   mockTokenGenerator,
 		EmailProvider:    mockEmailProvider,
 		Config:           mockConfig,
 		Logger:           mockLogger,
@@ -327,6 +344,7 @@ func TestUseCase_Constructor_Validation(t *testing.T) {
 			deps: UseCaseDependencies{
 				SubscriptionRepo: nil,
 				TokenRepo:        mocks.NewTokenRepository(t),
+				TokenGenerator:   mocks.NewTokenGenerator(t),
 				EmailProvider:    mocks.NewEmailProvider(t),
 				Config:           mocks.NewConfigProvider(t),
 				Logger:           mocks.NewLogger(t),
@@ -335,10 +353,24 @@ func TestUseCase_Constructor_Validation(t *testing.T) {
 			errMsg:  "subscription repository is required",
 		},
 		{
+			name: "missing_token_generator",
+			deps: UseCaseDependencies{
+				SubscriptionRepo: mocks.NewSubscriptionRepository(t),
+				TokenRepo:        mocks.NewTokenRepository(t),
+				TokenGenerator:   nil,
+				EmailProvider:    mocks.NewEmailProvider(t),
+				Config:           mocks.NewConfigProvider(t),
+				Logger:           mocks.NewLogger(t),
+			},
+			wantErr: true,
+			errMsg:  "token generator is required",
+		},
+		{
 			name: "valid_dependencies",
 			deps: UseCaseDependencies{
 				SubscriptionRepo: mocks.NewSubscriptionRepository(t),
 				TokenRepo:        mocks.NewTokenRepository(t),
+				TokenGenerator:   mocks.NewTokenGenerator(t),
 				EmailProvider:    mocks.NewEmailProvider(t),
 				Config:           mocks.NewConfigProvider(t),
 				Logger:           mocks.NewLogger(t),

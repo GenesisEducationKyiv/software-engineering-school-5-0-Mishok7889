@@ -55,6 +55,4 @@ type TokenRepository interface {
 	FindBySubscriptionIDAndType(ctx context.Context, subscriptionID uint, tokenType string) (*TokenData, error)
 	Delete(ctx context.Context, token *TokenData) error
 	DeleteExpiredTokens(ctx context.Context) (int64, error)
-	CreateConfirmationToken(ctx context.Context, subscriptionID uint, expiresIn time.Duration) (*TokenData, error)
-	CreateUnsubscribeToken(ctx context.Context, subscriptionID uint, expiresIn time.Duration) (*TokenData, error)
 }

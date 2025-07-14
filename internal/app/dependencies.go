@@ -83,6 +83,7 @@ func (c *DependencyContainer) initializePorts(appConfig *config.Config) error {
 	// Database repositories
 	subscriptionRepo := database.NewSubscriptionRepositoryAdapter(c.db)
 	tokenRepo := database.NewTokenRepositoryAdapter(c.db)
+	tokenGenerator := infrastructure.NewUUIDTokenGenerator()
 
 	// Initialize logger based on configuration
 	var logger ports.Logger = &infrastructure.SlogLoggerAdapter{}
@@ -168,6 +169,7 @@ func (c *DependencyContainer) initializePorts(appConfig *config.Config) error {
 			Logger:         logger,
 			Database:       c.db,
 			TokenRepo:      tokenRepo,
+			TokenGenerator: tokenGenerator,
 			CacheMetrics:   genericCacheProvider.(ports.CacheMetrics),
 		},
 	}

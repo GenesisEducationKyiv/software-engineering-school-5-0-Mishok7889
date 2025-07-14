@@ -34,5 +34,6 @@ type InfrastructurePorts struct {
 	Logger         Logger
 	Database       interface{}
 	TokenRepo      TokenRepository
+	TokenGenerator TokenGenerator
 	CacheMetrics   CacheMetrics
 }

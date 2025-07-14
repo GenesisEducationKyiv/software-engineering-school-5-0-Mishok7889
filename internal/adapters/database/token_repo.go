@@ -2,10 +2,8 @@ package database
 
 import (
 	"context"
-	"fmt"
 	"time"
 
-	"github.com/google/uuid"
 	"gorm.io/gorm"
 	"weatherapi.app/internal/adapters/infrastructure"
 	"weatherapi.app/internal/ports"
@@ -33,7 +31,9 @@ type TokenRepositoryAdapter struct {
 
 // NewTokenRepositoryAdapter creates a new token repository adapter
 func NewTokenRepositoryAdapter(db *gorm.DB) ports.TokenRepository {
-	return &TokenRepositoryAdapter{db: db}
+	return &TokenRepositoryAdapter{
+		db: db,
+	}
 }
 
 // Save persists a token to the database
@@ -129,48 +129,6 @@ func (r *TokenRepositoryAdapter) DeleteExpiredTokens(ctx context.Context) (int64
 	}
 
 	return result.RowsAffected, nil
-}
-
-// CreateConfirmationToken creates a new confirmation token
-func (r *TokenRepositoryAdapter) CreateConfirmationToken(ctx context.Context, subscriptionID uint, expiresIn time.Duration) (*ports.TokenData, error) {
-	if subscriptionID == 0 {
-		return nil, infrastructure.NewDatabaseError("subscription ID cannot be zero", nil)
-	}
-
-	token := &ports.TokenData{
-		Value:          uuid.New().String(),
-		SubscriptionID: subscriptionID,
-		Type:           "confirmation",
-		ExpiresAt:      time.Now().Add(expiresIn),
-		CreatedAt:      time.Now(),
-	}
-
-	if err := r.Save(ctx, token); err != nil {
-		return nil, fmt.Errorf("save confirmation token: %w", err)
-	}
-
-	return token, nil
-}
-
-// CreateUnsubscribeToken creates a new unsubscribe token
-func (r *TokenRepositoryAdapter) CreateUnsubscribeToken(ctx context.Context, subscriptionID uint, expiresIn time.Duration) (*ports.TokenData, error) {
-	if subscriptionID == 0 {
-		return nil, infrastructure.NewDatabaseError("subscription ID cannot be zero", nil)
-	}
-
-	token := &ports.TokenData{
-		Value:          uuid.New().String(),
-		SubscriptionID: subscriptionID,
-		Type:           "unsubscribe",
-		ExpiresAt:      time.Now().Add(expiresIn),
-		CreatedAt:      time.Now(),
-	}
-
-	if err := r.Save(ctx, token); err != nil {
-		return nil, fmt.Errorf("save unsubscribe token: %w", err)
-	}
-
-	return token, nil
 }
 
 // dataToModel converts port data to database model

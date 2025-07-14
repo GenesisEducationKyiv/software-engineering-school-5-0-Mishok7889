@@ -13,6 +13,7 @@ import (
 type UseCase struct {
 	subscriptionRepo ports.SubscriptionRepository
 	tokenRepo        ports.TokenRepository
+	tokenGenerator   ports.TokenGenerator
 	emailProvider    ports.EmailProvider
 	config           ports.ConfigProvider
 	logger           ports.Logger
@@ -21,6 +22,7 @@ type UseCase struct {
 type UseCaseDependencies struct {
 	SubscriptionRepo ports.SubscriptionRepository
 	TokenRepo        ports.TokenRepository
+	TokenGenerator   ports.TokenGenerator
 	EmailProvider    ports.EmailProvider
 	Config           ports.ConfigProvider
 	Logger           ports.Logger
@@ -47,6 +49,9 @@ func NewUseCase(deps UseCaseDependencies) (*UseCase, error) {
 	if deps.TokenRepo == nil {
 		return nil, shared.NewValidationError("token repository is required")
 	}
+	if deps.TokenGenerator == nil {
+		return nil, shared.NewValidationError("token generator is required")
+	}
 	if deps.EmailProvider == nil {
 		return nil, shared.NewValidationError("email provider is required")
 	}
@@ -60,10 +65,17 @@ func NewUseCase(deps UseCaseDependencies) (*UseCase, error) {
 	return &UseCase{
 		subscriptionRepo: deps.SubscriptionRepo,
 		tokenRepo:        deps.TokenRepo,
+		tokenGenerator:   deps.TokenGenerator,
 		emailProvider:    deps.EmailProvider,
 		config:           deps.Config,
 		logger:           deps.Logger,
 	}, nil
+}
+
+type CreateTokenParams struct {
+	SubscriptionID uint
+	TokenType      string
+	ExpiresIn      time.Duration
 }
 
 func (uc *UseCase) validateSubscribeParams(params SubscribeParams) error {
@@ -86,6 +98,26 @@ func (uc *UseCase) validateSubscribeParams(params SubscribeParams) error {
 	}
 
 	return nil
+}
+
+func (uc *UseCase) createToken(ctx context.Context, params CreateTokenParams) (*ports.TokenData, error) {
+	if params.SubscriptionID == 0 {
+		return nil, shared.NewValidationError("subscription ID cannot be zero")
+	}
+
+	token := &ports.TokenData{
+		Value:          uc.tokenGenerator.GenerateToken(),
+		SubscriptionID: params.SubscriptionID,
+		Type:           params.TokenType,
+		ExpiresAt:      time.Now().Add(params.ExpiresIn),
+		CreatedAt:      time.Now(),
+	}
+
+	if err := uc.tokenRepo.Save(ctx, token); err != nil {
+		return nil, fmt.Errorf("save %s token: %w", params.TokenType, err)
+	}
+
+	return token, nil
 }
 
 func (uc *UseCase) Subscribe(ctx context.Context, params SubscribeParams) error {
@@ -188,7 +220,7 @@ func (uc *UseCase) ConfirmSubscription(ctx context.Context, params ConfirmParams
 		return shared.NewValidationError("invalid or expired confirmation token")
 	}
 
-	if tokenData.Type != "confirmation" {
+	if tokenData.Type != TokenTypeConfirmation.String() {
 		return shared.NewValidationError("invalid token type")
 	}
 
@@ -240,7 +272,7 @@ func (uc *UseCase) Unsubscribe(ctx context.Context, params UnsubscribeParams) er
 		return shared.NewValidationError("invalid unsubscribe token")
 	}
 
-	if tokenData.Type != "unsubscribe" {
+	if tokenData.Type != TokenTypeUnsubscribe.String() {
 		return shared.NewValidationError("invalid token type")
 	}
 
@@ -300,7 +332,11 @@ func (uc *UseCase) sendConfirmationEmail(ctx context.Context, subscription *Subs
 	uc.logger.Debug("Creating confirmation token",
 		ports.F("subscriptionID", subscription.ID))
 
-	confirmToken, err := uc.tokenRepo.CreateConfirmationToken(ctx, subscription.ID, 24*time.Hour)
+	confirmToken, err := uc.createToken(ctx, CreateTokenParams{
+		SubscriptionID: subscription.ID,
+		TokenType:      TokenTypeConfirmation.String(),
+		ExpiresIn:      24 * time.Hour,
+	})
 	if err != nil {
 		return fmt.Errorf("create confirmation token: %w", err)
 	}
@@ -320,7 +356,11 @@ func (uc *UseCase) sendConfirmationEmail(ctx context.Context, subscription *Subs
 }
 
 func (uc *UseCase) sendWelcomeEmail(ctx context.Context, subscription *Subscription) error {
-	unsubscribeToken, err := uc.tokenRepo.CreateUnsubscribeToken(ctx, subscription.ID, 365*24*time.Hour)
+	unsubscribeToken, err := uc.createToken(ctx, CreateTokenParams{
+		SubscriptionID: subscription.ID,
+		TokenType:      TokenTypeUnsubscribe.String(),
+		ExpiresIn:      365 * 24 * time.Hour,
+	})
 	if err != nil {
 		uc.logger.Warn("Failed to create unsubscribe token", ports.F("error", err))
 		return nil

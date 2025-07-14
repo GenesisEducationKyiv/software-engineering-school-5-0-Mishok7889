@@ -108,6 +108,7 @@ func (a *Application) initializeUseCases() error {
 	subscriptionUseCase, err := subscription.NewUseCase(subscription.UseCaseDependencies{
 		SubscriptionRepo: a.ports.Subscription.Repository,
 		TokenRepo:        a.ports.Infrastructure.TokenRepo,
+		TokenGenerator:   a.ports.Infrastructure.TokenGenerator,
 		EmailProvider:    a.ports.Notification.EmailProvider,
 		Config:           a.ports.Infrastructure.ConfigProvider,
 		Logger:           a.ports.Infrastructure.Logger,
