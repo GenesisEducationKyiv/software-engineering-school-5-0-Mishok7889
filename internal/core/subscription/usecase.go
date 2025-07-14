@@ -174,10 +174,6 @@ func (uc *UseCase) Subscribe(ctx context.Context, params SubscribeParams) error 
 }
 
 func (uc *UseCase) ConfirmSubscription(ctx context.Context, params ConfirmParams) error {
-	if params.Token == "" {
-		return shared.NewValidationError("token is required")
-	}
-
 	uc.logger.Debug("Confirming subscription", ports.F("token", params.Token))
 
 	tokenData, err := uc.tokenRepo.FindByToken(ctx, params.Token)
@@ -230,10 +226,6 @@ func (uc *UseCase) ConfirmSubscription(ctx context.Context, params ConfirmParams
 }
 
 func (uc *UseCase) Unsubscribe(ctx context.Context, params UnsubscribeParams) error {
-	if params.Token == "" {
-		return shared.NewValidationError("token is required")
-	}
-
 	uc.logger.Debug("Unsubscribing", ports.F("token", params.Token))
 
 	tokenData, err := uc.tokenRepo.FindByToken(ctx, params.Token)

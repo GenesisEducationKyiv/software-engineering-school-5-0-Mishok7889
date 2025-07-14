@@ -8,6 +8,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"weatherapi.app/internal/adapters/middleware"
 	"weatherapi.app/internal/core/subscription"
 	"weatherapi.app/internal/core/weather"
 	"weatherapi.app/internal/ports"
@@ -99,14 +100,16 @@ func (opts *ServerOptions) Validate() error {
 
 // setupRoutes configures all HTTP routes
 func (s *HTTPServerAdapter) setupRoutes() {
+	validationMiddleware := middleware.NewValidationMiddleware()
+
 	api := s.router.Group("/api")
 	{
 		api.GET("/health", s.getHealth)
 		api.GET("/debug", s.getDebug)
-		api.GET("/weather", s.getWeather)
+		api.GET("/weather", validationMiddleware.ValidateCityQuery(), s.getWeather)
 		api.POST("/subscribe", s.subscribe)
-		api.GET("/confirm/:token", s.confirmSubscription)
-		api.GET("/unsubscribe/:token", s.unsubscribe)
+		api.GET("/confirm/:token", validationMiddleware.ValidateTokenParam(), s.confirmSubscription)
+		api.GET("/unsubscribe/:token", validationMiddleware.ValidateTokenParam(), s.unsubscribe)
 		api.GET("/metrics", s.getMetrics)
 	}
 

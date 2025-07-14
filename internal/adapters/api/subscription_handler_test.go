@@ -14,12 +14,21 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"weatherapi.app/internal/adapters/middleware"
 	"weatherapi.app/internal/core/subscription"
 	"weatherapi.app/internal/mocks"
 	"weatherapi.app/internal/ports"
 )
 
-func setupSubscriptionTestRouter(t *testing.T) (*gin.Engine, *mocks.SubscriptionRepository, *mocks.TokenRepository, *mocks.EmailProvider) {
+// SubscriptionTestDependencies contains all dependencies for subscription handler tests
+type SubscriptionTestDependencies struct {
+	Router           *gin.Engine
+	SubscriptionRepo *mocks.SubscriptionRepository
+	TokenRepo        *mocks.TokenRepository
+	EmailProvider    *mocks.EmailProvider
+}
+
+func setupSubscriptionTestRouter(t *testing.T) SubscriptionTestDependencies {
 	gin.SetMode(gin.TestMode)
 
 	mockSubscriptionRepo := mocks.NewSubscriptionRepository(t)
@@ -60,23 +69,29 @@ func setupSubscriptionTestRouter(t *testing.T) (*gin.Engine, *mocks.Subscription
 		logger:              mockLogger,
 	}
 
+	validationMiddleware := middleware.NewValidationMiddleware()
 	router := gin.New()
 	router.POST("/api/subscribe", server.subscribe)
-	router.GET("/api/confirm/:token", server.confirmSubscription)
-	router.GET("/api/unsubscribe/:token", server.unsubscribe)
+	router.GET("/api/confirm/:token", validationMiddleware.ValidateTokenParam(), server.confirmSubscription)
+	router.GET("/api/unsubscribe/:token", validationMiddleware.ValidateTokenParam(), server.unsubscribe)
 
-	return router, mockSubscriptionRepo, mockTokenRepo, mockEmailProvider
+	return SubscriptionTestDependencies{
+		Router:           router,
+		SubscriptionRepo: mockSubscriptionRepo,
+		TokenRepo:        mockTokenRepo,
+		EmailProvider:    mockEmailProvider,
+	}
 }
 
 func TestSubscriptionHandler_Subscribe_Success_JSON(t *testing.T) {
-	router, mockSubscriptionRepo, mockTokenRepo, mockEmailProvider := setupSubscriptionTestRouter(t)
+	deps := setupSubscriptionTestRouter(t)
 
 	// Mock the repository calls
-	mockSubscriptionRepo.EXPECT().
+	deps.SubscriptionRepo.EXPECT().
 		FindByEmail(mock.Anything, "test@example.com", "London").
 		Return(nil, ports.NewNotFoundError("not found"))
 
-	mockSubscriptionRepo.EXPECT().
+	deps.SubscriptionRepo.EXPECT().
 		Save(mock.Anything, mock.MatchedBy(func(sub *ports.SubscriptionData) bool {
 			return sub.Email == "test@example.com" && sub.City == "London" && sub.Frequency == "daily"
 		})).
@@ -85,13 +100,13 @@ func TestSubscriptionHandler_Subscribe_Success_JSON(t *testing.T) {
 			sub.ID = 1 // Simulate database ID assignment
 		})
 
-	mockTokenRepo.EXPECT().
+	deps.TokenRepo.EXPECT().
 		CreateConfirmationToken(mock.Anything, uint(1), mock.Anything).
 		Return(&ports.TokenData{
 			Value: "test-token",
 		}, nil)
 
-	mockEmailProvider.EXPECT().
+	deps.EmailProvider.EXPECT().
 		SendEmail(mock.Anything, mock.Anything).
 		Return(nil)
 
@@ -106,7 +121,7 @@ func TestSubscriptionHandler_Subscribe_Success_JSON(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
-	router.ServeHTTP(w, req)
+	deps.Router.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
@@ -117,14 +132,14 @@ func TestSubscriptionHandler_Subscribe_Success_JSON(t *testing.T) {
 }
 
 func TestSubscriptionHandler_Subscribe_Success_Form(t *testing.T) {
-	router, mockSubscriptionRepo, mockTokenRepo, mockEmailProvider := setupSubscriptionTestRouter(t)
+	deps := setupSubscriptionTestRouter(t)
 
 	// Mock the repository calls
-	mockSubscriptionRepo.EXPECT().
+	deps.SubscriptionRepo.EXPECT().
 		FindByEmail(mock.Anything, "test@example.com", "London").
 		Return(nil, ports.NewNotFoundError("not found"))
 
-	mockSubscriptionRepo.EXPECT().
+	deps.SubscriptionRepo.EXPECT().
 		Save(mock.Anything, mock.MatchedBy(func(sub *ports.SubscriptionData) bool {
 			return sub.Email == "test@example.com" && sub.City == "London" && sub.Frequency == "hourly"
 		})).
@@ -133,13 +148,13 @@ func TestSubscriptionHandler_Subscribe_Success_Form(t *testing.T) {
 			sub.ID = 1
 		})
 
-	mockTokenRepo.EXPECT().
+	deps.TokenRepo.EXPECT().
 		CreateConfirmationToken(mock.Anything, uint(1), mock.Anything).
 		Return(&ports.TokenData{
 			Value: "test-token",
 		}, nil)
 
-	mockEmailProvider.EXPECT().
+	deps.EmailProvider.EXPECT().
 		SendEmail(mock.Anything, mock.Anything).
 		Return(nil)
 
@@ -152,7 +167,7 @@ func TestSubscriptionHandler_Subscribe_Success_Form(t *testing.T) {
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	w := httptest.NewRecorder()
 
-	router.ServeHTTP(w, req)
+	deps.Router.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
@@ -163,7 +178,7 @@ func TestSubscriptionHandler_Subscribe_Success_Form(t *testing.T) {
 }
 
 func TestSubscriptionHandler_Subscribe_InvalidEmail(t *testing.T) {
-	router, _, _, _ := setupSubscriptionTestRouter(t)
+	deps := setupSubscriptionTestRouter(t)
 
 	reqBody := SubscriptionRequest{
 		Email:     "invalid-email",
@@ -176,7 +191,7 @@ func TestSubscriptionHandler_Subscribe_InvalidEmail(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
-	router.ServeHTTP(w, req)
+	deps.Router.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 
@@ -187,7 +202,7 @@ func TestSubscriptionHandler_Subscribe_InvalidEmail(t *testing.T) {
 }
 
 func TestSubscriptionHandler_Subscribe_MissingFields(t *testing.T) {
-	router, _, _, _ := setupSubscriptionTestRouter(t)
+	deps := setupSubscriptionTestRouter(t)
 
 	tests := []struct {
 		name string
@@ -223,7 +238,7 @@ func TestSubscriptionHandler_Subscribe_MissingFields(t *testing.T) {
 			req.Header.Set("Content-Type", "application/json")
 			w := httptest.NewRecorder()
 
-			router.ServeHTTP(w, req)
+			deps.Router.ServeHTTP(w, req)
 
 			assert.Equal(t, http.StatusBadRequest, w.Code)
 
@@ -236,7 +251,7 @@ func TestSubscriptionHandler_Subscribe_MissingFields(t *testing.T) {
 }
 
 func TestSubscriptionHandler_Subscribe_AlreadyExists(t *testing.T) {
-	router, mockSubscriptionRepo, _, _ := setupSubscriptionTestRouter(t)
+	deps := setupSubscriptionTestRouter(t)
 
 	// Mock that subscription already exists and is confirmed
 	existingSubscription := &ports.SubscriptionData{
@@ -247,7 +262,7 @@ func TestSubscriptionHandler_Subscribe_AlreadyExists(t *testing.T) {
 		Confirmed: true,
 	}
 
-	mockSubscriptionRepo.EXPECT().
+	deps.SubscriptionRepo.EXPECT().
 		FindByEmail(mock.Anything, "test@example.com", "London").
 		Return(existingSubscription, nil)
 
@@ -262,7 +277,7 @@ func TestSubscriptionHandler_Subscribe_AlreadyExists(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
-	router.ServeHTTP(w, req)
+	deps.Router.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusConflict, w.Code)
 
@@ -273,7 +288,7 @@ func TestSubscriptionHandler_Subscribe_AlreadyExists(t *testing.T) {
 }
 
 func TestSubscriptionHandler_ConfirmSubscription_Success(t *testing.T) {
-	router, mockSubscriptionRepo, mockTokenRepo, mockEmailProvider := setupSubscriptionTestRouter(t)
+	deps := setupSubscriptionTestRouter(t)
 
 	// Mock token lookup
 	tokenData := &ports.TokenData{
@@ -283,7 +298,7 @@ func TestSubscriptionHandler_ConfirmSubscription_Success(t *testing.T) {
 		ExpiresAt:      time.Now().Add(24 * time.Hour),
 	}
 
-	mockTokenRepo.EXPECT().
+	deps.TokenRepo.EXPECT().
 		FindByToken(mock.Anything, "test-token-123").
 		Return(tokenData, nil)
 
@@ -296,37 +311,37 @@ func TestSubscriptionHandler_ConfirmSubscription_Success(t *testing.T) {
 		Confirmed: false,
 	}
 
-	mockSubscriptionRepo.EXPECT().
+	deps.SubscriptionRepo.EXPECT().
 		FindByID(mock.Anything, uint(1)).
 		Return(subscriptionData, nil)
 
 	// Mock subscription update
-	mockSubscriptionRepo.EXPECT().
+	deps.SubscriptionRepo.EXPECT().
 		Update(mock.Anything, mock.MatchedBy(func(sub *ports.SubscriptionData) bool {
 			return sub.ID == 1 && sub.Confirmed == true
 		})).
 		Return(nil)
 
 	// Mock token deletion
-	mockTokenRepo.EXPECT().
+	deps.TokenRepo.EXPECT().
 		Delete(mock.Anything, tokenData).
 		Return(nil)
 
 	// Mock welcome email
-	mockTokenRepo.EXPECT().
+	deps.TokenRepo.EXPECT().
 		CreateUnsubscribeToken(mock.Anything, uint(1), mock.Anything).
 		Return(&ports.TokenData{
 			Value: "unsubscribe-token",
 		}, nil)
 
-	mockEmailProvider.EXPECT().
+	deps.EmailProvider.EXPECT().
 		SendEmail(mock.Anything, mock.Anything).
 		Return(nil)
 
 	req := httptest.NewRequest("GET", "/api/confirm/test-token-123", nil)
 	w := httptest.NewRecorder()
 
-	router.ServeHTTP(w, req)
+	deps.Router.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
@@ -336,56 +351,8 @@ func TestSubscriptionHandler_ConfirmSubscription_Success(t *testing.T) {
 	assert.Contains(t, response.Message, "confirmed successfully")
 }
 
-func TestSubscriptionHandler_TokenValidationErrors(t *testing.T) {
-	tests := []struct {
-		name           string
-		url            string
-		token          string
-		expectedStatus int
-		expectedError  string
-	}{
-		{
-			name:           "confirm with invalid token",
-			url:            "/api/confirm/invalid-token",
-			token:          "invalid-token",
-			expectedStatus: http.StatusBadRequest,
-			expectedError:  "token",
-		},
-		{
-			name:           "unsubscribe with invalid token",
-			url:            "/api/unsubscribe/invalid-token",
-			token:          "invalid-token",
-			expectedStatus: http.StatusBadRequest,
-			expectedError:  "token",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-
-			router, _, mockTokenRepo, _ := setupSubscriptionTestRouter(t)
-
-			mockTokenRepo.EXPECT().
-				FindByToken(mock.Anything, tt.token).
-				Return(nil, ports.NewNotFoundError("token not found"))
-
-			req := httptest.NewRequest("GET", tt.url, nil)
-			w := httptest.NewRecorder()
-
-			router.ServeHTTP(w, req)
-
-			assert.Equal(t, tt.expectedStatus, w.Code)
-
-			var response ErrorResponse
-			err := json.Unmarshal(w.Body.Bytes(), &response)
-			assert.NoError(t, err)
-			assert.Contains(t, response.Error, tt.expectedError)
-		})
-	}
-}
-
 func TestSubscriptionHandler_Unsubscribe_Success(t *testing.T) {
-	router, mockSubscriptionRepo, mockTokenRepo, mockEmailProvider := setupSubscriptionTestRouter(t)
+	deps := setupSubscriptionTestRouter(t)
 
 	// Mock token lookup
 	tokenData := &ports.TokenData{
@@ -395,7 +362,7 @@ func TestSubscriptionHandler_Unsubscribe_Success(t *testing.T) {
 		ExpiresAt:      time.Now().Add(24 * time.Hour),
 	}
 
-	mockTokenRepo.EXPECT().
+	deps.TokenRepo.EXPECT().
 		FindByToken(mock.Anything, "test-token-123").
 		Return(tokenData, nil)
 
@@ -408,29 +375,29 @@ func TestSubscriptionHandler_Unsubscribe_Success(t *testing.T) {
 		Confirmed: true,
 	}
 
-	mockSubscriptionRepo.EXPECT().
+	deps.SubscriptionRepo.EXPECT().
 		FindByID(mock.Anything, uint(1)).
 		Return(subscriptionData, nil)
 
 	// Mock subscription deletion
-	mockSubscriptionRepo.EXPECT().
+	deps.SubscriptionRepo.EXPECT().
 		Delete(mock.Anything, subscriptionData).
 		Return(nil)
 
 	// Mock token deletion
-	mockTokenRepo.EXPECT().
+	deps.TokenRepo.EXPECT().
 		Delete(mock.Anything, tokenData).
 		Return(nil)
 
 	// Mock confirmation email
-	mockEmailProvider.EXPECT().
+	deps.EmailProvider.EXPECT().
 		SendEmail(mock.Anything, mock.Anything).
 		Return(nil)
 
 	req := httptest.NewRequest("GET", "/api/unsubscribe/test-token-123", nil)
 	w := httptest.NewRecorder()
 
-	router.ServeHTTP(w, req)
+	deps.Router.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
 

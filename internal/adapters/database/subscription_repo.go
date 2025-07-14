@@ -9,6 +9,31 @@ import (
 	"weatherapi.app/internal/ports"
 )
 
+// Error message constants for subscription repository
+const (
+	// Validation error messages
+	ErrSubscriptionNil             = "subscription cannot be nil"
+	ErrSubscriptionIDZero          = "subscription ID cannot be zero"
+	ErrSubscriptionIDZeroForUpdate = "subscription ID cannot be zero for update"
+	ErrSubscriptionIDZeroForDelete = "subscription ID cannot be zero for delete"
+	ErrEmailEmpty                  = "email cannot be empty"
+	ErrCityEmpty                   = "city cannot be empty"
+	ErrFrequencyEmpty              = "frequency cannot be empty"
+
+	// Operation error messages
+	ErrFailedToSave             = "failed to save subscription"
+	ErrFailedToFindByID         = "failed to find subscription by ID"
+	ErrFailedToFind             = "failed to find subscription"
+	ErrFailedToUpdate           = "failed to update subscription"
+	ErrFailedToDelete           = "failed to delete subscription"
+	ErrFailedToGetConfirmed     = "failed to get confirmed subscriptions"
+	ErrFailedToCountByFrequency = "failed to count subscriptions by frequency"
+	ErrFailedToCountConfirmed   = "failed to count confirmed subscriptions"
+
+	// Not found error messages
+	ErrSubscriptionNotFound = "subscription not found"
+)
+
 // SubscriptionModel represents the database model for subscriptions
 type SubscriptionModel struct {
 	ID        uint   `gorm:"primaryKey"`
@@ -38,7 +63,7 @@ func NewSubscriptionRepositoryAdapter(db *gorm.DB) ports.SubscriptionRepository 
 // Save persists a subscription to the database
 func (r *SubscriptionRepositoryAdapter) Save(ctx context.Context, sub *ports.SubscriptionData) error {
 	if sub == nil {
-		return infrastructure.NewDatabaseError("subscription cannot be nil", nil)
+		return infrastructure.NewDatabaseError(ErrSubscriptionNil, nil)
 	}
 
 	model := r.dataToModel(sub)
@@ -52,7 +77,7 @@ func (r *SubscriptionRepositoryAdapter) Save(ctx context.Context, sub *ports.Sub
 	}
 
 	if result.Error != nil {
-		return infrastructure.NewDatabaseError("failed to save subscription", result.Error)
+		return infrastructure.NewDatabaseError(ErrFailedToSave, result.Error)
 	}
 
 	return nil
@@ -61,16 +86,16 @@ func (r *SubscriptionRepositoryAdapter) Save(ctx context.Context, sub *ports.Sub
 // FindByID retrieves a subscription by its ID
 func (r *SubscriptionRepositoryAdapter) FindByID(ctx context.Context, id uint) (*ports.SubscriptionData, error) {
 	if id == 0 {
-		return nil, infrastructure.NewDatabaseError("subscription ID cannot be zero", nil)
+		return nil, infrastructure.NewDatabaseError(ErrSubscriptionIDZero, nil)
 	}
 
 	var model SubscriptionModel
 	result := r.db.WithContext(ctx).First(&model, id)
 	if result.Error != nil {
 		if result.Error == gorm.ErrRecordNotFound {
-			return nil, ports.NewNotFoundError("subscription not found")
+			return nil, ports.NewNotFoundError(ErrSubscriptionNotFound)
 		}
-		return nil, infrastructure.NewDatabaseError("failed to find subscription by ID", result.Error)
+		return nil, infrastructure.NewDatabaseError(ErrFailedToFindByID, result.Error)
 	}
 
 	return r.modelToData(&model), nil
@@ -79,19 +104,19 @@ func (r *SubscriptionRepositoryAdapter) FindByID(ctx context.Context, id uint) (
 // FindByEmail retrieves a subscription by email and city
 func (r *SubscriptionRepositoryAdapter) FindByEmail(ctx context.Context, email, city string) (*ports.SubscriptionData, error) {
 	if email == "" {
-		return nil, infrastructure.NewDatabaseError("email cannot be empty", nil)
+		return nil, infrastructure.NewDatabaseError(ErrEmailEmpty, nil)
 	}
 	if city == "" {
-		return nil, infrastructure.NewDatabaseError("city cannot be empty", nil)
+		return nil, infrastructure.NewDatabaseError(ErrCityEmpty, nil)
 	}
 
 	var model SubscriptionModel
 	result := r.db.WithContext(ctx).Where("email = ? AND city = ?", email, city).First(&model)
 	if result.Error != nil {
 		if result.Error == gorm.ErrRecordNotFound {
-			return nil, ports.NewNotFoundError("subscription not found")
+			return nil, ports.NewNotFoundError(ErrSubscriptionNotFound)
 		}
-		return nil, infrastructure.NewDatabaseError("failed to find subscription", result.Error)
+		return nil, infrastructure.NewDatabaseError(ErrFailedToFind, result.Error)
 	}
 
 	return r.modelToData(&model), nil
@@ -100,16 +125,16 @@ func (r *SubscriptionRepositoryAdapter) FindByEmail(ctx context.Context, email, 
 // Update modifies an existing subscription
 func (r *SubscriptionRepositoryAdapter) Update(ctx context.Context, sub *ports.SubscriptionData) error {
 	if sub == nil {
-		return infrastructure.NewDatabaseError("subscription cannot be nil", nil)
+		return infrastructure.NewDatabaseError(ErrSubscriptionNil, nil)
 	}
 	if sub.ID == 0 {
-		return infrastructure.NewDatabaseError("subscription ID cannot be zero for update", nil)
+		return infrastructure.NewDatabaseError(ErrSubscriptionIDZeroForUpdate, nil)
 	}
 
 	model := r.dataToModel(sub)
 	result := r.db.WithContext(ctx).Save(model)
 	if result.Error != nil {
-		return infrastructure.NewDatabaseError("failed to update subscription", result.Error)
+		return infrastructure.NewDatabaseError(ErrFailedToUpdate, result.Error)
 	}
 
 	return nil
@@ -118,15 +143,15 @@ func (r *SubscriptionRepositoryAdapter) Update(ctx context.Context, sub *ports.S
 // Delete removes a subscription from the database
 func (r *SubscriptionRepositoryAdapter) Delete(ctx context.Context, sub *ports.SubscriptionData) error {
 	if sub == nil {
-		return infrastructure.NewDatabaseError("subscription cannot be nil", nil)
+		return infrastructure.NewDatabaseError(ErrSubscriptionNil, nil)
 	}
 	if sub.ID == 0 {
-		return infrastructure.NewDatabaseError("subscription ID cannot be zero for delete", nil)
+		return infrastructure.NewDatabaseError(ErrSubscriptionIDZeroForDelete, nil)
 	}
 
 	result := r.db.WithContext(ctx).Delete(&SubscriptionModel{}, sub.ID)
 	if result.Error != nil {
-		return infrastructure.NewDatabaseError("failed to delete subscription", result.Error)
+		return infrastructure.NewDatabaseError(ErrFailedToDelete, result.Error)
 	}
 
 	return nil
@@ -135,13 +160,13 @@ func (r *SubscriptionRepositoryAdapter) Delete(ctx context.Context, sub *ports.S
 // GetConfirmedByFrequency retrieves all confirmed subscriptions for a specific frequency
 func (r *SubscriptionRepositoryAdapter) GetConfirmedByFrequency(ctx context.Context, frequency string) ([]*ports.SubscriptionData, error) {
 	if frequency == "" {
-		return nil, infrastructure.NewDatabaseError("frequency cannot be empty", nil)
+		return nil, infrastructure.NewDatabaseError(ErrFrequencyEmpty, nil)
 	}
 
 	var models []SubscriptionModel
 	result := r.db.WithContext(ctx).Where("frequency = ? AND confirmed = ?", frequency, true).Find(&models)
 	if result.Error != nil {
-		return nil, infrastructure.NewDatabaseError("failed to get confirmed subscriptions", result.Error)
+		return nil, infrastructure.NewDatabaseError(ErrFailedToGetConfirmed, result.Error)
 	}
 
 	subscriptions := make([]*ports.SubscriptionData, len(models))
@@ -165,13 +190,13 @@ func (r *SubscriptionRepositoryAdapter) FindConfirmedByFrequency(ctx context.Con
 // CountByFrequency counts subscriptions by frequency
 func (r *SubscriptionRepositoryAdapter) CountByFrequency(ctx context.Context, frequency string) (int64, error) {
 	if frequency == "" {
-		return 0, infrastructure.NewDatabaseError("frequency cannot be empty", nil)
+		return 0, infrastructure.NewDatabaseError(ErrFrequencyEmpty, nil)
 	}
 
 	var count int64
 	result := r.db.WithContext(ctx).Model(&SubscriptionModel{}).Where("frequency = ? AND confirmed = ?", frequency, true).Count(&count)
 	if result.Error != nil {
-		return 0, infrastructure.NewDatabaseError("failed to count subscriptions by frequency", result.Error)
+		return 0, infrastructure.NewDatabaseError(ErrFailedToCountByFrequency, result.Error)
 	}
 
 	return count, nil
@@ -182,7 +207,7 @@ func (r *SubscriptionRepositoryAdapter) CountConfirmed(ctx context.Context) (int
 	var count int64
 	result := r.db.WithContext(ctx).Model(&SubscriptionModel{}).Where("confirmed = ?", true).Count(&count)
 	if result.Error != nil {
-		return 0, infrastructure.NewDatabaseError("failed to count confirmed subscriptions", result.Error)
+		return 0, infrastructure.NewDatabaseError(ErrFailedToCountConfirmed, result.Error)
 	}
 
 	return count, nil

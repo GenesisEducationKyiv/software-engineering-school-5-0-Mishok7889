@@ -59,11 +59,8 @@ func (s *HTTPServerAdapter) subscribe(c *gin.Context) {
 
 // confirmSubscription handles GET /api/confirm/:token requests
 func (s *HTTPServerAdapter) confirmSubscription(c *gin.Context) {
-	token := c.Param("token")
-	if token == "" {
-		s.handleError(c, NewValidationError("token parameter is required"))
-		return
-	}
+	// Get validated token from middleware
+	token := c.GetString("validated_token")
 
 	s.logger.Debug("Confirming subscription", ports.F("token", token))
 
@@ -83,11 +80,8 @@ func (s *HTTPServerAdapter) confirmSubscription(c *gin.Context) {
 
 // unsubscribe handles GET /api/unsubscribe/:token requests
 func (s *HTTPServerAdapter) unsubscribe(c *gin.Context) {
-	token := c.Param("token")
-	if token == "" {
-		s.handleError(c, NewValidationError("token parameter is required"))
-		return
-	}
+	// Get validated token from middleware
+	token := c.GetString("validated_token")
 
 	s.logger.Debug("Unsubscribing", ports.F("token", token))
 

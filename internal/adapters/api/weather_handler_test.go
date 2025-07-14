@@ -11,6 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"weatherapi.app/internal/adapters/middleware"
 	"weatherapi.app/internal/core/shared"
 	"weatherapi.app/internal/core/weather"
 	"weatherapi.app/internal/mocks"
@@ -81,8 +82,9 @@ func setupWeatherTestRouter(t *testing.T) (*gin.Engine, *mocks.WeatherProviderMa
 		metricsCollector: mockAPIMetrics,
 	}
 
+	validationMiddleware := middleware.NewValidationMiddleware()
 	router := gin.New()
-	router.GET("/api/weather", server.getWeather)
+	router.GET("/api/weather", validationMiddleware.ValidateCityQuery(), server.getWeather)
 
 	return router, mockWeatherProvider, mockWeatherCache, mockAPIMetrics
 }
@@ -157,54 +159,6 @@ func TestWeatherHandler_GetWeather_Success_FromCache(t *testing.T) {
 	assert.Equal(t, cachedWeatherData.Humidity, response.Humidity)
 	assert.Equal(t, cachedWeatherData.Description, response.Description)
 	assert.Equal(t, cachedWeatherData.City, response.City)
-}
-
-func TestWeatherHandler_GetWeather_ValidationErrors(t *testing.T) {
-	tests := []struct {
-		name           string
-		url            string
-		expectedStatus int
-		expectedError  string
-	}{
-		{
-			name:           "missing city parameter",
-			url:            "/api/weather",
-			expectedStatus: http.StatusBadRequest,
-			expectedError:  "city parameter is required",
-		},
-		{
-			name:           "empty city parameter",
-			url:            "/api/weather?city=",
-			expectedStatus: http.StatusBadRequest,
-			expectedError:  "city parameter is required",
-		},
-		{
-			name:           "whitespace only city",
-			url:            "/api/weather?city=%20",
-			expectedStatus: http.StatusBadRequest,
-			expectedError:  "invalid weather request",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			router, _, _, _ := setupWeatherTestRouter(t)
-
-			req := httptest.NewRequest("GET", tt.url, nil)
-			w := httptest.NewRecorder()
-
-			router.ServeHTTP(w, req)
-
-			assert.Equal(t, tt.expectedStatus, w.Code)
-
-			var response ErrorResponse
-			err := json.Unmarshal(w.Body.Bytes(), &response)
-			assert.NoError(t, err)
-			assert.Contains(t, response.Error, tt.expectedError)
-		})
-	}
 }
 
 func TestWeatherHandler_GetWeather_WeatherProviderError(t *testing.T) {

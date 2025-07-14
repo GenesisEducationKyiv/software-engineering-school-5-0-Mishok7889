@@ -19,6 +19,9 @@ components:
   # HTTP handlers and API adapters
   primary_adapters: { in: internal/adapters/api/** }
 
+  # Middleware for HTTP adapters
+  middleware: { in: internal/adapters/middleware/** }
+
   # External system adapters
   secondary_adapters_external: { in: internal/adapters/external/** }
 
@@ -58,6 +61,7 @@ deps:
     mayDependOn:
       - domain
       - ports
+      - middleware
 
   secondary_adapters_external:
     mayDependOn:
@@ -94,6 +98,7 @@ deps:
       - secondary_adapters_infrastructure
       - services
       - config
+      - middleware
 
   config:
     mayDependOn:

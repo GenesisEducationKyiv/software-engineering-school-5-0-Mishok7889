@@ -24,15 +24,8 @@ func (s *HTTPServerAdapter) getWeather(c *gin.Context) {
 		"method":   "GET",
 	})
 
-	city := c.Query("city")
-	if city == "" {
-		s.metricsCollector.IncrementCounter("api_errors_total", map[string]string{
-			"endpoint": "weather",
-			"error":    "validation",
-		})
-		s.handleError(c, NewValidationError("city parameter is required"))
-		return
-	}
+	// Get validated city from middleware
+	city := c.GetString("validated_city")
 
 	s.logger.Debug("Getting weather for city", ports.F("city", city))
 
