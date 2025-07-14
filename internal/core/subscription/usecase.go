@@ -276,7 +276,14 @@ func (uc *UseCase) GetSubscriptionsForUpdates(ctx context.Context, frequency Fre
 		return nil, shared.NewValidationError("invalid frequency")
 	}
 
-	subscriptionsData, err := uc.subscriptionRepo.GetConfirmedByFrequency(ctx, frequency.String())
+	freqStr := frequency.String()
+	confirmed := true
+	filter := ports.SubscriptionFilter{
+		Frequency: &freqStr,
+		Confirmed: &confirmed,
+	}
+
+	subscriptionsData, err := uc.subscriptionRepo.Find(ctx, filter)
 	if err != nil {
 		return nil, fmt.Errorf("get subscriptions for frequency %s: %w", frequency, err)
 	}

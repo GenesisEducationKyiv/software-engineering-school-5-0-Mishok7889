@@ -26,7 +26,6 @@ const (
 	ErrFailedToFind             = "failed to find subscription"
 	ErrFailedToUpdate           = "failed to update subscription"
 	ErrFailedToDelete           = "failed to delete subscription"
-	ErrFailedToGetConfirmed     = "failed to get confirmed subscriptions"
 	ErrFailedToCountByFrequency = "failed to count subscriptions by frequency"
 	ErrFailedToCountConfirmed   = "failed to count confirmed subscriptions"
 
@@ -157,16 +156,47 @@ func (r *SubscriptionRepositoryAdapter) Delete(ctx context.Context, sub *ports.S
 	return nil
 }
 
-// GetConfirmedByFrequency retrieves all confirmed subscriptions for a specific frequency
-func (r *SubscriptionRepositoryAdapter) GetConfirmedByFrequency(ctx context.Context, frequency string) ([]*ports.SubscriptionData, error) {
-	if frequency == "" {
-		return nil, infrastructure.NewDatabaseError(ErrFrequencyEmpty, nil)
+// Find retrieves subscriptions based on the provided filter criteria
+func (r *SubscriptionRepositoryAdapter) Find(ctx context.Context, filter ports.SubscriptionFilter) ([]*ports.SubscriptionData, error) {
+	// Validate that at least one filter criterion is provided
+	if filter.ID == nil && filter.Email == nil && filter.City == nil && filter.Frequency == nil && filter.Confirmed == nil {
+		return nil, infrastructure.NewDatabaseError("at least one filter criterion must be provided", nil)
+	}
+
+	query := r.db.WithContext(ctx).Model(&SubscriptionModel{})
+
+	if filter.ID != nil {
+		if *filter.ID == 0 {
+			return nil, infrastructure.NewDatabaseError(ErrSubscriptionIDZero, nil)
+		}
+		query = query.Where("id = ?", *filter.ID)
+	}
+	if filter.Email != nil {
+		if *filter.Email == "" {
+			return nil, infrastructure.NewDatabaseError(ErrEmailEmpty, nil)
+		}
+		query = query.Where("email = ?", *filter.Email)
+	}
+	if filter.City != nil {
+		if *filter.City == "" {
+			return nil, infrastructure.NewDatabaseError(ErrCityEmpty, nil)
+		}
+		query = query.Where("city = ?", *filter.City)
+	}
+	if filter.Frequency != nil {
+		if *filter.Frequency == "" {
+			return nil, infrastructure.NewDatabaseError(ErrFrequencyEmpty, nil)
+		}
+		query = query.Where("frequency = ?", *filter.Frequency)
+	}
+	if filter.Confirmed != nil {
+		query = query.Where("confirmed = ?", *filter.Confirmed)
 	}
 
 	var models []SubscriptionModel
-	result := r.db.WithContext(ctx).Where("frequency = ? AND confirmed = ?", frequency, true).Find(&models)
+	result := query.Find(&models)
 	if result.Error != nil {
-		return nil, infrastructure.NewDatabaseError(ErrFailedToGetConfirmed, result.Error)
+		return nil, infrastructure.NewDatabaseError(ErrFailedToFind, result.Error)
 	}
 
 	subscriptions := make([]*ports.SubscriptionData, len(models))
@@ -175,16 +205,6 @@ func (r *SubscriptionRepositoryAdapter) GetConfirmedByFrequency(ctx context.Cont
 	}
 
 	return subscriptions, nil
-}
-
-// FindActiveByFrequency retrieves all active (confirmed) subscriptions for a specific frequency
-func (r *SubscriptionRepositoryAdapter) FindActiveByFrequency(ctx context.Context, frequency string) ([]*ports.SubscriptionData, error) {
-	return r.GetConfirmedByFrequency(ctx, frequency)
-}
-
-// FindConfirmedByFrequency retrieves all confirmed subscriptions for a specific frequency
-func (r *SubscriptionRepositoryAdapter) FindConfirmedByFrequency(ctx context.Context, frequency string) ([]*ports.SubscriptionData, error) {
-	return r.GetConfirmedByFrequency(ctx, frequency)
 }
 
 // CountByFrequency counts subscriptions by frequency

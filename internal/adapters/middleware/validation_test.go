@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -63,33 +64,33 @@ func TestValidationMiddleware_ValidateTokenParam(t *testing.T) {
 	}
 }
 
-// Test the middleware behavior when token parameter could be empty
-// This tests the middleware logic directly
+// Test the middleware behavior when token parameter is empty
 func TestValidationMiddleware_ValidateTokenParam_EmptyToken(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	middleware := NewValidationMiddleware()
 	router := gin.New()
 
-	// Create a route that can capture empty parameters using wildcard
-	router.GET("/test/*path", func(c *gin.Context) {
-		// Manually set empty token parameter to test middleware logic
-		c.Params = gin.Params{
-			{Key: "token", Value: ""},
-		}
-
-		// Call the middleware function directly
-		handler := middleware.ValidateTokenParam()
-		handler(c)
-
-		// This should not be reached if middleware aborts
-		c.JSON(http.StatusOK, gin.H{"should": "not reach here"})
+	// Test with a route that accepts optional token (using wildcard)
+	router.GET("/test/:token", middleware.ValidateTokenParam(), func(c *gin.Context) {
+		token := c.GetString("validated_token")
+		c.JSON(http.StatusOK, gin.H{"token": token})
 	})
 
+	// Test with empty token by using URL-encoded empty string
 	req := httptest.NewRequest("GET", "/test/", nil)
 	w := httptest.NewRecorder()
 
-	router.ServeHTTP(w, req)
+	// Since /test/ won't match /test/:token, let's test the actual scenario
+	// where someone accesses the endpoint but the token is effectively empty
+	// We'll create a context manually to test the middleware logic
+	c, _ := gin.CreateTestContext(w)
+	c.Request = req
+	c.Params = gin.Params{{Key: "token", Value: ""}} // Simulate empty token
+
+	// Call middleware directly
+	handler := middleware.ValidateTokenParam()
+	handler(c)
 
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 
@@ -141,12 +142,15 @@ func TestValidationMiddleware_ValidateCityQuery(t *testing.T) {
 				c.JSON(http.StatusOK, gin.H{"city": city})
 			})
 
-			url := "/test"
+			// Build URL with proper encoding
+			testURL := "/test"
 			if tt.city != "" {
-				url += "?city=" + tt.city
+				v := url.Values{}
+				v.Set("city", tt.city)
+				testURL += "?" + v.Encode()
 			}
 
-			req := httptest.NewRequest("GET", url, nil)
+			req := httptest.NewRequest("GET", testURL, nil)
 			w := httptest.NewRecorder()
 
 			router.ServeHTTP(w, req)

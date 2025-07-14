@@ -152,7 +152,7 @@ func TestSubscriptionRepository_Delete(t *testing.T) {
 	assert.Nil(t, found)
 }
 
-func TestSubscriptionRepository_GetConfirmedByFrequency(t *testing.T) {
+func TestSubscriptionRepository_Find(t *testing.T) {
 	db := setupTestDB(t)
 	repo := NewSubscriptionRepositoryAdapter(db)
 	ctx := context.Background()
@@ -179,13 +179,46 @@ func TestSubscriptionRepository_GetConfirmedByFrequency(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	dailySubscriptions, err := repo.GetConfirmedByFrequency(ctx, "daily")
+	// Test finding confirmed daily subscriptions
+	dailyFreq := "daily"
+	confirmed := true
+	filter := ports.SubscriptionFilter{
+		Frequency: &dailyFreq,
+		Confirmed: &confirmed,
+	}
+	dailySubscriptions, err := repo.Find(ctx, filter)
 	assert.NoError(t, err)
 	assert.Len(t, dailySubscriptions, 2)
 
-	hourlySubscriptions, err := repo.GetConfirmedByFrequency(ctx, "hourly")
+	// Test finding confirmed hourly subscriptions
+	hourlyFreq := "hourly"
+	hourlyFilter := ports.SubscriptionFilter{
+		Frequency: &hourlyFreq,
+		Confirmed: &confirmed,
+	}
+	hourlySubscriptions, err := repo.Find(ctx, hourlyFilter)
 	assert.NoError(t, err)
 	assert.Len(t, hourlySubscriptions, 1)
+
+	// Test finding all daily subscriptions (including unconfirmed)
+	dailyAllFilter := ports.SubscriptionFilter{
+		Frequency: &dailyFreq,
+	}
+	allDailySubscriptions, err := repo.Find(ctx, dailyAllFilter)
+	assert.NoError(t, err)
+	assert.Len(t, allDailySubscriptions, 3)
+
+	// Test finding by email
+	email := "daily1@example.com"
+	city := "London"
+	emailFilter := ports.SubscriptionFilter{
+		Email: &email,
+		City:  &city,
+	}
+	emailSubscriptions, err := repo.Find(ctx, emailFilter)
+	assert.NoError(t, err)
+	assert.Len(t, emailSubscriptions, 1)
+	assert.Equal(t, "daily1@example.com", emailSubscriptions[0].Email)
 }
 
 func TestSubscriptionRepository_CountByFrequency(t *testing.T) {
@@ -259,10 +292,52 @@ func TestSubscriptionRepository_ValidationErrors(t *testing.T) {
 				return err
 			},
 		},
+		{
+			name: "Find with empty filter",
+			test: func() error {
+				_, err := repo.Find(ctx, ports.SubscriptionFilter{})
+				return err
+			},
+		},
+		{
+			name: "Find with zero ID",
+			test: func() error {
+				id := uint(0)
+				_, err := repo.Find(ctx, ports.SubscriptionFilter{ID: &id})
+				return err
+			},
+		},
+		{
+			name: "Find with empty email",
+			test: func() error {
+				email := ""
+				_, err := repo.Find(ctx, ports.SubscriptionFilter{Email: &email})
+				return err
+			},
+		},
+		{
+			name: "Find with empty city",
+			test: func() error {
+				city := ""
+				_, err := repo.Find(ctx, ports.SubscriptionFilter{City: &city})
+				return err
+			},
+		},
+		{
+			name: "Find with empty frequency",
+			test: func() error {
+				frequency := ""
+				_, err := repo.Find(ctx, ports.SubscriptionFilter{Frequency: &frequency})
+				return err
+			},
+		},
 	}
 
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := tt.test()
 			assert.Error(t, err)
 
