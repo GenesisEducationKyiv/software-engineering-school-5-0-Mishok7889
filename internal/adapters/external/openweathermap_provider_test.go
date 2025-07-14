@@ -190,7 +190,7 @@ func TestOpenWeatherMapProvider_GetCurrentWeather_NoWeatherData(t *testing.T) {
 	assert.NotNil(t, weather)
 	assert.Equal(t, 20.0, weather.Temperature)
 	assert.Equal(t, 60.0, weather.Humidity)
-	assert.Equal(t, "Clear", weather.Description) // Default description
+	assert.Equal(t, "N/A", weather.Description) // Default description
 	assert.Equal(t, "London", weather.City)
 }
 

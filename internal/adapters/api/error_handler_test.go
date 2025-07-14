@@ -67,183 +67,104 @@ func setupErrorTestRouter() *gin.Engine {
 	return router
 }
 
-func TestHTTPServerAdapter_HandleError_ValidationError(t *testing.T) {
-	router := setupErrorTestRouter()
+func TestHTTPServerAdapter_HandleError(t *testing.T) {
+	tests := []struct {
+		name           string
+		route          string
+		expectedStatus int
+		expectedError  string
+	}{
+		{
+			name:           "validation error",
+			route:          "/test/validation",
+			expectedStatus: http.StatusBadRequest,
+			expectedError:  "validation failed",
+		},
+		{
+			name:           "not found error",
+			route:          "/test/not-found",
+			expectedStatus: http.StatusNotFound,
+			expectedError:  "resource not found",
+		},
+		{
+			name:           "already exists error",
+			route:          "/test/already-exists",
+			expectedStatus: http.StatusConflict,
+			expectedError:  "resource already exists",
+		},
+		{
+			name:           "external service error",
+			route:          "/test/external-api",
+			expectedStatus: http.StatusServiceUnavailable,
+			expectedError:  "External service unavailable",
+		},
+		{
+			name:           "internal error",
+			route:          "/test/internal",
+			expectedStatus: http.StatusInternalServerError,
+			expectedError:  "Internal server error",
+		},
+		{
+			name:           "database error",
+			route:          "/test/database",
+			expectedStatus: http.StatusInternalServerError,
+			expectedError:  "Internal server error",
+		},
+		{
+			name:           "configuration error",
+			route:          "/test/configuration",
+			expectedStatus: http.StatusInternalServerError,
+			expectedError:  "Internal server error",
+		},
+		{
+			name:           "API validation error",
+			route:          "/test/api-validation",
+			expectedStatus: http.StatusBadRequest,
+			expectedError:  "API validation failed",
+		},
+		{
+			name:           "generic error",
+			route:          "/test/generic",
+			expectedStatus: http.StatusInternalServerError,
+			expectedError:  "Internal server error",
+		},
+		{
+			name:           "port not found error",
+			route:          "/test/port-not-found",
+			expectedStatus: http.StatusNotFound,
+			expectedError:  "port not found",
+		},
+		{
+			name:           "port already exists error",
+			route:          "/test/port-already-exists",
+			expectedStatus: http.StatusConflict,
+			expectedError:  "port already exists",
+		},
+	}
 
-	req := httptest.NewRequest("GET", "/test/validation", nil)
-	w := httptest.NewRecorder()
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 
-	router.ServeHTTP(w, req)
+			router := setupErrorTestRouter()
 
-	assert.Equal(t, http.StatusBadRequest, w.Code)
+			req := httptest.NewRequest("GET", tt.route, nil)
+			w := httptest.NewRecorder()
 
-	var response ErrorResponse
-	err := json.Unmarshal(w.Body.Bytes(), &response)
-	assert.NoError(t, err)
-	assert.Equal(t, "validation failed", response.Error)
+			router.ServeHTTP(w, req)
+
+			assert.Equal(t, tt.expectedStatus, w.Code)
+
+			var response ErrorResponse
+			err := json.Unmarshal(w.Body.Bytes(), &response)
+			assert.NoError(t, err)
+			assert.Equal(t, tt.expectedError, response.Error)
+		})
+	}
 }
 
-func TestHTTPServerAdapter_HandleError_NotFoundError(t *testing.T) {
-	router := setupErrorTestRouter()
-
-	req := httptest.NewRequest("GET", "/test/not-found", nil)
-	w := httptest.NewRecorder()
-
-	router.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusNotFound, w.Code)
-
-	var response ErrorResponse
-	err := json.Unmarshal(w.Body.Bytes(), &response)
-	assert.NoError(t, err)
-	assert.Equal(t, "resource not found", response.Error)
-}
-
-func TestHTTPServerAdapter_HandleError_AlreadyExistsError(t *testing.T) {
-	router := setupErrorTestRouter()
-
-	req := httptest.NewRequest("GET", "/test/already-exists", nil)
-	w := httptest.NewRecorder()
-
-	router.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusConflict, w.Code)
-
-	var response ErrorResponse
-	err := json.Unmarshal(w.Body.Bytes(), &response)
-	assert.NoError(t, err)
-	assert.Equal(t, "resource already exists", response.Error)
-}
-
-func TestHTTPServerAdapter_HandleError_ExternalServiceError(t *testing.T) {
-	router := setupErrorTestRouter()
-
-	req := httptest.NewRequest("GET", "/test/external-api", nil)
-	w := httptest.NewRecorder()
-
-	router.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
-
-	var response ErrorResponse
-	err := json.Unmarshal(w.Body.Bytes(), &response)
-	assert.NoError(t, err)
-	assert.Equal(t, "External service unavailable", response.Error)
-}
-
-func TestHTTPServerAdapter_HandleError_APIValidationError(t *testing.T) {
-	router := setupErrorTestRouter()
-
-	req := httptest.NewRequest("GET", "/test/api-validation", nil)
-	w := httptest.NewRecorder()
-
-	router.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusBadRequest, w.Code)
-
-	var response ErrorResponse
-	err := json.Unmarshal(w.Body.Bytes(), &response)
-	assert.NoError(t, err)
-	assert.Equal(t, "API validation failed", response.Error)
-}
-
-func TestHTTPServerAdapter_HandleError_InternalError(t *testing.T) {
-	router := setupErrorTestRouter()
-
-	req := httptest.NewRequest("GET", "/test/internal", nil)
-	w := httptest.NewRecorder()
-
-	router.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusInternalServerError, w.Code)
-
-	var response ErrorResponse
-	err := json.Unmarshal(w.Body.Bytes(), &response)
-	assert.NoError(t, err)
-	assert.Equal(t, "Internal server error", response.Error)
-}
-
-func TestHTTPServerAdapter_HandleError_DatabaseError(t *testing.T) {
-	router := setupErrorTestRouter()
-
-	req := httptest.NewRequest("GET", "/test/database", nil)
-	w := httptest.NewRecorder()
-
-	router.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusInternalServerError, w.Code)
-
-	var response ErrorResponse
-	err := json.Unmarshal(w.Body.Bytes(), &response)
-	assert.NoError(t, err)
-	assert.Equal(t, "Internal server error", response.Error)
-}
-
-func TestHTTPServerAdapter_HandleError_ConfigurationError(t *testing.T) {
-	router := setupErrorTestRouter()
-
-	req := httptest.NewRequest("GET", "/test/configuration", nil)
-	w := httptest.NewRecorder()
-
-	router.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusInternalServerError, w.Code)
-
-	var response ErrorResponse
-	err := json.Unmarshal(w.Body.Bytes(), &response)
-	assert.NoError(t, err)
-	assert.Equal(t, "Internal server error", response.Error)
-}
-
-func TestHTTPServerAdapter_HandleError_GenericError(t *testing.T) {
-	router := setupErrorTestRouter()
-
-	req := httptest.NewRequest("GET", "/test/generic", nil)
-	w := httptest.NewRecorder()
-
-	router.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusInternalServerError, w.Code)
-
-	var response ErrorResponse
-	err := json.Unmarshal(w.Body.Bytes(), &response)
-	assert.NoError(t, err)
-	assert.Equal(t, "Internal server error", response.Error)
-}
-
-func TestHTTPServerAdapter_HandleError_PortNotFoundError(t *testing.T) {
-	router := setupErrorTestRouter()
-
-	req := httptest.NewRequest("GET", "/test/port-not-found", nil)
-	w := httptest.NewRecorder()
-
-	router.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusNotFound, w.Code)
-
-	var response ErrorResponse
-	err := json.Unmarshal(w.Body.Bytes(), &response)
-	assert.NoError(t, err)
-	assert.Equal(t, "port not found", response.Error)
-}
-
-func TestHTTPServerAdapter_HandleError_PortAlreadyExistsError(t *testing.T) {
-	router := setupErrorTestRouter()
-
-	req := httptest.NewRequest("GET", "/test/port-already-exists", nil)
-	w := httptest.NewRecorder()
-
-	router.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusConflict, w.Code)
-
-	var response ErrorResponse
-	err := json.Unmarshal(w.Body.Bytes(), &response)
-	assert.NoError(t, err)
-	assert.Equal(t, "port already exists", response.Error)
-}
-
-func TestHTTPServerAdapter_HandleError_ErrorResponseStructure(t *testing.T) {
+func TestHTTPServerAdapter_HandleError_ResponseStructure(t *testing.T) {
 	router := setupErrorTestRouter()
 
 	req := httptest.NewRequest("GET", "/test/validation", nil)
@@ -257,7 +178,6 @@ func TestHTTPServerAdapter_HandleError_ErrorResponseStructure(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	assert.NoError(t, err)
 
-	// Verify the response structure
 	assert.Contains(t, response, "error")
 	assert.IsType(t, "", response["error"])
 	assert.NotEmpty(t, response["error"])

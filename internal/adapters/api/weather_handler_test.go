@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -16,7 +17,21 @@ import (
 	"weatherapi.app/internal/ports"
 )
 
-func setupWeatherTestRouter(t *testing.T) (*gin.Engine, *mocks.WeatherProviderManager, *mocks.WeatherCache) {
+// mockMetricsCollector implements the local MetricsCollector interface for testing
+type mockMetricsCollector struct {
+	mock.Mock
+}
+
+func (m *mockMetricsCollector) IncrementCounter(name string, labels map[string]string) {
+	m.Called(name, labels)
+}
+
+func (m *mockMetricsCollector) GetMetrics(ctx context.Context) (map[string]interface{}, error) {
+	args := m.Called(ctx)
+	return args.Get(0).(map[string]interface{}), args.Error(1)
+}
+
+func setupWeatherTestRouter(t *testing.T) (*gin.Engine, *mocks.WeatherProviderManager, *mocks.WeatherCache, *mockMetricsCollector) {
 	gin.SetMode(gin.TestMode)
 
 	// Mock the dependencies
@@ -24,7 +39,8 @@ func setupWeatherTestRouter(t *testing.T) (*gin.Engine, *mocks.WeatherProviderMa
 	mockWeatherCache := mocks.NewWeatherCache(t)
 	mockConfig := mocks.NewConfigProvider(t)
 	mockLogger := mocks.NewLogger(t)
-	mockMetrics := mocks.NewWeatherMetrics(t)
+	mockWeatherMetrics := mocks.NewWeatherMetrics(t)
+	mockAPIMetrics := &mockMetricsCollector{}
 
 	// Allow logger calls without strict expectations - handle variadic field parameters
 	mockLogger.EXPECT().Debug(mock.Anything, mock.Anything).Maybe()
@@ -41,6 +57,9 @@ func setupWeatherTestRouter(t *testing.T) (*gin.Engine, *mocks.WeatherProviderMa
 	mockLogger.EXPECT().Error(mock.Anything, mock.Anything, mock.Anything).Maybe()
 	mockLogger.EXPECT().Error(mock.Anything, mock.Anything, mock.Anything, mock.Anything).Maybe()
 
+	// Allow metrics collector calls without strict expectations
+	mockAPIMetrics.On("IncrementCounter", mock.Anything, mock.Anything).Maybe()
+
 	// Mock config provider
 	mockConfig.EXPECT().GetWeatherConfig().Return(ports.WeatherConfig{
 		EnableCache: true,
@@ -52,23 +71,24 @@ func setupWeatherTestRouter(t *testing.T) (*gin.Engine, *mocks.WeatherProviderMa
 		Cache:           mockWeatherCache,
 		Config:          mockConfig,
 		Logger:          mockLogger,
-		Metrics:         mockMetrics,
+		Metrics:         mockWeatherMetrics,
 	})
 	assert.NoError(t, err)
 
 	server := &HTTPServerAdapter{
-		weatherUseCase: weatherUseCase,
-		logger:         mockLogger,
+		weatherUseCase:   weatherUseCase,
+		logger:           mockLogger,
+		metricsCollector: mockAPIMetrics,
 	}
 
 	router := gin.New()
 	router.GET("/api/weather", server.getWeather)
 
-	return router, mockWeatherProvider, mockWeatherCache
+	return router, mockWeatherProvider, mockWeatherCache, mockAPIMetrics
 }
 
 func TestWeatherHandler_GetWeather_Success(t *testing.T) {
-	router, mockWeatherProvider, mockWeatherCache := setupWeatherTestRouter(t)
+	router, mockWeatherProvider, mockWeatherCache, _ := setupWeatherTestRouter(t)
 
 	// Mock cache miss
 	mockWeatherCache.EXPECT().
@@ -109,7 +129,7 @@ func TestWeatherHandler_GetWeather_Success(t *testing.T) {
 }
 
 func TestWeatherHandler_GetWeather_Success_FromCache(t *testing.T) {
-	router, _, mockWeatherCache := setupWeatherTestRouter(t)
+	router, _, mockWeatherCache, _ := setupWeatherTestRouter(t)
 
 	// Mock cache hit
 	cachedWeatherData := &ports.WeatherData{
@@ -139,40 +159,56 @@ func TestWeatherHandler_GetWeather_Success_FromCache(t *testing.T) {
 	assert.Equal(t, cachedWeatherData.City, response.City)
 }
 
-func TestWeatherHandler_GetWeather_MissingCity(t *testing.T) {
-	router, _, _ := setupWeatherTestRouter(t)
+func TestWeatherHandler_GetWeather_ValidationErrors(t *testing.T) {
+	tests := []struct {
+		name           string
+		url            string
+		expectedStatus int
+		expectedError  string
+	}{
+		{
+			name:           "missing city parameter",
+			url:            "/api/weather",
+			expectedStatus: http.StatusBadRequest,
+			expectedError:  "city parameter is required",
+		},
+		{
+			name:           "empty city parameter",
+			url:            "/api/weather?city=",
+			expectedStatus: http.StatusBadRequest,
+			expectedError:  "city parameter is required",
+		},
+		{
+			name:           "whitespace only city",
+			url:            "/api/weather?city=%20",
+			expectedStatus: http.StatusBadRequest,
+			expectedError:  "invalid weather request",
+		},
+	}
 
-	req := httptest.NewRequest("GET", "/api/weather", nil)
-	w := httptest.NewRecorder()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 
-	router.ServeHTTP(w, req)
+			router, _, _, _ := setupWeatherTestRouter(t)
 
-	assert.Equal(t, http.StatusBadRequest, w.Code)
+			req := httptest.NewRequest("GET", tt.url, nil)
+			w := httptest.NewRecorder()
 
-	var response ErrorResponse
-	err := json.Unmarshal(w.Body.Bytes(), &response)
-	assert.NoError(t, err)
-	assert.Contains(t, response.Error, "city parameter is required")
-}
+			router.ServeHTTP(w, req)
 
-func TestWeatherHandler_GetWeather_EmptyCity(t *testing.T) {
-	router, _, _ := setupWeatherTestRouter(t)
+			assert.Equal(t, tt.expectedStatus, w.Code)
 
-	req := httptest.NewRequest("GET", "/api/weather?city=", nil)
-	w := httptest.NewRecorder()
-
-	router.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusBadRequest, w.Code)
-
-	var response ErrorResponse
-	err := json.Unmarshal(w.Body.Bytes(), &response)
-	assert.NoError(t, err)
-	assert.Contains(t, response.Error, "city parameter is required")
+			var response ErrorResponse
+			err := json.Unmarshal(w.Body.Bytes(), &response)
+			assert.NoError(t, err)
+			assert.Contains(t, response.Error, tt.expectedError)
+		})
+	}
 }
 
 func TestWeatherHandler_GetWeather_WeatherProviderError(t *testing.T) {
-	router, mockWeatherProvider, mockWeatherCache := setupWeatherTestRouter(t)
+	router, mockWeatherProvider, mockWeatherCache, _ := setupWeatherTestRouter(t)
 
 	// Mock cache miss
 	mockWeatherCache.EXPECT().
@@ -197,24 +233,8 @@ func TestWeatherHandler_GetWeather_WeatherProviderError(t *testing.T) {
 	assert.Contains(t, response.Error, "External service unavailable")
 }
 
-func TestWeatherHandler_GetWeather_ValidationError(t *testing.T) {
-	router, _, _ := setupWeatherTestRouter(t)
-
-	req := httptest.NewRequest("GET", "/api/weather?city=%20", nil) // URL encode the space
-	w := httptest.NewRecorder()
-
-	router.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusBadRequest, w.Code)
-
-	var response ErrorResponse
-	err := json.Unmarshal(w.Body.Bytes(), &response)
-	assert.NoError(t, err)
-	assert.Contains(t, response.Error, "invalid weather request")
-}
-
 func TestWeatherHandler_GetWeather_CacheError(t *testing.T) {
-	router, mockWeatherProvider, mockWeatherCache := setupWeatherTestRouter(t)
+	router, mockWeatherProvider, mockWeatherCache, _ := setupWeatherTestRouter(t)
 
 	// Mock cache miss
 	mockWeatherCache.EXPECT().

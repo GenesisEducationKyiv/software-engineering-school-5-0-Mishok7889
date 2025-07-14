@@ -336,24 +336,52 @@ func TestSubscriptionHandler_ConfirmSubscription_Success(t *testing.T) {
 	assert.Contains(t, response.Message, "confirmed successfully")
 }
 
-func TestSubscriptionHandler_ConfirmSubscription_InvalidToken(t *testing.T) {
-	router, _, mockTokenRepo, _ := setupSubscriptionTestRouter(t)
+func TestSubscriptionHandler_TokenValidationErrors(t *testing.T) {
+	tests := []struct {
+		name           string
+		url            string
+		token          string
+		expectedStatus int
+		expectedError  string
+	}{
+		{
+			name:           "confirm with invalid token",
+			url:            "/api/confirm/invalid-token",
+			token:          "invalid-token",
+			expectedStatus: http.StatusBadRequest,
+			expectedError:  "token",
+		},
+		{
+			name:           "unsubscribe with invalid token",
+			url:            "/api/unsubscribe/invalid-token",
+			token:          "invalid-token",
+			expectedStatus: http.StatusBadRequest,
+			expectedError:  "token",
+		},
+	}
 
-	mockTokenRepo.EXPECT().
-		FindByToken(mock.Anything, "invalid-token").
-		Return(nil, ports.NewNotFoundError("token not found"))
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
 
-	req := httptest.NewRequest("GET", "/api/confirm/invalid-token", nil)
-	w := httptest.NewRecorder()
+			router, _, mockTokenRepo, _ := setupSubscriptionTestRouter(t)
 
-	router.ServeHTTP(w, req)
+			mockTokenRepo.EXPECT().
+				FindByToken(mock.Anything, tt.token).
+				Return(nil, ports.NewNotFoundError("token not found"))
 
-	assert.Equal(t, http.StatusBadRequest, w.Code) // Token errors return 400, not 404
+			req := httptest.NewRequest("GET", tt.url, nil)
+			w := httptest.NewRecorder()
 
-	var response ErrorResponse
-	err := json.Unmarshal(w.Body.Bytes(), &response)
-	assert.NoError(t, err)
-	assert.Contains(t, response.Error, "token")
+			router.ServeHTTP(w, req)
+
+			assert.Equal(t, tt.expectedStatus, w.Code)
+
+			var response ErrorResponse
+			err := json.Unmarshal(w.Body.Bytes(), &response)
+			assert.NoError(t, err)
+			assert.Contains(t, response.Error, tt.expectedError)
+		})
+	}
 }
 
 func TestSubscriptionHandler_Unsubscribe_Success(t *testing.T) {
@@ -410,24 +438,4 @@ func TestSubscriptionHandler_Unsubscribe_Success(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	assert.NoError(t, err)
 	assert.Contains(t, response.Message, "Unsubscribed successfully")
-}
-
-func TestSubscriptionHandler_Unsubscribe_InvalidToken(t *testing.T) {
-	router, _, mockTokenRepo, _ := setupSubscriptionTestRouter(t)
-
-	mockTokenRepo.EXPECT().
-		FindByToken(mock.Anything, "invalid-token").
-		Return(nil, ports.NewNotFoundError("token not found"))
-
-	req := httptest.NewRequest("GET", "/api/unsubscribe/invalid-token", nil)
-	w := httptest.NewRecorder()
-
-	router.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusBadRequest, w.Code) // Token errors return 400, not 404
-
-	var response ErrorResponse
-	err := json.Unmarshal(w.Body.Bytes(), &response)
-	assert.NoError(t, err)
-	assert.Contains(t, response.Error, "token")
 }
