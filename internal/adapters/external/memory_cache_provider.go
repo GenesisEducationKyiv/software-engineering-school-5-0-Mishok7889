@@ -47,14 +47,35 @@ func NewMemoryCacheProvider() *MemoryCacheProvider {
 	}
 }
 
+func (c *MemoryCacheProvider) ValidateKey(key string) error {
+	if key == "" {
+		return infrastructure.NewValidationError("cache key cannot be empty")
+	}
+	return nil
+}
+
+func (c *MemoryCacheProvider) ValidateValue(value []byte) error {
+	if value == nil {
+		return infrastructure.NewValidationError("cache value cannot be nil")
+	}
+	return nil
+}
+
+func (c *MemoryCacheProvider) ValidateTTL(ttl time.Duration) error {
+	if ttl <= 0 {
+		return infrastructure.NewValidationError("cache TTL must be positive")
+	}
+	return nil
+}
+
 func (c *MemoryCacheProvider) Get(ctx context.Context, key string) ([]byte, error) {
 	start := time.Now()
 	defer func() {
 		c.RecordOperation("get", time.Since(start))
 	}()
 
-	if key == "" {
-		return nil, infrastructure.NewValidationError("cache key cannot be empty")
+	if err := c.ValidateKey(key); err != nil {
+		return nil, err
 	}
 
 	c.mutex.RLock()
@@ -76,14 +97,14 @@ func (c *MemoryCacheProvider) Set(ctx context.Context, key string, value []byte,
 		c.RecordOperation("set", time.Since(start))
 	}()
 
-	if key == "" {
-		return infrastructure.NewValidationError("cache key cannot be empty")
+	if err := c.ValidateKey(key); err != nil {
+		return err
 	}
-	if value == nil {
-		return infrastructure.NewValidationError("cache value cannot be nil")
+	if err := c.ValidateValue(value); err != nil {
+		return err
 	}
-	if ttl <= 0 {
-		return infrastructure.NewValidationError("cache TTL must be positive")
+	if err := c.ValidateTTL(ttl); err != nil {
+		return err
 	}
 
 	c.mutex.Lock()
@@ -103,8 +124,8 @@ func (c *MemoryCacheProvider) Delete(ctx context.Context, key string) error {
 		c.RecordOperation("delete", time.Since(start))
 	}()
 
-	if key == "" {
-		return infrastructure.NewValidationError("cache key cannot be empty")
+	if err := c.ValidateKey(key); err != nil {
+		return err
 	}
 
 	c.mutex.Lock()
@@ -120,8 +141,8 @@ func (c *MemoryCacheProvider) Exists(ctx context.Context, key string) (bool, err
 		c.RecordOperation("exists", time.Since(start))
 	}()
 
-	if key == "" {
-		return false, infrastructure.NewValidationError("cache key cannot be empty")
+	if err := c.ValidateKey(key); err != nil {
+		return false, err
 	}
 
 	c.mutex.RLock()
