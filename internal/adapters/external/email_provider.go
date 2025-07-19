@@ -18,6 +18,7 @@ type SMTPEmailProviderAdapter struct {
 	password string
 	fromName string
 	fromAddr string
+	addr     string // Pre-computed server address
 }
 
 // EmailProviderConfig represents SMTP configuration
@@ -32,35 +33,32 @@ type EmailProviderConfig struct {
 
 // NewSMTPEmailProviderAdapter creates a new SMTP email provider adapter
 func NewSMTPEmailProviderAdapter(config EmailProviderConfig) ports.EmailProvider {
-	return &SMTPEmailProviderAdapter{
+	provider := &SMTPEmailProviderAdapter{
 		host:     config.Host,
 		port:     config.Port,
 		username: config.Username,
 		password: config.Password,
 		fromName: config.FromName,
 		fromAddr: config.FromAddr,
+		addr:     fmt.Sprintf("%s:%d", config.Host, config.Port),
 	}
+
+	if err := provider.ValidateConfiguration(); err != nil {
+		panic(fmt.Sprintf("invalid email provider configuration: %v", err))
+	}
+
+	return provider
 }
 
 // SendEmail sends an email using SMTP with flexible authentication and TLS
 func (p *SMTPEmailProviderAdapter) SendEmail(ctx context.Context, params ports.EmailParams) error {
-	if params.To == "" {
-		return infrastructure.NewValidationError("recipient email cannot be empty")
-	}
-	if params.Subject == "" {
-		return infrastructure.NewValidationError("email subject cannot be empty")
-	}
-	if params.Body == "" {
-		return infrastructure.NewValidationError("email body cannot be empty")
+	if err := params.Validate(); err != nil {
+		return err
 	}
 
-	from := fmt.Sprintf("%s <%s>", p.fromName, p.fromAddr)
-	msg := p.buildMessage(from, params.To, params.Subject, params.Body, params.IsHTML)
-	addr := fmt.Sprintf("%s:%d", p.host, p.port)
-
-	client, err := smtp.Dial(addr)
+	client, err := p.establishConnection()
 	if err != nil {
-		return infrastructure.NewEmailError("failed to connect to SMTP server", err)
+		return err
 	}
 	defer func() {
 		if closeErr := client.Close(); closeErr != nil {
@@ -68,45 +66,11 @@ func (p *SMTPEmailProviderAdapter) SendEmail(ctx context.Context, params ports.E
 		}
 	}()
 
-	if ok, _ := client.Extension("STARTTLS"); ok {
-		tlsConfig := &tls.Config{
-			ServerName: p.host,
-		}
-		if err := client.StartTLS(tlsConfig); err != nil {
-			return infrastructure.NewEmailError("failed to establish secure TLS connection", err)
-		}
+	if err := p.authenticateConnection(client); err != nil {
+		return err
 	}
 
-	if p.username != "" && p.password != "" {
-		auth := smtp.PlainAuth("", p.username, p.password, p.host)
-		if err := client.Auth(auth); err != nil {
-			return infrastructure.NewEmailError("failed to authenticate", err)
-		}
-	}
-
-	if err := client.Mail(p.fromAddr); err != nil {
-		return infrastructure.NewEmailError("failed to set sender", err)
-	}
-
-	if err := client.Rcpt(params.To); err != nil {
-		return infrastructure.NewEmailError("failed to set recipient", err)
-	}
-
-	writer, err := client.Data()
-	if err != nil {
-		return infrastructure.NewEmailError("failed to get data writer", err)
-	}
-	defer func() {
-		if closeErr := writer.Close(); closeErr != nil {
-			_ = closeErr
-		}
-	}()
-
-	if _, err := writer.Write([]byte(msg)); err != nil {
-		return infrastructure.NewEmailError("failed to write message", err)
-	}
-
-	return nil
+	return p.sendMessage(client, params)
 }
 
 // ValidateConfiguration validates the email provider configuration
@@ -126,10 +90,77 @@ func (p *SMTPEmailProviderAdapter) ValidateConfiguration() error {
 	return nil
 }
 
+// establishConnection creates and configures the SMTP connection
+func (p *SMTPEmailProviderAdapter) establishConnection() (*smtp.Client, error) {
+	client, err := smtp.Dial(p.addr)
+	if err != nil {
+		return nil, infrastructure.NewEmailError("failed to connect to SMTP server", err)
+	}
+
+	if err := p.startTLS(client); err != nil {
+		return nil, err
+	}
+
+	return client, nil
+}
+
+// startTLS establishes a secure TLS connection if supported by the server
+func (p *SMTPEmailProviderAdapter) startTLS(client *smtp.Client) error {
+	if ok, _ := client.Extension("STARTTLS"); ok {
+		tlsConfig := &tls.Config{
+			ServerName: p.host,
+		}
+		if err := client.StartTLS(tlsConfig); err != nil {
+			return infrastructure.NewEmailError("failed to establish secure TLS connection", err)
+		}
+	}
+	return nil
+}
+
+// authenticateConnection handles SMTP authentication
+func (p *SMTPEmailProviderAdapter) authenticateConnection(client *smtp.Client) error {
+	if p.username != "" && p.password != "" {
+		auth := smtp.PlainAuth("", p.username, p.password, p.host)
+		if err := client.Auth(auth); err != nil {
+			return infrastructure.NewEmailError("failed to authenticate", err)
+		}
+	}
+	return nil
+}
+
+// sendMessage sends the email message through the SMTP client
+func (p *SMTPEmailProviderAdapter) sendMessage(client *smtp.Client, params ports.EmailParams) error {
+	if err := client.Mail(p.fromAddr); err != nil {
+		return infrastructure.NewEmailError("failed to set sender", err)
+	}
+
+	if err := client.Rcpt(params.To); err != nil {
+		return infrastructure.NewEmailError("failed to set recipient", err)
+	}
+
+	writer, err := client.Data()
+	if err != nil {
+		return infrastructure.NewEmailError("failed to get data writer", err)
+	}
+	defer func() {
+		if closeErr := writer.Close(); closeErr != nil {
+			_ = closeErr
+		}
+	}()
+
+	msg := p.buildMessage(params.To, params.Subject, params.Body, params)
+	if _, err := writer.Write([]byte(msg)); err != nil {
+		return infrastructure.NewEmailError("failed to write message", err)
+	}
+
+	return nil
+}
+
 // buildMessage constructs the email message
-func (p *SMTPEmailProviderAdapter) buildMessage(from, to, subject, body string, isHTML bool) string {
+func (p *SMTPEmailProviderAdapter) buildMessage(to, subject, body string, params ports.EmailParams) string {
+	from := fmt.Sprintf("%s <%s>", p.fromName, p.fromAddr)
 	contentType := "text/plain"
-	if isHTML {
+	if params.IsHTML() {
 		contentType = "text/html"
 	}
 

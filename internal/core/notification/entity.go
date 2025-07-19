@@ -2,7 +2,6 @@ package notification
 
 import (
 	"errors"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -25,14 +24,6 @@ type NotificationStats struct {
 	LastUpdated         time.Time
 	LastSentAt          time.Time
 	ProcessingTime      time.Duration
-}
-
-// EmailParams represents parameters for sending emails
-type EmailParams struct {
-	To      string
-	Subject string
-	Body    string
-	IsHTML  bool
 }
 
 // NotificationRequest represents a request to send notifications
@@ -64,20 +55,6 @@ func NewNotificationToken(tokenType string, expiresIn time.Duration) *Token {
 // IsExpired checks if the token has expired
 func (t *Token) IsExpired() bool {
 	return time.Now().After(t.ExpiresAt)
-}
-
-// IsValid validates email parameters
-func (e *EmailParams) IsValid() error {
-	if strings.TrimSpace(e.To) == "" {
-		return errors.New("recipient email is required")
-	}
-	if strings.TrimSpace(e.Subject) == "" {
-		return errors.New("email subject is required")
-	}
-	if strings.TrimSpace(e.Body) == "" {
-		return errors.New("email body is required")
-	}
-	return nil
 }
 
 // IsValid validates notification request

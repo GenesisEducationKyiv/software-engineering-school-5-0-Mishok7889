@@ -9,82 +9,82 @@ import (
 )
 
 func TestSMTPEmailProviderAdapter_ValidateConfiguration(t *testing.T) {
+	validConfig := EmailProviderConfig{
+		Host:     "smtp.example.com",
+		Port:     587,
+		Username: "user",
+		Password: "pass",
+		FromName: "App",
+		FromAddr: "app@company.com",
+	}
+
 	tests := []struct {
 		name        string
-		config      EmailProviderConfig
-		expectError bool
+		modify      func(EmailProviderConfig) EmailProviderConfig
+		expectPanic bool
 	}{
 		{
-			name: "Valid Mailhog Config",
-			config: EmailProviderConfig{
-				Host:     "mailhog-e2e",
-				Port:     1025,
-				Username: "",
-				Password: "",
-				FromName: "Weather API E2E",
-				FromAddr: "test@weatherapi.com",
+			name: "Valid Config",
+			modify: func(cfg EmailProviderConfig) EmailProviderConfig {
+				return cfg
 			},
-			expectError: false,
+			expectPanic: false,
 		},
 		{
-			name: "Valid Production Config",
-			config: EmailProviderConfig{
-				Host:     "smtp.gmail.com",
-				Port:     587,
-				Username: "user@gmail.com",
-				Password: "password123",
-				FromName: "Weather API",
-				FromAddr: "noreply@weatherapi.com",
+			name: "Valid Mailhog Config",
+			modify: func(cfg EmailProviderConfig) EmailProviderConfig {
+				cfg.Host = "mailhog-e2e"
+				cfg.Port = 1025
+				cfg.Username = ""
+				cfg.Password = ""
+				cfg.FromName = "Weather API E2E"
+				cfg.FromAddr = "test@weatherapi.com"
+				return cfg
 			},
-			expectError: false,
+			expectPanic: false,
 		},
 		{
 			name: "Missing Host",
-			config: EmailProviderConfig{
-				Host:     "",
-				Port:     587,
-				Username: "user",
-				Password: "pass",
-				FromName: "App",
-				FromAddr: "app@company.com",
+			modify: func(cfg EmailProviderConfig) EmailProviderConfig {
+				cfg.Host = ""
+				return cfg
 			},
-			expectError: true,
+			expectPanic: true,
 		},
 		{
 			name: "Invalid Port",
-			config: EmailProviderConfig{
-				Host:     "smtp.example.com",
-				Port:     0,
-				Username: "user",
-				Password: "pass",
-				FromName: "App",
-				FromAddr: "app@company.com",
+			modify: func(cfg EmailProviderConfig) EmailProviderConfig {
+				cfg.Port = 0
+				return cfg
 			},
-			expectError: true,
+			expectPanic: true,
 		},
 		{
 			name: "Missing From Address",
-			config: EmailProviderConfig{
-				Host:     "smtp.example.com",
-				Port:     587,
-				Username: "user",
-				Password: "pass",
-				FromName: "App",
-				FromAddr: "",
+			modify: func(cfg EmailProviderConfig) EmailProviderConfig {
+				cfg.FromAddr = ""
+				return cfg
 			},
-			expectError: true,
+			expectPanic: true,
 		},
 	}
 
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			provider := NewSMTPEmailProviderAdapter(tt.config).(*SMTPEmailProviderAdapter)
-			err := provider.ValidateConfiguration()
+			t.Parallel()
 
-			if tt.expectError {
-				assert.Error(t, err)
+			config := tt.modify(validConfig)
+
+			if tt.expectPanic {
+				assert.Panics(t, func() {
+					NewSMTPEmailProviderAdapter(config)
+				})
 			} else {
-				assert.NoError(t, err)
+				assert.NotPanics(t, func() {
+					provider := NewSMTPEmailProviderAdapter(config)
+					assert.NotNil(t, provider)
+				})
 			}
 		})
 	}
@@ -103,56 +103,66 @@ func TestSMTPEmailProviderAdapter_SendEmailValidation(t *testing.T) {
 	provider := NewSMTPEmailProviderAdapter(config)
 	ctx := context.Background()
 
+	validParams := ports.EmailParams{
+		To:      "recipient@example.com",
+		Subject: "Test Subject",
+		Body:    "Test Body",
+		Format:  ports.FormatText,
+	}
+
 	tests := []struct {
 		name        string
-		params      ports.EmailParams
+		modify      func(ports.EmailParams) ports.EmailParams
 		expectError bool
 	}{
 		{
 			name: "Valid Email Params",
-			params: ports.EmailParams{
-				To:      "recipient@example.com",
-				Subject: "Test Subject",
-				Body:    "Test Body",
-				IsHTML:  false,
+			modify: func(params ports.EmailParams) ports.EmailParams {
+				return params
 			},
 			expectError: false, // Will fail due to no actual SMTP server, but validation should pass
 		},
 		{
 			name: "Missing To",
-			params: ports.EmailParams{
-				To:      "",
-				Subject: "Test Subject",
-				Body:    "Test Body",
-				IsHTML:  false,
+			modify: func(params ports.EmailParams) ports.EmailParams {
+				params.To = ""
+				return params
 			},
 			expectError: true,
 		},
 		{
 			name: "Missing Subject",
-			params: ports.EmailParams{
-				To:      "recipient@example.com",
-				Subject: "",
-				Body:    "Test Body",
-				IsHTML:  false,
+			modify: func(params ports.EmailParams) ports.EmailParams {
+				params.Subject = ""
+				return params
 			},
 			expectError: true,
 		},
 		{
 			name: "Missing Body",
-			params: ports.EmailParams{
-				To:      "recipient@example.com",
-				Subject: "Test Subject",
-				Body:    "",
-				IsHTML:  false,
+			modify: func(params ports.EmailParams) ports.EmailParams {
+				params.Body = ""
+				return params
+			},
+			expectError: true,
+		},
+		{
+			name: "Invalid Format",
+			modify: func(params ports.EmailParams) ports.EmailParams {
+				params.Format = "invalid"
+				return params
 			},
 			expectError: true,
 		},
 	}
 
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			err := provider.SendEmail(ctx, tt.params)
+			t.Parallel()
+
+			params := tt.modify(validParams)
+			err := provider.SendEmail(ctx, params)
 
 			if tt.expectError {
 				assert.Error(t, err)
@@ -183,20 +193,17 @@ func TestSMTPEmailProviderAdapter_BuildMessage(t *testing.T) {
 
 	tests := []struct {
 		name     string
-		from     string
-		to       string
-		subject  string
-		body     string
-		isHTML   bool
+		params   ports.EmailParams
 		contains []string
 	}{
 		{
-			name:    "Plain Text Email",
-			from:    "Test App <test@example.com>",
-			to:      "recipient@example.com",
-			subject: "Test Subject",
-			body:    "Test Body",
-			isHTML:  false,
+			name: "Plain Text Email",
+			params: ports.EmailParams{
+				To:      "recipient@example.com",
+				Subject: "Test Subject",
+				Body:    "Test Body",
+				Format:  ports.FormatText,
+			},
 			contains: []string{
 				"From: Test App <test@example.com>",
 				"To: recipient@example.com",
@@ -206,12 +213,13 @@ func TestSMTPEmailProviderAdapter_BuildMessage(t *testing.T) {
 			},
 		},
 		{
-			name:    "HTML Email",
-			from:    "Test App <test@example.com>",
-			to:      "recipient@example.com",
-			subject: "HTML Test",
-			body:    "<h1>HTML Body</h1>",
-			isHTML:  true,
+			name: "HTML Email",
+			params: ports.EmailParams{
+				To:      "recipient@example.com",
+				Subject: "HTML Test",
+				Body:    "<h1>HTML Body</h1>",
+				Format:  ports.FormatHTML,
+			},
 			contains: []string{
 				"From: Test App <test@example.com>",
 				"To: recipient@example.com",
@@ -223,8 +231,11 @@ func TestSMTPEmailProviderAdapter_BuildMessage(t *testing.T) {
 	}
 
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			msg := provider.buildMessage(tt.from, tt.to, tt.subject, tt.body, tt.isHTML)
+			t.Parallel()
+
+			msg := provider.buildMessage(tt.params.To, tt.params.Subject, tt.params.Body, tt.params)
 
 			for _, expected := range tt.contains {
 				assert.Contains(t, msg, expected)

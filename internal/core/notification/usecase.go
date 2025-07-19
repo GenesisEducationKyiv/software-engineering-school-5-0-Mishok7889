@@ -126,7 +126,7 @@ func (uc *UseCase) sendWeatherUpdateToSubscription(ctx context.Context, sub *por
 		To:      sub.Email,
 		Subject: fmt.Sprintf("Weather Update for %s", currentWeather.City),
 		Body:    uc.buildWeatherUpdateEmailBody(sub, currentWeather),
-		IsHTML:  true,
+		Format:  ports.FormatHTML,
 	}
 
 	if err := uc.emailProvider.SendEmail(ctx, emailParams); err != nil {

@@ -345,7 +345,7 @@ func (uc *UseCase) sendConfirmationEmail(ctx context.Context, subscription *Subs
 		To:      subscription.Email,
 		Subject: "Confirm your weather subscription",
 		Body:    uc.buildConfirmationEmailBody(subscription, confirmToken.Value),
-		IsHTML:  true,
+		Format:  ports.FormatHTML,
 	}
 
 	if err := uc.emailProvider.SendEmail(ctx, emailParams); err != nil {
@@ -370,7 +370,7 @@ func (uc *UseCase) sendWelcomeEmail(ctx context.Context, subscription *Subscript
 		To:      subscription.Email,
 		Subject: "Welcome to Weather Updates!",
 		Body:    uc.buildWelcomeEmailBody(subscription, unsubscribeToken.Value),
-		IsHTML:  true,
+		Format:  ports.FormatHTML,
 	}
 
 	if err := uc.emailProvider.SendEmail(ctx, emailParams); err != nil {
@@ -385,7 +385,7 @@ func (uc *UseCase) sendUnsubscribeConfirmationEmail(ctx context.Context, subscri
 		To:      subscription.Email,
 		Subject: "You have been unsubscribed from weather updates",
 		Body:    uc.buildUnsubscribeConfirmationBody(subscription),
-		IsHTML:  true,
+		Format:  ports.FormatHTML,
 	}
 
 	if err := uc.emailProvider.SendEmail(ctx, emailParams); err != nil {
