@@ -20,22 +20,6 @@ func NewSubscriptionServiceAdapter(subscriptionRepo ports.SubscriptionRepository
 	}
 }
 
-// GetActiveSubscriptions returns all active subscriptions for a given frequency
-func (a *SubscriptionServiceAdapter) GetActiveSubscriptions(ctx context.Context, frequency string) ([]*ports.SubscriptionServiceData, error) {
-	confirmed := true
-	filter := ports.SubscriptionFilter{
-		Frequency: &frequency,
-		Confirmed: &confirmed,
-	}
-
-	subscriptions, err := a.subscriptionRepo.Find(ctx, filter)
-	if err != nil {
-		return nil, err
-	}
-
-	return a.convertToServiceData(ctx, subscriptions)
-}
-
 // GetConfirmedSubscriptions returns all confirmed subscriptions for a given frequency
 func (a *SubscriptionServiceAdapter) GetConfirmedSubscriptions(ctx context.Context, frequency string) ([]*ports.SubscriptionServiceData, error) {
 	confirmed := true

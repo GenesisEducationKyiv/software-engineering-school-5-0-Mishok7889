@@ -24,7 +24,6 @@ type WeatherServiceData struct {
 
 // SubscriptionService defines the contract for subscription operations used by other bounded contexts
 type SubscriptionService interface {
-	GetActiveSubscriptions(ctx context.Context, frequency string) ([]*SubscriptionServiceData, error)
 	GetConfirmedSubscriptions(ctx context.Context, frequency string) ([]*SubscriptionServiceData, error)
 	FindByID(ctx context.Context, id uint) (*SubscriptionServiceData, error)
 }
