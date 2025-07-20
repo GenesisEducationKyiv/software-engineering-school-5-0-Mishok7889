@@ -9,11 +9,11 @@ import (
 
 // getMetrics handles GET /api/metrics requests
 func (s *HTTPServerAdapter) getMetrics(c *gin.Context) {
-	s.logger.Debug("Metrics endpoint called")
+	s.logger.Debug(MetricsEndpointCalledMsg)
 
 	metrics, err := s.metricsCollector.GetMetrics(c.Request.Context())
 	if err != nil {
-		s.logger.Error("Error getting metrics", ports.F("error", err))
+		s.logger.Error(ErrorGettingMetricsMsg, ports.F(ErrorField, err))
 		s.handleError(c, err)
 		return
 	}
@@ -23,12 +23,12 @@ func (s *HTTPServerAdapter) getMetrics(c *gin.Context) {
 
 // getHealth handles GET /api/health requests
 func (s *HTTPServerAdapter) getHealth(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	c.JSON(http.StatusOK, gin.H{StatusField: HealthStatusOK})
 }
 
 // getDebug handles GET /api/debug requests
 func (s *HTTPServerAdapter) getDebug(c *gin.Context) {
-	s.logger.Debug("Debug endpoint called")
+	s.logger.Debug(DebugEndpointCalledMsg)
 
 	healthStatuses := s.systemHealthChecker.CheckAll(c.Request.Context())
 
@@ -36,18 +36,18 @@ func (s *HTTPServerAdapter) getDebug(c *gin.Context) {
 
 	for component, status := range healthStatuses {
 		switch component {
-		case "database":
-			response["database"] = gin.H{
-				"connected": status.Status == "healthy",
+		case DatabaseComponent:
+			response[DatabaseComponent] = gin.H{
+				ConnectedField: status.Status == HealthyStatus,
 			}
-		case "weatherAPI":
-			response["weatherAPI"] = gin.H{
-				"connected": status.Status == "healthy",
+		case WeatherAPIComponent:
+			response[WeatherAPIComponent] = gin.H{
+				ConnectedField: status.Status == HealthyStatus,
 			}
-		case "smtp":
-			response["smtp"] = status.Details
-		case "config":
-			response["config"] = status.Details
+		case SMTPComponent:
+			response[SMTPComponent] = status.Details
+		case ConfigComponent:
+			response[ConfigComponent] = status.Details
 		}
 	}
 

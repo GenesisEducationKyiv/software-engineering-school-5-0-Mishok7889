@@ -34,7 +34,7 @@ func (s *HTTPServerAdapter) mapError(err error) (int, string) {
 		return statusCode, message
 	}
 
-	return http.StatusInternalServerError, "Internal server error"
+	return http.StatusInternalServerError, InternalServerErrorMsg
 }
 
 // mapAPIError maps API-specific errors to HTTP responses
@@ -48,7 +48,7 @@ func (s *HTTPServerAdapter) mapAPIError(err error) (int, string) {
 	case APIValidationErrorType:
 		return http.StatusBadRequest, apiErr.Message
 	default:
-		return http.StatusInternalServerError, "Internal server error"
+		return http.StatusInternalServerError, InternalServerErrorMsg
 	}
 }
 
@@ -69,11 +69,11 @@ func (s *HTTPServerAdapter) mapDomainError(err error) (int, string) {
 	case shared.ErrCodeUnauthorized:
 		return http.StatusUnauthorized, domainErr.Message
 	case shared.ErrCodeExternalService:
-		return http.StatusServiceUnavailable, "External service unavailable"
+		return http.StatusServiceUnavailable, ExternalServiceErrorMsg
 	case shared.ErrCodeInternal:
-		return http.StatusInternalServerError, "Internal server error"
+		return http.StatusInternalServerError, InternalServerErrorMsg
 	default:
-		return http.StatusInternalServerError, "Internal server error"
+		return http.StatusInternalServerError, InternalServerErrorMsg
 	}
 }
 

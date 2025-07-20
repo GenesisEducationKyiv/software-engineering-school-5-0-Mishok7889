@@ -81,19 +81,19 @@ func NewHTTPServerAdapter(opts ServerOptions) (*HTTPServerAdapter, error) {
 // Validate checks if all required dependencies are provided
 func (opts *ServerOptions) Validate() error {
 	if opts.WeatherUseCase == nil {
-		return NewValidationError("weather use case is required")
+		return NewValidationError(WeatherUseCaseRequiredMsg)
 	}
 	if opts.SubscriptionUseCase == nil {
-		return NewValidationError("subscription use case is required")
+		return NewValidationError(SubscriptionUseCaseRequiredMsg)
 	}
 	if opts.MetricsCollector == nil {
-		return NewValidationError("metrics collector is required")
+		return NewValidationError(MetricsCollectorRequiredMsg)
 	}
 	if opts.SystemHealthChecker == nil {
-		return NewValidationError("system health checker is required")
+		return NewValidationError(SystemHealthCheckerRequiredMsg)
 	}
 	if opts.Logger == nil {
-		return NewValidationError("logger is required")
+		return NewValidationError(LoggerRequiredMsg)
 	}
 	return nil
 }
@@ -119,7 +119,7 @@ func (s *HTTPServerAdapter) setupRoutes() {
 
 // Start begins the HTTP server
 func (s *HTTPServerAdapter) Start(ctx context.Context) error {
-	s.logger.Info("Starting HTTP server", ports.F("port", s.config.Port))
+	s.logger.Info(StartingHTTPServerMsg, ports.F(PortField, s.config.Port))
 	return s.router.Run(fmt.Sprintf(":%d", s.config.Port))
 }
 

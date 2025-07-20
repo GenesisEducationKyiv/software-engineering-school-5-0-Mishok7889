@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"weatherapi.app/internal/core/shared"
 	"weatherapi.app/internal/core/subscription"
 	"weatherapi.app/internal/ports"
 )
@@ -23,18 +24,18 @@ type SuccessResponse struct {
 // subscribe handles POST /api/subscribe requests
 func (s *HTTPServerAdapter) subscribe(c *gin.Context) {
 	var httpReq SubscriptionRequest
-	s.logger.Debug("Handling subscription request")
+	s.logger.Debug(HandlingSubscriptionMsg)
 
 	if err := c.ShouldBind(&httpReq); err != nil {
-		s.logger.Error("Request binding error", ports.F("error", err))
-		s.handleError(c, NewValidationError("Invalid request format"))
+		s.logger.Error(RequestBindingErrorMsg, ports.F(ErrorField, err))
+		s.handleError(c, NewValidationError(InvalidRequestFormatMsg))
 		return
 	}
 
-	s.logger.Debug("Subscription request received",
-		ports.F("email", httpReq.Email),
-		ports.F("city", httpReq.City),
-		ports.F("frequency", httpReq.Frequency))
+	s.logger.Debug(SubscriptionRequestMsg,
+		ports.F(EmailField, httpReq.Email),
+		ports.F(CityField, httpReq.City),
+		ports.F(FrequencyField, httpReq.Frequency))
 
 	domainReq := subscription.SubscribeParams{
 		Email:     httpReq.Email,
@@ -43,58 +44,58 @@ func (s *HTTPServerAdapter) subscribe(c *gin.Context) {
 	}
 
 	if err := s.subscriptionUseCase.Subscribe(c.Request.Context(), domainReq); err != nil {
-		s.logger.Error("Subscription error",
-			ports.F("error", err),
-			ports.F("email", httpReq.Email),
-			ports.F("city", httpReq.City))
+		s.logger.Error(SubscriptionErrorMsg,
+			ports.F(ErrorField, err),
+			ports.F(EmailField, httpReq.Email),
+			ports.F(CityField, httpReq.City))
 		s.handleError(c, err)
 		return
 	}
 
-	s.logger.Debug("Subscription created successfully",
-		ports.F("email", httpReq.Email),
-		ports.F("city", httpReq.City))
-	c.JSON(http.StatusOK, SuccessResponse{Message: "Subscription successful. Confirmation email sent."})
+	s.logger.Debug(SubscriptionCreatedMsg,
+		ports.F(EmailField, httpReq.Email),
+		ports.F(CityField, httpReq.City))
+	c.JSON(http.StatusOK, SuccessResponse{Message: SubscriptionSuccessMsg})
 }
 
 // confirmSubscription handles GET /api/confirm/:token requests
 func (s *HTTPServerAdapter) confirmSubscription(c *gin.Context) {
 	// Get validated token from middleware
-	token := c.GetString("validated_token")
+	token := c.GetString(shared.ValidatedTokenKey)
 
-	s.logger.Debug("Confirming subscription", ports.F("token", token))
+	s.logger.Debug(ConfirmingSubscriptionMsg, ports.F(TokenField, token))
 
 	confirmParams := subscription.ConfirmParams{
 		Token: token,
 	}
 
 	if err := s.subscriptionUseCase.ConfirmSubscription(c.Request.Context(), confirmParams); err != nil {
-		s.logger.Error("Confirmation error", ports.F("error", err), ports.F("token", token))
+		s.logger.Error(ConfirmationErrorMsg, ports.F(ErrorField, err), ports.F(TokenField, token))
 		s.handleError(c, err)
 		return
 	}
 
-	s.logger.Debug("Subscription confirmed successfully", ports.F("token", token))
-	c.JSON(http.StatusOK, SuccessResponse{Message: "Subscription confirmed successfully"})
+	s.logger.Debug(SubscriptionConfirmedMsg, ports.F(TokenField, token))
+	c.JSON(http.StatusOK, SuccessResponse{Message: ConfirmationSuccessMsg})
 }
 
 // unsubscribe handles GET /api/unsubscribe/:token requests
 func (s *HTTPServerAdapter) unsubscribe(c *gin.Context) {
 	// Get validated token from middleware
-	token := c.GetString("validated_token")
+	token := c.GetString(shared.ValidatedTokenKey)
 
-	s.logger.Debug("Unsubscribing", ports.F("token", token))
+	s.logger.Debug(UnsubscribingMsg, ports.F(TokenField, token))
 
 	unsubscribeParams := subscription.UnsubscribeParams{
 		Token: token,
 	}
 
 	if err := s.subscriptionUseCase.Unsubscribe(c.Request.Context(), unsubscribeParams); err != nil {
-		s.logger.Error("Unsubscribe error", ports.F("error", err), ports.F("token", token))
+		s.logger.Error(UnsubscribeErrorMsg, ports.F(ErrorField, err), ports.F(TokenField, token))
 		s.handleError(c, err)
 		return
 	}
 
-	s.logger.Debug("Unsubscribed successfully", ports.F("token", token))
-	c.JSON(http.StatusOK, SuccessResponse{Message: "Unsubscribed successfully"})
+	s.logger.Debug(UnsubscribedMsg, ports.F(TokenField, token))
+	c.JSON(http.StatusOK, SuccessResponse{Message: UnsubscribeSuccessMsg})
 }

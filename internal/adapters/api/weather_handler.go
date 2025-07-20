@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"weatherapi.app/internal/core/shared"
 	"weatherapi.app/internal/core/weather"
 	"weatherapi.app/internal/ports"
 )
@@ -19,25 +20,25 @@ type WeatherResponse struct {
 // getWeather handles GET /api/weather requests
 func (s *HTTPServerAdapter) getWeather(c *gin.Context) {
 	// Increment API call counter
-	s.metricsCollector.IncrementCounter("api_requests_total", map[string]string{
-		"endpoint": "weather",
-		"method":   "GET",
+	s.metricsCollector.IncrementCounter(APIRequestsTotalMetric, map[string]string{
+		EndpointLabelKey: WeatherEndpoint,
+		MethodLabelKey:   GetMethod,
 	})
 
 	// Get validated city from middleware
-	city := c.GetString("validated_city")
+	city := c.GetString(shared.ValidatedCityKey)
 
-	s.logger.Debug("Getting weather for city", ports.F("city", city))
+	s.logger.Debug(GettingWeatherForCityMsg, ports.F(CityField, city))
 
 	request := weather.WeatherRequest{City: city}
 	weatherData, err := s.weatherUseCase.GetWeather(c.Request.Context(), request)
 	if err != nil {
-		s.logger.Error("Weather use case error",
-			ports.F("error", err),
-			ports.F("city", city))
-		s.metricsCollector.IncrementCounter("api_errors_total", map[string]string{
-			"endpoint": "weather",
-			"error":    "usecase",
+		s.logger.Error(WeatherUseCaseErrorMsg,
+			ports.F(ErrorField, err),
+			ports.F(CityField, city))
+		s.metricsCollector.IncrementCounter(APIErrorsTotalMetric, map[string]string{
+			EndpointLabelKey: WeatherEndpoint,
+			ErrorLabelKey:    UsecaseError,
 		})
 		s.handleError(c, err)
 		return
@@ -50,13 +51,13 @@ func (s *HTTPServerAdapter) getWeather(c *gin.Context) {
 		City:        weatherData.City,
 	}
 
-	s.metricsCollector.IncrementCounter("api_responses_total", map[string]string{
-		"endpoint": "weather",
-		"status":   "success",
+	s.metricsCollector.IncrementCounter(APIResponsesTotalMetric, map[string]string{
+		EndpointLabelKey: WeatherEndpoint,
+		StatusLabelKey:   SuccessStatus,
 	})
 
-	s.logger.Debug("Weather result",
-		ports.F("temperature", response.Temperature),
-		ports.F("city", city))
+	s.logger.Debug(WeatherResultMsg,
+		ports.F(TemperatureField, response.Temperature),
+		ports.F(CityField, city))
 	c.JSON(http.StatusOK, response)
 }

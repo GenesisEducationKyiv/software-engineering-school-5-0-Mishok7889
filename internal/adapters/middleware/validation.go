@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"weatherapi.app/internal/core/shared"
 )
 
 // Error constants for validation
@@ -39,7 +40,7 @@ func (v *ValidationMiddleware) ValidateTokenParam() gin.HandlerFunc {
 		}
 
 		// Store validated token in context for handler use
-		c.Set("validated_token", token)
+		c.Set(shared.ValidatedTokenKey, token)
 		c.Next()
 	}
 }
@@ -57,7 +58,7 @@ func (v *ValidationMiddleware) ValidateCityQuery() gin.HandlerFunc {
 		}
 
 		// Store validated city in context for handler use
-		c.Set("validated_city", city)
+		c.Set(shared.ValidatedCityKey, city)
 		c.Next()
 	}
 }
