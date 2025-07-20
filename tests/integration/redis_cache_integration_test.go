@@ -15,8 +15,8 @@ import (
 	"weatherapi.app/internal/ports"
 )
 
-// setupRedisAdapter creates a Redis adapter for testing
-func setupRedisAdapter(t *testing.T) *external.RedisCacheProviderAdapter {
+// setupRedisCacheWithMetrics creates a Redis cache with metrics for testing
+func setupRedisCacheWithMetrics(t *testing.T) (*external.CacheMetricsDecorator, func()) {
 	t.Helper()
 
 	// Create mock Redis server
@@ -32,18 +32,28 @@ func setupRedisAdapter(t *testing.T) *external.RedisCacheProviderAdapter {
 		WriteTimeout: 3,
 	}
 
-	adapter, err := external.NewRedisCacheProviderAdapter(redisConfig)
+	// Create Redis client
+	client, err := external.NewRedisCacheClient(context.Background(), redisConfig)
 	if err != nil {
-		t.Fatalf("Failed to create Redis adapter: %v", err)
+		t.Fatalf("Failed to create Redis client: %v", err)
 	}
 
-	return adapter
+	// Wrap with metrics decorator
+	decorator := external.NewCacheMetricsDecorator(client)
+
+	// Return cleanup function
+	cleanup := func() {
+		_ = client.Close()
+		mockRedis.Close()
+	}
+
+	return decorator, cleanup
 }
 
 // TestRedisCache_WeatherDataIntegration tests Redis cache with actual weather data
 func TestRedisCache_WeatherDataIntegration(t *testing.T) {
-	adapter := setupRedisAdapter(t)
-	defer func() { _ = adapter.Close() }()
+	adapter, cleanup := setupRedisCacheWithMetrics(t)
+	defer cleanup()
 
 	ctx := context.Background()
 
@@ -89,8 +99,8 @@ func TestRedisCache_WeatherDataIntegration(t *testing.T) {
 
 // TestRedisCache_MultipleDataTypes tests Redis cache with different data types
 func TestRedisCache_MultipleDataTypes(t *testing.T) {
-	adapter := setupRedisAdapter(t)
-	defer func() { _ = adapter.Close() }()
+	adapter, cleanup := setupRedisCacheWithMetrics(t)
+	defer cleanup()
 
 	ctx := context.Background()
 
@@ -210,27 +220,42 @@ func TestRedisCache_ConfigurationTypes(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			adapter, err := external.NewRedisCacheProviderAdapter(tt.config)
+			// Use factory to create cache provider
+			factory := external.NewCacheProviderFactory()
+			cacheConfig := &config.CacheConfig{
+				Type:  config.CacheTypeRedis,
+				Redis: *tt.config,
+			}
+
+			provider, err := factory.CreateCacheProvider(context.Background(), cacheConfig)
 
 			if tt.shouldWork {
 				if err != nil {
 					t.Skipf("Skipping Redis test: %v", err)
 				}
 				require.NoError(t, err)
-				require.NotNil(t, adapter)
-				defer func() { _ = adapter.Close() }()
+				require.NotNil(t, provider)
+
+				// Cleanup function
+				defer func() {
+					if decorator, ok := provider.(*external.CacheMetricsDecorator); ok {
+						if redisClient, ok := decorator.GetProvider().(*external.RedisCacheClient); ok {
+							_ = redisClient.Close()
+						}
+					}
+				}()
 
 				// Test basic operation
 				ctx := context.Background()
-				err = adapter.Set(ctx, "test-key", []byte("test-value"), time.Minute)
+				err = provider.Set(ctx, "test-key", []byte("test-value"), time.Minute)
 				assert.NoError(t, err)
 
-				value, err := adapter.Get(ctx, "test-key")
+				value, err := provider.Get(ctx, "test-key")
 				assert.NoError(t, err)
 				assert.Equal(t, []byte("test-value"), value)
 			} else {
 				assert.Error(t, err)
-				assert.Nil(t, adapter)
+				assert.Nil(t, provider)
 			}
 		})
 	}
@@ -238,8 +263,8 @@ func TestRedisCache_ConfigurationTypes(t *testing.T) {
 
 // TestRedisCache_PerformanceMetrics tests performance tracking
 func TestRedisCache_PerformanceMetrics(t *testing.T) {
-	adapter := setupRedisAdapter(t)
-	defer func() { _ = adapter.Close() }()
+	adapter, cleanup := setupRedisCacheWithMetrics(t)
+	defer cleanup()
 
 	ctx := context.Background()
 
@@ -283,13 +308,15 @@ func TestRedisCache_PerformanceMetrics(t *testing.T) {
 
 // TestRedisCache_ConnectionRecovery tests connection recovery
 func TestRedisCache_ConnectionRecovery(t *testing.T) {
-	adapter := setupRedisAdapter(t)
-	defer func() { _ = adapter.Close() }()
+	adapter, cleanup := setupRedisCacheWithMetrics(t)
+	defer cleanup()
 
 	ctx := context.Background()
 
-	// Test initial connection
-	err := adapter.Ping(ctx)
+	// Test initial connection - get underlying Redis client for Ping
+	decorator := adapter
+	redisClient := decorator.GetProvider().(*external.RedisCacheClient)
+	err := redisClient.Ping(ctx)
 	require.NoError(t, err)
 
 	// Store some data
@@ -302,6 +329,6 @@ func TestRedisCache_ConnectionRecovery(t *testing.T) {
 	assert.Equal(t, []byte("test-data"), value)
 
 	// Test connection again
-	err = adapter.Ping(ctx)
+	err = redisClient.Ping(ctx)
 	assert.NoError(t, err)
 }

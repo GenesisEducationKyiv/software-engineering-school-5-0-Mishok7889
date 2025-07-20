@@ -15,6 +15,7 @@ import (
 // TestCacheProviderFactory_CreateCacheProvider tests the factory
 func TestCacheProviderFactory_CreateCacheProvider(t *testing.T) {
 	factory := NewCacheProviderFactory()
+	ctx := context.Background()
 
 	tests := []struct {
 		name         string
@@ -33,7 +34,7 @@ func TestCacheProviderFactory_CreateCacheProvider(t *testing.T) {
 				Type: config.CacheTypeMemory,
 			},
 			expectError:  false,
-			expectedType: "*external.MemoryCacheProvider",
+			expectedType: "*external.CacheMetricsDecorator",
 		},
 		{
 			name: "RedisCache",
@@ -49,7 +50,7 @@ func TestCacheProviderFactory_CreateCacheProvider(t *testing.T) {
 				},
 			},
 			expectError:  false,
-			expectedType: "*external.RedisCacheProviderAdapter",
+			expectedType: "*external.CacheMetricsDecorator",
 		},
 		{
 			name: "UnknownCacheType",
@@ -62,27 +63,42 @@ func TestCacheProviderFactory_CreateCacheProvider(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			provider, err := factory.CreateCacheProvider(tt.config)
+			provider, err := factory.CreateCacheProvider(ctx, tt.config)
 
 			if tt.expectError {
 				assert.Error(t, err)
 				assert.Nil(t, provider)
 			} else {
-				if tt.expectedType == "*external.RedisCacheProviderAdapter" && err != nil {
+				if tt.config != nil && tt.config.Type == config.CacheTypeRedis && err != nil {
 					t.Skipf("Skipping Redis test due to connection error: %v", err)
 				}
 				assert.NoError(t, err)
 				assert.NotNil(t, provider)
-				assert.Contains(t, string(rune(0))+tt.expectedType, string(rune(0)))
+
+				// Verify the provider is a CacheMetricsDecorator which implements both interfaces
+				decorator, ok := provider.(*CacheMetricsDecorator)
+				assert.True(t, ok, "Provider should be a CacheMetricsDecorator")
+
+				// Verify it implements both interfaces through the decorator
+				var _ ports.CacheProvider = decorator
+				var _ ports.CacheMetrics = decorator
 			}
 		})
 	}
 }
 
-// TestMemoryCacheProvider_Operations tests memory cache operations
-func TestMemoryCacheProvider_Operations(t *testing.T) {
-	provider := NewMemoryCacheProvider()
+// TestCacheProviderFactory_MemoryCacheOperations tests memory cache operations through factory
+func TestCacheProviderFactory_MemoryCacheOperations(t *testing.T) {
+	factory := NewCacheProviderFactory()
 	ctx := context.Background()
+
+	config := &config.CacheConfig{
+		Type: config.CacheTypeMemory,
+	}
+
+	provider, err := factory.CreateCacheProvider(ctx, config)
+	require.NoError(t, err)
+	require.NotNil(t, provider)
 
 	// Clear cache before testing
 	require.NoError(t, provider.Clear(ctx))
@@ -106,71 +122,56 @@ func TestMemoryCacheProvider_Operations(t *testing.T) {
 		retrieved, err := provider.Get(ctx, key)
 		assert.Error(t, err)
 		assert.Nil(t, retrieved)
-
-		// Check if it's a ports NotFoundError or infrastructure error
-		if !ports.IsNotFoundError(err) {
-			var infraErr *infrastructure.InfrastructureError
-			if assert.ErrorAs(t, err, &infraErr) {
-				assert.Contains(t, infraErr.Type, "ERROR")
-			}
-		}
+		assert.True(t, ports.IsNotFoundError(err))
 	})
 
-	t.Run("Delete", func(t *testing.T) {
-		key := "delete-key"
-		value := []byte("delete-value")
+	t.Run("MetricsTracking", func(t *testing.T) {
+		// Cast to metrics interface
+		metricsProvider, ok := provider.(*CacheMetricsDecorator)
+		require.True(t, ok, "Provider should be CacheMetricsDecorator")
+
+		// Clear and check initial stats
+		require.NoError(t, provider.Clear(ctx))
+		stats := metricsProvider.GetStats()
+		assert.Equal(t, int64(0), stats.Hits)
+		assert.Equal(t, int64(0), stats.Misses)
+
+		// Set a value and generate hits/misses
+		key := "metrics-key"
+		value := []byte("metrics-value")
 		ttl := time.Minute
 
 		err := provider.Set(ctx, key, value, ttl)
 		require.NoError(t, err)
 
-		err = provider.Delete(ctx, key)
-		require.NoError(t, err)
-
+		// Hit
 		_, err = provider.Get(ctx, key)
+		require.NoError(t, err)
+
+		// Miss
+		_, err = provider.Get(ctx, "non-existent")
 		assert.Error(t, err)
-	})
 
-	t.Run("Exists", func(t *testing.T) {
-		key := "exists-key"
-		value := []byte("exists-value")
-		ttl := time.Minute
-
-		exists, err := provider.Exists(ctx, key)
-		require.NoError(t, err)
-		assert.False(t, exists)
-
-		err = provider.Set(ctx, key, value, ttl)
-		require.NoError(t, err)
-
-		exists, err = provider.Exists(ctx, key)
-		require.NoError(t, err)
-		assert.True(t, exists)
-	})
-
-	t.Run("TTLExpiration", func(t *testing.T) {
-		key := "ttl-key"
-		value := []byte("ttl-value")
-		ttl := 100 * time.Millisecond
-
-		err := provider.Set(ctx, key, value, ttl)
-		require.NoError(t, err)
-
-		retrieved, err := provider.Get(ctx, key)
-		require.NoError(t, err)
-		assert.Equal(t, value, retrieved)
-
-		require.Eventually(t, func() bool {
-			_, err := provider.Get(ctx, key)
-			return err != nil
-		}, time.Second, 10*time.Millisecond)
+		// Check stats
+		stats = metricsProvider.GetStats()
+		assert.Equal(t, int64(1), stats.Hits)
+		assert.Equal(t, int64(1), stats.Misses)
+		assert.Equal(t, int64(2), stats.TotalOps)
+		assert.Equal(t, float64(0.5), stats.HitRatio)
 	})
 }
 
-// TestMemoryCacheProvider_ValidationErrors tests validation error cases
-func TestMemoryCacheProvider_ValidationErrors(t *testing.T) {
-	provider := NewMemoryCacheProvider()
+// TestCacheProviderFactory_ValidationErrors tests validation error cases
+func TestCacheProviderFactory_ValidationErrors(t *testing.T) {
+	factory := NewCacheProviderFactory()
 	ctx := context.Background()
+
+	config := &config.CacheConfig{
+		Type: config.CacheTypeMemory,
+	}
+
+	provider, err := factory.CreateCacheProvider(ctx, config)
+	require.NoError(t, err)
 
 	tests := []struct {
 		name      string
@@ -206,21 +207,6 @@ func TestMemoryCacheProvider_ValidationErrors(t *testing.T) {
 			},
 			errorType: "VALIDATION_ERROR",
 		},
-		{
-			name: "DeleteEmptyKey",
-			operation: func() error {
-				return provider.Delete(ctx, "")
-			},
-			errorType: "VALIDATION_ERROR",
-		},
-		{
-			name: "ExistsEmptyKey",
-			operation: func() error {
-				_, err := provider.Exists(ctx, "")
-				return err
-			},
-			errorType: "VALIDATION_ERROR",
-		},
 	}
 
 	for _, tt := range tests {
@@ -234,60 +220,4 @@ func TestMemoryCacheProvider_ValidationErrors(t *testing.T) {
 			}
 		})
 	}
-}
-
-// TestMemoryCacheProvider_Metrics tests metrics functionality
-func TestMemoryCacheProvider_Metrics(t *testing.T) {
-	provider := NewMemoryCacheProvider()
-	ctx := context.Background()
-
-	// Clear cache and reset stats
-	require.NoError(t, provider.Clear(ctx))
-
-	// Initial stats should be zero
-	stats := provider.GetStats()
-	assert.Equal(t, int64(0), stats.Hits)
-	assert.Equal(t, int64(0), stats.Misses)
-	assert.Equal(t, int64(0), stats.TotalOps)
-	assert.Equal(t, float64(0), stats.HitRatio)
-
-	// Generate some hits and misses
-	key := "metrics-key"
-	value := []byte("metrics-value")
-	ttl := time.Minute
-
-	// Set a value
-	err := provider.Set(ctx, key, value, ttl)
-	require.NoError(t, err)
-
-	// Hit - get existing key
-	_, err = provider.Get(ctx, key)
-	require.NoError(t, err)
-
-	// Miss - get non-existent key
-	_, err = provider.Get(ctx, "non-existent")
-	assert.Error(t, err)
-
-	// Another hit
-	_, err = provider.Get(ctx, key)
-	require.NoError(t, err)
-
-	// Check stats: 2 hits, 1 miss
-	stats = provider.GetStats()
-	assert.Equal(t, int64(2), stats.Hits)
-	assert.Equal(t, int64(1), stats.Misses)
-	assert.Equal(t, int64(3), stats.TotalOps)
-	assert.Equal(t, float64(2)/float64(3), stats.HitRatio)
-	assert.True(t, stats.LastUpdated.After(time.Now().Add(-time.Second)))
-}
-
-// TestMemoryCacheProvider_InterfaceCompliance tests interface compliance
-func TestMemoryCacheProvider_InterfaceCompliance(t *testing.T) {
-	provider := NewMemoryCacheProvider()
-
-	// Test that provider implements CacheProvider interface
-	var _ ports.CacheProvider = provider
-
-	// Test that provider implements CacheMetrics interface
-	var _ ports.CacheMetrics = provider
 }

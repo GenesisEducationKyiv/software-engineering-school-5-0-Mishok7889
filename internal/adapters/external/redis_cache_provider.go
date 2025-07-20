@@ -31,7 +31,7 @@ type redisOperationMetrics struct {
 }
 
 // NewRedisCacheProviderAdapter creates a new Redis cache provider adapter
-func NewRedisCacheProviderAdapter(config *config.RedisConfig) (*RedisCacheProviderAdapter, error) {
+func NewRedisCacheProviderAdapter(ctx context.Context, config *config.RedisConfig) (*RedisCacheProviderAdapter, error) {
 	if config == nil {
 		return nil, infrastructure.NewConfigurationError("redis config cannot be nil")
 	}
@@ -45,10 +45,10 @@ func NewRedisCacheProviderAdapter(config *config.RedisConfig) (*RedisCacheProvid
 		WriteTimeout: time.Duration(config.WriteTimeout) * time.Second,
 	})
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	pingCtx, cancel := context.WithTimeout(ctx, DefaultConnectionTimeout)
 	defer cancel()
 
-	if err := client.Ping(ctx).Err(); err != nil {
+	if err := client.Ping(pingCtx).Err(); err != nil {
 		return nil, infrastructure.NewExternalAPIError("failed to connect to Redis", err)
 	}
 
@@ -73,7 +73,7 @@ func (r *RedisCacheProviderAdapter) Get(ctx context.Context, key string) ([]byte
 	}()
 
 	if key == "" {
-		return nil, infrastructure.NewValidationError("cache key cannot be empty")
+		return nil, infrastructure.NewValidationError(ErrCacheKeyEmpty)
 	}
 
 	val, err := r.client.Get(ctx, key).Result()
@@ -97,13 +97,13 @@ func (r *RedisCacheProviderAdapter) Set(ctx context.Context, key string, value [
 	}()
 
 	if key == "" {
-		return infrastructure.NewValidationError("cache key cannot be empty")
+		return infrastructure.NewValidationError(ErrCacheKeyEmpty)
 	}
 	if value == nil {
-		return infrastructure.NewValidationError("cache value cannot be nil")
+		return infrastructure.NewValidationError(ErrCacheValueNil)
 	}
 	if ttl <= 0 {
-		return infrastructure.NewValidationError("cache TTL must be positive")
+		return infrastructure.NewValidationError(ErrCacheTTLNonPositive)
 	}
 
 	if err := r.client.Set(ctx, key, value, ttl).Err(); err != nil {
@@ -121,7 +121,7 @@ func (r *RedisCacheProviderAdapter) Delete(ctx context.Context, key string) erro
 	}()
 
 	if key == "" {
-		return infrastructure.NewValidationError("cache key cannot be empty")
+		return infrastructure.NewValidationError(ErrCacheKeyEmpty)
 	}
 
 	if err := r.client.Del(ctx, key).Err(); err != nil {
@@ -139,7 +139,7 @@ func (r *RedisCacheProviderAdapter) Exists(ctx context.Context, key string) (boo
 	}()
 
 	if key == "" {
-		return false, infrastructure.NewValidationError("cache key cannot be empty")
+		return false, infrastructure.NewValidationError(ErrCacheKeyEmpty)
 	}
 
 	count, err := r.client.Exists(ctx, key).Result()

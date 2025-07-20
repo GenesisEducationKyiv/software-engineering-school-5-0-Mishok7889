@@ -49,21 +49,21 @@ func NewMemoryCacheProvider() *MemoryCacheProvider {
 
 func (c *MemoryCacheProvider) ValidateKey(key string) error {
 	if key == "" {
-		return infrastructure.NewValidationError("cache key cannot be empty")
+		return infrastructure.NewValidationError(ErrCacheKeyEmpty)
 	}
 	return nil
 }
 
 func (c *MemoryCacheProvider) ValidateValue(value []byte) error {
 	if value == nil {
-		return infrastructure.NewValidationError("cache value cannot be nil")
+		return infrastructure.NewValidationError(ErrCacheValueNil)
 	}
 	return nil
 }
 
 func (c *MemoryCacheProvider) ValidateTTL(ttl time.Duration) error {
 	if ttl <= 0 {
-		return infrastructure.NewValidationError("cache TTL must be positive")
+		return infrastructure.NewValidationError(ErrCacheTTLNonPositive)
 	}
 	return nil
 }

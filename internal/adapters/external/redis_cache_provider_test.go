@@ -33,72 +33,58 @@ func setupMockRedis(t *testing.T) (*miniredis.Miniredis, *config.RedisConfig) {
 	return mockRedis, redisConfig
 }
 
-// TestRedisCacheProviderAdapter_NewRedisCacheProviderAdapter tests the constructor
-func TestRedisCacheProviderAdapter_NewRedisCacheProviderAdapter(t *testing.T) {
-	tests := []struct {
-		name        string
-		config      *config.RedisConfig
-		expectError bool
-		checkError  func(t *testing.T, err error)
-	}{
-		{
-			name:        "NilConfig",
-			config:      nil,
-			expectError: true,
-			checkError: func(t *testing.T, err error) {
-				var infraErr *infrastructure.InfrastructureError
-				if assert.ErrorAs(t, err, &infraErr) {
-					assert.Equal(t, "CONFIGURATION_ERROR", infraErr.Type)
-				}
-			},
-		},
-		{
-			name: "ValidConfig",
-			config: func() *config.RedisConfig {
-				_, cfg := setupMockRedis(t)
-				return cfg
-			}(),
-			expectError: false,
-		},
-		{
-			name: "InvalidAddress",
-			config: &config.RedisConfig{
-				Addr:         "invalid:address:port",
-				Password:     "",
-				DB:           0,
-				DialTimeout:  5,
-				ReadTimeout:  3,
-				WriteTimeout: 3,
-			},
-			expectError: true,
-			checkError: func(t *testing.T, err error) {
-				var infraErr *infrastructure.InfrastructureError
-				if assert.ErrorAs(t, err, &infraErr) {
-					assert.Equal(t, "EXTERNAL_API_ERROR", infraErr.Type)
-				}
-			},
-		},
-	}
+// TestRedisCacheProviderAdapter_NewRedisCacheProviderAdapter_Success tests successful constructor cases
+func TestRedisCacheProviderAdapter_NewRedisCacheProviderAdapter_Success(t *testing.T) {
+	ctx := context.Background()
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			adapter, err := NewRedisCacheProviderAdapter(tt.config)
+	t.Run("ValidConfig", func(t *testing.T) {
+		mockRedis, redisConfig := setupMockRedis(t)
+		defer mockRedis.Close()
 
-			if tt.expectError {
-				assert.Error(t, err)
-				assert.Nil(t, adapter)
-				if tt.checkError != nil {
-					tt.checkError(t, err)
-				}
-			} else {
-				assert.NoError(t, err)
-				assert.NotNil(t, adapter)
-				if adapter != nil {
-					assert.NoError(t, adapter.Close())
-				}
-			}
-		})
-	}
+		adapter, err := NewRedisCacheProviderAdapter(ctx, redisConfig)
+		assert.NoError(t, err)
+		assert.NotNil(t, adapter)
+
+		if adapter != nil {
+			assert.NoError(t, adapter.Close())
+		}
+	})
+}
+
+// TestRedisCacheProviderAdapter_NewRedisCacheProviderAdapter_Errors tests error cases
+func TestRedisCacheProviderAdapter_NewRedisCacheProviderAdapter_Errors(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("NilConfig", func(t *testing.T) {
+		adapter, err := NewRedisCacheProviderAdapter(ctx, nil)
+		assert.Error(t, err)
+		assert.Nil(t, adapter)
+
+		var infraErr *infrastructure.InfrastructureError
+		if assert.ErrorAs(t, err, &infraErr) {
+			assert.Equal(t, "CONFIGURATION_ERROR", infraErr.Type)
+		}
+	})
+
+	t.Run("InvalidAddress", func(t *testing.T) {
+		invalidConfig := &config.RedisConfig{
+			Addr:         "invalid:address:port",
+			Password:     "",
+			DB:           0,
+			DialTimeout:  5,
+			ReadTimeout:  3,
+			WriteTimeout: 3,
+		}
+
+		adapter, err := NewRedisCacheProviderAdapter(ctx, invalidConfig)
+		assert.Error(t, err)
+		assert.Nil(t, adapter)
+
+		var infraErr *infrastructure.InfrastructureError
+		if assert.ErrorAs(t, err, &infraErr) {
+			assert.Equal(t, "EXTERNAL_API_ERROR", infraErr.Type)
+		}
+	})
 }
 
 // TestRedisCacheProviderAdapter_Operations tests cache operations
@@ -106,7 +92,7 @@ func TestRedisCacheProviderAdapter_Operations(t *testing.T) {
 	mockRedis, redisConfig := setupMockRedis(t)
 	defer mockRedis.Close()
 
-	adapter, err := NewRedisCacheProviderAdapter(redisConfig)
+	adapter, err := NewRedisCacheProviderAdapter(context.Background(), redisConfig)
 	require.NoError(t, err)
 	defer func() { _ = adapter.Close() }()
 
@@ -195,115 +181,81 @@ func TestRedisCacheProviderAdapter_ValidationErrors(t *testing.T) {
 	mockRedis, redisConfig := setupMockRedis(t)
 	defer mockRedis.Close()
 
-	adapter, err := NewRedisCacheProviderAdapter(redisConfig)
+	adapter, err := NewRedisCacheProviderAdapter(context.Background(), redisConfig)
 	require.NoError(t, err)
 	defer func() { _ = adapter.Close() }()
 
 	ctx := context.Background()
 
-	tests := []struct {
-		name       string
-		operation  func() error
-		checkError func(t *testing.T, err error)
-	}{
-		{
-			name: "GetEmptyKey",
-			operation: func() error {
-				_, err := adapter.Get(ctx, "")
-				return err
-			},
-			checkError: func(t *testing.T, err error) {
-				var infraErr *infrastructure.InfrastructureError
-				if assert.ErrorAs(t, err, &infraErr) {
-					assert.Equal(t, "VALIDATION_ERROR", infraErr.Type)
-				}
-			},
-		},
-		{
-			name: "SetEmptyKey",
-			operation: func() error {
-				return adapter.Set(ctx, "", []byte("value"), time.Minute)
-			},
-			checkError: func(t *testing.T, err error) {
-				var infraErr *infrastructure.InfrastructureError
-				if assert.ErrorAs(t, err, &infraErr) {
-					assert.Equal(t, "VALIDATION_ERROR", infraErr.Type)
-				}
-			},
-		},
-		{
-			name: "SetNilValue",
-			operation: func() error {
-				return adapter.Set(ctx, "key", nil, time.Minute)
-			},
-			checkError: func(t *testing.T, err error) {
-				var infraErr *infrastructure.InfrastructureError
-				if assert.ErrorAs(t, err, &infraErr) {
-					assert.Equal(t, "VALIDATION_ERROR", infraErr.Type)
-				}
-			},
-		},
-		{
-			name: "SetZeroTTL",
-			operation: func() error {
-				return adapter.Set(ctx, "key", []byte("value"), 0)
-			},
-			checkError: func(t *testing.T, err error) {
-				var infraErr *infrastructure.InfrastructureError
-				if assert.ErrorAs(t, err, &infraErr) {
-					assert.Equal(t, "VALIDATION_ERROR", infraErr.Type)
-				}
-			},
-		},
-		{
-			name: "SetNegativeTTL",
-			operation: func() error {
-				return adapter.Set(ctx, "key", []byte("value"), -time.Minute)
-			},
-			checkError: func(t *testing.T, err error) {
-				var infraErr *infrastructure.InfrastructureError
-				if assert.ErrorAs(t, err, &infraErr) {
-					assert.Equal(t, "VALIDATION_ERROR", infraErr.Type)
-				}
-			},
-		},
-		{
-			name: "DeleteEmptyKey",
-			operation: func() error {
-				return adapter.Delete(ctx, "")
-			},
-			checkError: func(t *testing.T, err error) {
-				var infraErr *infrastructure.InfrastructureError
-				if assert.ErrorAs(t, err, &infraErr) {
-					assert.Equal(t, "VALIDATION_ERROR", infraErr.Type)
-				}
-			},
-		},
-		{
-			name: "ExistsEmptyKey",
-			operation: func() error {
-				_, err := adapter.Exists(ctx, "")
-				return err
-			},
-			checkError: func(t *testing.T, err error) {
-				var infraErr *infrastructure.InfrastructureError
-				if assert.ErrorAs(t, err, &infraErr) {
-					assert.Equal(t, "VALIDATION_ERROR", infraErr.Type)
-				}
-			},
-		},
-	}
+	t.Run("GetEmptyKey", func(t *testing.T) {
+		_, err := adapter.Get(ctx, "")
+		assert.Error(t, err)
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := tt.operation()
-			assert.Error(t, err)
+		var infraErr *infrastructure.InfrastructureError
+		if assert.ErrorAs(t, err, &infraErr) {
+			assert.Equal(t, "VALIDATION_ERROR", infraErr.Type)
+		}
+	})
 
-			if tt.checkError != nil {
-				tt.checkError(t, err)
-			}
-		})
-	}
+	t.Run("SetEmptyKey", func(t *testing.T) {
+		err := adapter.Set(ctx, "", []byte("value"), time.Minute)
+		assert.Error(t, err)
+
+		var infraErr *infrastructure.InfrastructureError
+		if assert.ErrorAs(t, err, &infraErr) {
+			assert.Equal(t, "VALIDATION_ERROR", infraErr.Type)
+		}
+	})
+
+	t.Run("SetNilValue", func(t *testing.T) {
+		err := adapter.Set(ctx, "key", nil, time.Minute)
+		assert.Error(t, err)
+
+		var infraErr *infrastructure.InfrastructureError
+		if assert.ErrorAs(t, err, &infraErr) {
+			assert.Equal(t, "VALIDATION_ERROR", infraErr.Type)
+		}
+	})
+
+	t.Run("SetZeroTTL", func(t *testing.T) {
+		err := adapter.Set(ctx, "key", []byte("value"), 0)
+		assert.Error(t, err)
+
+		var infraErr *infrastructure.InfrastructureError
+		if assert.ErrorAs(t, err, &infraErr) {
+			assert.Equal(t, "VALIDATION_ERROR", infraErr.Type)
+		}
+	})
+
+	t.Run("SetNegativeTTL", func(t *testing.T) {
+		err := adapter.Set(ctx, "key", []byte("value"), -time.Minute)
+		assert.Error(t, err)
+
+		var infraErr *infrastructure.InfrastructureError
+		if assert.ErrorAs(t, err, &infraErr) {
+			assert.Equal(t, "VALIDATION_ERROR", infraErr.Type)
+		}
+	})
+
+	t.Run("DeleteEmptyKey", func(t *testing.T) {
+		err := adapter.Delete(ctx, "")
+		assert.Error(t, err)
+
+		var infraErr *infrastructure.InfrastructureError
+		if assert.ErrorAs(t, err, &infraErr) {
+			assert.Equal(t, "VALIDATION_ERROR", infraErr.Type)
+		}
+	})
+
+	t.Run("ExistsEmptyKey", func(t *testing.T) {
+		_, err := adapter.Exists(ctx, "")
+		assert.Error(t, err)
+
+		var infraErr *infrastructure.InfrastructureError
+		if assert.ErrorAs(t, err, &infraErr) {
+			assert.Equal(t, "VALIDATION_ERROR", infraErr.Type)
+		}
+	})
 }
 
 // TestRedisCacheProviderAdapter_Metrics tests cache metrics functionality
@@ -311,7 +263,7 @@ func TestRedisCacheProviderAdapter_Metrics(t *testing.T) {
 	mockRedis, redisConfig := setupMockRedis(t)
 	defer mockRedis.Close()
 
-	adapter, err := NewRedisCacheProviderAdapter(redisConfig)
+	adapter, err := NewRedisCacheProviderAdapter(context.Background(), redisConfig)
 	require.NoError(t, err)
 	defer func() { _ = adapter.Close() }()
 
@@ -362,7 +314,7 @@ func TestRedisCacheProviderAdapter_CacheInterface(t *testing.T) {
 	mockRedis, redisConfig := setupMockRedis(t)
 	defer mockRedis.Close()
 
-	adapter, err := NewRedisCacheProviderAdapter(redisConfig)
+	adapter, err := NewRedisCacheProviderAdapter(context.Background(), redisConfig)
 	require.NoError(t, err)
 	defer func() { _ = adapter.Close() }()
 
@@ -378,7 +330,7 @@ func TestRedisCacheProviderAdapter_ContextCancellation(t *testing.T) {
 	mockRedis, redisConfig := setupMockRedis(t)
 	defer mockRedis.Close()
 
-	adapter, err := NewRedisCacheProviderAdapter(redisConfig)
+	adapter, err := NewRedisCacheProviderAdapter(context.Background(), redisConfig)
 	require.NoError(t, err)
 	defer func() { _ = adapter.Close() }()
 
@@ -408,7 +360,7 @@ func TestRedisCacheProviderAdapter_Ping(t *testing.T) {
 	mockRedis, redisConfig := setupMockRedis(t)
 	defer mockRedis.Close()
 
-	adapter, err := NewRedisCacheProviderAdapter(redisConfig)
+	adapter, err := NewRedisCacheProviderAdapter(context.Background(), redisConfig)
 	require.NoError(t, err)
 	defer func() { _ = adapter.Close() }()
 
@@ -423,7 +375,7 @@ func TestRedisCacheProviderAdapter_LargeData(t *testing.T) {
 	mockRedis, redisConfig := setupMockRedis(t)
 	defer mockRedis.Close()
 
-	adapter, err := NewRedisCacheProviderAdapter(redisConfig)
+	adapter, err := NewRedisCacheProviderAdapter(context.Background(), redisConfig)
 	require.NoError(t, err)
 	defer func() { _ = adapter.Close() }()
 
@@ -451,7 +403,7 @@ func TestRedisCacheProviderAdapter_BinaryData(t *testing.T) {
 	mockRedis, redisConfig := setupMockRedis(t)
 	defer mockRedis.Close()
 
-	adapter, err := NewRedisCacheProviderAdapter(redisConfig)
+	adapter, err := NewRedisCacheProviderAdapter(context.Background(), redisConfig)
 	require.NoError(t, err)
 	defer func() { _ = adapter.Close() }()
 
@@ -475,7 +427,7 @@ func TestRedisCacheProviderAdapter_RecordMethods(t *testing.T) {
 	mockRedis, redisConfig := setupMockRedis(t)
 	defer mockRedis.Close()
 
-	adapter, err := NewRedisCacheProviderAdapter(redisConfig)
+	adapter, err := NewRedisCacheProviderAdapter(context.Background(), redisConfig)
 	require.NoError(t, err)
 	defer func() { _ = adapter.Close() }()
 

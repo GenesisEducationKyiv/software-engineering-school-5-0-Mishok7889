@@ -15,8 +15,8 @@ import (
 // Interface compliance verification
 var _ ports.WeatherCache = (*WeatherCacheAdapter)(nil)
 
-// TestWeatherCacheAdapter_Integration tests the weather cache adapter integration
-func TestWeatherCacheAdapter_Integration(t *testing.T) {
+// TestWeatherCacheAdapter_CacheFunctionality tests basic cache set/get operations
+func TestWeatherCacheAdapter_CacheFunctionality(t *testing.T) {
 	tests := []struct {
 		name       string
 		cacheType  config.CacheType
@@ -53,7 +53,7 @@ func TestWeatherCacheAdapter_Integration(t *testing.T) {
 
 			// Create cache provider using factory
 			factory := NewCacheProviderFactory()
-			genericCache, err := factory.CreateCacheProvider(cacheConfig)
+			genericCache, err := factory.CreateCacheProvider(context.Background(), cacheConfig)
 			if err != nil && tt.skipReason != "" {
 				t.Skipf("Skipping test: %s - %v", tt.skipReason, err)
 			}
@@ -61,8 +61,6 @@ func TestWeatherCacheAdapter_Integration(t *testing.T) {
 
 			// Create weather cache adapter
 			weatherCache := NewWeatherCacheAdapter(genericCache)
-
-			// Test weather cache operations
 			ctx := context.Background()
 
 			// Clear cache if supported
@@ -76,10 +74,10 @@ func TestWeatherCacheAdapter_Integration(t *testing.T) {
 				Humidity:    65.0,
 				Description: "Partly cloudy",
 				City:        "London",
-				Timestamp:   time.Now().UTC().Truncate(time.Second), // Use UTC for consistent JSON comparison
+				Timestamp:   time.Now().UTC().Truncate(time.Second),
 			}
 
-			// Test Set and Get
+			// Test successful Set and Get
 			cacheKey := "weather:london:test"
 			ttl := time.Minute
 
@@ -90,31 +88,119 @@ func TestWeatherCacheAdapter_Integration(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, weatherData, retrievedData)
 
-			// Test metrics through generic cache provider
-			if metricsProvider, ok := genericCache.(ports.CacheMetrics); ok {
-				stats := metricsProvider.GetStats()
-				assert.Equal(t, int64(1), stats.Hits)
-				assert.Equal(t, int64(0), stats.Misses)
-				assert.Equal(t, int64(1), stats.TotalOps)
-				assert.Equal(t, float64(1), stats.HitRatio)
-			}
-
 			// Test cache miss
 			_, err = weatherCache.Get(ctx, "non-existent-key")
 			assert.Error(t, err)
 
-			// Verify miss was recorded through generic cache
-			if metricsProvider, ok := genericCache.(ports.CacheMetrics); ok {
-				stats := metricsProvider.GetStats()
-				assert.Equal(t, int64(1), stats.Hits)
-				assert.Equal(t, int64(1), stats.Misses)
-				assert.Equal(t, int64(2), stats.TotalOps)
-				assert.Equal(t, float64(0.5), stats.HitRatio)
+			// Clean up Redis connection if applicable
+			if decorator, ok := genericCache.(*CacheMetricsDecorator); ok {
+				if redisClient, ok := decorator.GetProvider().(interface{ Close() error }); ok {
+					_ = redisClient.Close()
+				}
+			}
+		})
+	}
+}
+
+// TestWeatherCacheAdapter_MetricsCollection tests metrics tracking through cache operations
+func TestWeatherCacheAdapter_MetricsCollection(t *testing.T) {
+	tests := []struct {
+		name       string
+		cacheType  config.CacheType
+		skipReason string
+	}{
+		{
+			name:      "MemoryCache",
+			cacheType: config.CacheTypeMemory,
+		},
+		{
+			name:       "RedisCache",
+			cacheType:  config.CacheTypeRedis,
+			skipReason: "Redis connection required",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create cache configuration
+			cacheConfig := &config.CacheConfig{
+				Type: tt.cacheType,
 			}
 
+			if tt.cacheType == config.CacheTypeRedis {
+				cacheConfig.Redis = config.RedisConfig{
+					Addr:         "localhost:6379",
+					Password:     "",
+					DB:           1,
+					DialTimeout:  5,
+					ReadTimeout:  3,
+					WriteTimeout: 3,
+				}
+			}
+
+			// Create cache provider using factory
+			factory := NewCacheProviderFactory()
+			genericCache, err := factory.CreateCacheProvider(context.Background(), cacheConfig)
+			if err != nil && tt.skipReason != "" {
+				t.Skipf("Skipping test: %s - %v", tt.skipReason, err)
+			}
+			require.NoError(t, err)
+
+			// Ensure we have metrics support
+			metricsProvider, ok := genericCache.(ports.CacheMetrics)
+			if !ok {
+				t.Skip("Cache provider does not support metrics")
+			}
+
+			// Create weather cache adapter
+			weatherCache := NewWeatherCacheAdapter(genericCache)
+			ctx := context.Background()
+
+			// Clear cache and reset stats
+			if clearableCache, ok := genericCache.(interface{ Clear(context.Context) error }); ok {
+				require.NoError(t, clearableCache.Clear(ctx))
+			}
+
+			// Test data
+			weatherData := &ports.WeatherData{
+				Temperature: 25.5,
+				Humidity:    65.0,
+				Description: "Partly cloudy",
+				City:        "London",
+				Timestamp:   time.Now().UTC().Truncate(time.Second),
+			}
+
+			// Generate cache hit
+			cacheKey := "weather:london:metrics"
+			err = weatherCache.Set(ctx, cacheKey, weatherData, time.Minute)
+			require.NoError(t, err)
+
+			_, err = weatherCache.Get(ctx, cacheKey)
+			require.NoError(t, err)
+
+			// Verify hit metrics
+			stats := metricsProvider.GetStats()
+			assert.Equal(t, int64(1), stats.Hits)
+			assert.Equal(t, int64(0), stats.Misses)
+			assert.Equal(t, int64(1), stats.TotalOps)
+			assert.Equal(t, float64(1), stats.HitRatio)
+
+			// Generate cache miss
+			_, err = weatherCache.Get(ctx, "non-existent-key")
+			assert.Error(t, err)
+
+			// Verify miss was recorded
+			stats = metricsProvider.GetStats()
+			assert.Equal(t, int64(1), stats.Hits)
+			assert.Equal(t, int64(1), stats.Misses)
+			assert.Equal(t, int64(2), stats.TotalOps)
+			assert.Equal(t, float64(0.5), stats.HitRatio)
+
 			// Clean up Redis connection if applicable
-			if redisCache, ok := genericCache.(*RedisCacheProviderAdapter); ok {
-				_ = redisCache.Close()
+			if decorator, ok := genericCache.(*CacheMetricsDecorator); ok {
+				if redisClient, ok := decorator.GetProvider().(interface{ Close() error }); ok {
+					_ = redisClient.Close()
+				}
 			}
 		})
 	}
@@ -124,7 +210,7 @@ func TestWeatherCacheAdapter_Integration(t *testing.T) {
 func TestWeatherCacheAdapter_ErrorHandling(t *testing.T) {
 	// Create memory cache for testing
 	factory := NewCacheProviderFactory()
-	genericCache, err := factory.CreateCacheProvider(&config.CacheConfig{
+	genericCache, err := factory.CreateCacheProvider(context.Background(), &config.CacheConfig{
 		Type: config.CacheTypeMemory,
 	})
 	require.NoError(t, err)
@@ -149,7 +235,7 @@ func TestWeatherCacheAdapter_ErrorHandling(t *testing.T) {
 func TestWeatherCacheAdapter_Serialization(t *testing.T) {
 	// Create memory cache for testing
 	factory := NewCacheProviderFactory()
-	genericCache, err := factory.CreateCacheProvider(&config.CacheConfig{
+	genericCache, err := factory.CreateCacheProvider(context.Background(), &config.CacheConfig{
 		Type: config.CacheTypeMemory,
 	})
 	require.NoError(t, err)

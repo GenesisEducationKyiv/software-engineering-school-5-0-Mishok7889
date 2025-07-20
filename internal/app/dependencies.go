@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 
@@ -127,7 +128,7 @@ func (c *DependencyContainer) initializePorts(appConfig *config.Config) error {
 	})
 
 	cacheFactory := external.NewCacheProviderFactory()
-	genericCacheProvider, err := cacheFactory.CreateCacheProvider(&c.config.Cache)
+	genericCacheProvider, err := cacheFactory.CreateCacheProvider(context.Background(), &c.config.Cache)
 	if err != nil {
 		slog.Error("Failed to create cache provider", "error", err)
 		return fmt.Errorf("create cache provider: %w", err)
