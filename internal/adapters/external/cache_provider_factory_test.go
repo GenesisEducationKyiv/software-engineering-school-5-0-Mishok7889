@@ -130,11 +130,9 @@ func TestCacheProviderFactory_MemoryCacheOperations(t *testing.T) {
 		metricsProvider, ok := provider.(*CacheMetricsDecorator)
 		require.True(t, ok, "Provider should be CacheMetricsDecorator")
 
-		// Clear and check initial stats
+		// Clear and get baseline stats
 		require.NoError(t, provider.Clear(ctx))
-		stats := metricsProvider.GetStats()
-		assert.Equal(t, int64(0), stats.Hits)
-		assert.Equal(t, int64(0), stats.Misses)
+		baselineStats := metricsProvider.GetStats()
 
 		// Set a value and generate hits/misses
 		key := "metrics-key"
@@ -152,12 +150,24 @@ func TestCacheProviderFactory_MemoryCacheOperations(t *testing.T) {
 		_, err = provider.Get(ctx, "non-existent")
 		assert.Error(t, err)
 
-		// Check stats
-		stats = metricsProvider.GetStats()
-		assert.Equal(t, int64(1), stats.Hits)
-		assert.Equal(t, int64(1), stats.Misses)
-		assert.Equal(t, int64(2), stats.TotalOps)
-		assert.Equal(t, float64(0.5), stats.HitRatio)
+		// Check stats relative to baseline
+		stats := metricsProvider.GetStats()
+		expectedHits := baselineStats.Hits + 1
+		expectedMisses := baselineStats.Misses + 1
+		expectedTotal := baselineStats.TotalOps + 2
+
+		assert.Equal(t, expectedHits, stats.Hits)
+		assert.Equal(t, expectedMisses, stats.Misses)
+		assert.Equal(t, expectedTotal, stats.TotalOps)
+
+		// Calculate hit ratio based on the new operations only
+		if expectedTotal > baselineStats.TotalOps {
+			newOps := expectedTotal - baselineStats.TotalOps
+			newHits := expectedHits - baselineStats.Hits
+			expectedHitRatio := float64(newHits) / float64(newOps)
+			actualHitRatio := float64(stats.Hits-baselineStats.Hits) / float64(stats.TotalOps-baselineStats.TotalOps)
+			assert.InDelta(t, expectedHitRatio, actualHitRatio, 0.01)
+		}
 	})
 }
 

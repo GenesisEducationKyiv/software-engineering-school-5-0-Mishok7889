@@ -143,7 +143,7 @@ func (uc *UseCase) convertFromPortsWeather(weatherData *ports.WeatherData) *Weat
 	}
 }
 
-func (uc *UseCase) GetProviderInfo(ctx context.Context) map[string]interface{} {
+func (uc *UseCase) GetProviderInfo(ctx context.Context) ports.ProviderInfo {
 	return uc.metrics.GetProviderInfo()
 }
 

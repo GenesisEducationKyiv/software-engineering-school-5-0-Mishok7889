@@ -23,6 +23,14 @@ type CacheStats struct {
 	LastUpdated time.Time
 }
 
+// ProviderInfo contains information about configured weather providers
+type ProviderInfo struct {
+	TotalProviders  int      `json:"total_providers"`
+	ProviderOrder   []string `json:"provider_order"`
+	ChainEnabled    bool     `json:"chain_enabled"`
+	FallbackEnabled bool     `json:"fallback_enabled"`
+}
+
 // WeatherProvider defines the contract for weather data providers
 type WeatherProvider interface {
 	GetCurrentWeather(ctx context.Context, city string) (*WeatherData, error)
@@ -32,7 +40,7 @@ type WeatherProvider interface {
 // WeatherProviderManager defines the contract for managing multiple weather providers
 type WeatherProviderManager interface {
 	GetWeather(ctx context.Context, city string) (*WeatherData, error)
-	GetProviderInfo() map[string]interface{}
+	GetProviderInfo() ProviderInfo
 }
 
 // WeatherCache defines the contract for caching weather data
@@ -43,6 +51,6 @@ type WeatherCache interface {
 
 // WeatherMetrics defines the contract for weather provider metrics
 type WeatherMetrics interface {
-	GetProviderInfo() map[string]interface{}
+	GetProviderInfo() ProviderInfo
 	GetCacheMetrics() (CacheStats, error)
 }

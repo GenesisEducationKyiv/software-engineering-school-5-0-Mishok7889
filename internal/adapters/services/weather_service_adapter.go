@@ -37,6 +37,6 @@ func (a *WeatherServiceAdapter) GetWeather(ctx context.Context, city string) (*p
 }
 
 // GetProviderInfo delegates to the use case
-func (a *WeatherServiceAdapter) GetProviderInfo(ctx context.Context) map[string]interface{} {
+func (a *WeatherServiceAdapter) GetProviderInfo(ctx context.Context) ports.ProviderInfo {
 	return a.weatherUseCase.GetProviderInfo(ctx)
 }

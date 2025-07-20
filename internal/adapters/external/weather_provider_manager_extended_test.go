@@ -7,6 +7,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 	"weatherapi.app/internal/adapters/infrastructure"
 	"weatherapi.app/internal/mocks"
 )
@@ -39,11 +40,12 @@ func TestWeatherProviderManager_ChainOfResponsibility_AccuWeatherSuccess(t *test
 	// Create manager with AccuWeather provider (uses mock data)
 	config := ProviderManagerConfig{
 		AccuWeatherKey: "test-key",
-		ProviderOrder:  []string{"accuweather"},
+		ProviderOrder:  []string{string(AccuWeather)},
 		Logger:         mockLogger,
 	}
 
-	manager := NewWeatherProviderManagerAdapter(config)
+	manager, err := NewWeatherProviderManagerAdapter(config)
+	require.NoError(t, err)
 
 	ctx := context.Background()
 	weather, err := manager.GetWeather(ctx, "London")
@@ -51,9 +53,9 @@ func TestWeatherProviderManager_ChainOfResponsibility_AccuWeatherSuccess(t *test
 	assert.NoError(t, err)
 	assert.NotNil(t, weather)
 	assert.Equal(t, "London", weather.City)
-	assert.Equal(t, 22.5, weather.Temperature) // AccuWeather mock data
-	assert.Equal(t, 65.0, weather.Humidity)
-	assert.Equal(t, "Partly cloudy", weather.Description)
+	assert.Equal(t, DefaultTemperature, weather.Temperature)
+	assert.Equal(t, DefaultHumidity, weather.Humidity)
+	assert.Equal(t, DefaultMockDescription, weather.Description)
 }
 
 func TestWeatherProviderManager_ChainOfResponsibility_Fallback(t *testing.T) {
@@ -63,11 +65,12 @@ func TestWeatherProviderManager_ChainOfResponsibility_Fallback(t *testing.T) {
 	config := ProviderManagerConfig{
 		OpenWeatherKey: "invalid-key", // Will fail
 		AccuWeatherKey: "test-key",    // Will succeed with mock
-		ProviderOrder:  []string{"openweathermap", "accuweather"},
+		ProviderOrder:  []string{string(OpenWeatherMap), string(AccuWeather)},
 		Logger:         mockLogger,
 	}
 
-	manager := NewWeatherProviderManagerAdapter(config)
+	manager, err := NewWeatherProviderManagerAdapter(config)
+	require.NoError(t, err)
 
 	ctx := context.Background()
 	weather, err := manager.GetWeather(ctx, "London")
@@ -76,7 +79,7 @@ func TestWeatherProviderManager_ChainOfResponsibility_Fallback(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, weather)
 	assert.Equal(t, "London", weather.City)
-	assert.Equal(t, 22.5, weather.Temperature) // AccuWeather mock data
+	assert.Equal(t, DefaultTemperature, weather.Temperature)
 }
 
 func TestWeatherProviderManager_AllProvidersFail(t *testing.T) {
@@ -85,11 +88,12 @@ func TestWeatherProviderManager_AllProvidersFail(t *testing.T) {
 	// Create manager with invalid providers
 	config := ProviderManagerConfig{
 		OpenWeatherKey: "invalid-key",
-		ProviderOrder:  []string{"openweathermap"},
+		ProviderOrder:  []string{string(OpenWeatherMap)},
 		Logger:         mockLogger,
 	}
 
-	manager := NewWeatherProviderManagerAdapter(config)
+	manager, err := NewWeatherProviderManagerAdapter(config)
+	require.NoError(t, err)
 
 	ctx := context.Background()
 	weather, err := manager.GetWeather(ctx, "London")
@@ -104,11 +108,12 @@ func TestWeatherProviderManager_ValidationError(t *testing.T) {
 
 	config := ProviderManagerConfig{
 		AccuWeatherKey: "test-key",
-		ProviderOrder:  []string{"accuweather"},
+		ProviderOrder:  []string{string(AccuWeather)},
 		Logger:         mockLogger,
 	}
 
-	manager := NewWeatherProviderManagerAdapter(config)
+	manager, err := NewWeatherProviderManagerAdapter(config)
+	require.NoError(t, err)
 
 	ctx := context.Background()
 	weather, err := manager.GetWeather(ctx, "")
@@ -129,14 +134,15 @@ func TestWeatherProviderManager_NoProviders(t *testing.T) {
 		Logger: mockLogger,
 	}
 
-	manager := NewWeatherProviderManagerAdapter(config)
+	manager, err := NewWeatherProviderManagerAdapter(config)
+	require.NoError(t, err)
 
 	ctx := context.Background()
 	weather, err := manager.GetWeather(ctx, "London")
 
 	assert.Error(t, err)
 	assert.Nil(t, weather)
-	assert.Contains(t, err.Error(), "no weather providers configured")
+	assert.Contains(t, err.Error(), NoProvidersConfiguredMsg)
 }
 
 func TestWeatherProviderManager_GetProviderInfo(t *testing.T) {
@@ -145,21 +151,18 @@ func TestWeatherProviderManager_GetProviderInfo(t *testing.T) {
 	config := ProviderManagerConfig{
 		AccuWeatherKey: "test-key",
 		OpenWeatherKey: "test-key",
-		ProviderOrder:  []string{"accuweather", "openweathermap"},
+		ProviderOrder:  []string{string(AccuWeather), string(OpenWeatherMap)},
 		Logger:         mockLogger,
 	}
 
-	manager := NewWeatherProviderManagerAdapter(config)
+	manager, err := NewWeatherProviderManagerAdapter(config)
+	require.NoError(t, err)
 
 	info := manager.GetProviderInfo()
 	assert.NotNil(t, info)
-	assert.Contains(t, info, "total_providers")
-	assert.Contains(t, info, "provider_order")
-	assert.Contains(t, info, "chain_enabled")
-	assert.Contains(t, info, "fallback_enabled")
-	assert.Equal(t, 2, info["total_providers"])
-	assert.Equal(t, true, info["chain_enabled"])
-	assert.Equal(t, true, info["fallback_enabled"])
+	assert.Equal(t, 2, info.TotalProviders)
+	assert.True(t, info.ChainEnabled)
+	assert.True(t, info.FallbackEnabled)
 }
 
 func TestWeatherProviderManager_SingleProvider(t *testing.T) {
@@ -167,11 +170,12 @@ func TestWeatherProviderManager_SingleProvider(t *testing.T) {
 
 	config := ProviderManagerConfig{
 		AccuWeatherKey: "test-key",
-		ProviderOrder:  []string{"accuweather"},
+		ProviderOrder:  []string{string(AccuWeather)},
 		Logger:         logger,
 	}
 
-	manager := NewWeatherProviderManagerAdapter(config)
+	manager, err := NewWeatherProviderManagerAdapter(config)
+	require.NoError(t, err)
 
 	ctx := context.Background()
 	weather, err := manager.GetWeather(ctx, "London")
@@ -182,8 +186,8 @@ func TestWeatherProviderManager_SingleProvider(t *testing.T) {
 
 	// Test provider info
 	info := manager.GetProviderInfo()
-	assert.Equal(t, 1, info["total_providers"])
-	assert.Equal(t, false, info["fallback_enabled"]) // Only one provider, no fallback
+	assert.Equal(t, 1, info.TotalProviders)
+	assert.False(t, info.FallbackEnabled) // Only one provider, no fallback
 }
 
 func TestWeatherProviderManager_MultipleProviders(t *testing.T) {
@@ -193,17 +197,16 @@ func TestWeatherProviderManager_MultipleProviders(t *testing.T) {
 		AccuWeatherKey: "test-key",
 		OpenWeatherKey: "test-key",
 		WeatherAPIKey:  "test-key",
-		ProviderOrder:  []string{"weatherapi", "openweathermap", "accuweather"},
+		ProviderOrder:  []string{string(WeatherAPI), string(OpenWeatherMap), string(AccuWeather)},
 		Logger:         logger,
 	}
 
-	manager := NewWeatherProviderManagerAdapter(config)
+	manager, err := NewWeatherProviderManagerAdapter(config)
+	require.NoError(t, err)
 
 	// Test provider info
 	info := manager.GetProviderInfo()
-	assert.Equal(t, 3, info["total_providers"])
-	assert.Equal(t, true, info["fallback_enabled"])
-
-	providerOrder := info["provider_order"].([]string)
-	assert.Equal(t, []string{"weatherapi", "openweathermap", "accuweather"}, providerOrder)
+	assert.Equal(t, 3, info.TotalProviders)
+	assert.True(t, info.FallbackEnabled)
+	assert.Equal(t, []string{string(WeatherAPI), string(OpenWeatherMap), string(AccuWeather)}, info.ProviderOrder)
 }

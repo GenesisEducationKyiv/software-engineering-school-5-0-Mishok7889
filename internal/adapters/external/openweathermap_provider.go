@@ -2,7 +2,6 @@ package external
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"time"
@@ -13,10 +12,10 @@ import (
 
 // OpenWeatherMapProviderAdapter implements WeatherProvider port for OpenWeatherMap
 type OpenWeatherMapProviderAdapter struct {
-	apiKey  string
-	baseURL string
-	client  HTTPClient
-	logger  ports.Logger
+	apiKey     string
+	baseURL    string
+	httpClient *HTTPWeatherClient
+	logger     ports.Logger
 }
 
 // OpenWeatherMapProviderParams holds parameters for creating OpenWeatherMap provider
@@ -38,51 +37,51 @@ type OpenWeatherMapResponse struct {
 }
 
 // NewOpenWeatherMapProviderAdapter creates a new OpenWeatherMap provider adapter
-func NewOpenWeatherMapProviderAdapter(params OpenWeatherMapProviderParams) ports.WeatherProvider {
-	baseURL := params.BaseURL
-	if baseURL == "" {
-		baseURL = "https://api.openweathermap.org/data/2.5"
+func NewOpenWeatherMapProviderAdapter(params OpenWeatherMapProviderParams) (ports.WeatherProvider, error) {
+	if err := ValidateConstructorParams(params.APIKey); err != nil {
+		return nil, fmt.Errorf("OpenWeatherMap provider validation failed: %w", err)
 	}
 
-	return &OpenWeatherMapProviderAdapter{
-		apiKey:  params.APIKey,
-		baseURL: baseURL,
-		client:  &http.Client{Timeout: 10 * time.Second},
-		logger:  params.Logger,
+	baseURL := params.BaseURL
+	if baseURL == "" {
+		baseURL = DefaultOpenWeatherMapURL
 	}
+
+	client := &http.Client{Timeout: DefaultHTTPTimeout}
+	httpClient := NewHTTPWeatherClient(client, params.Logger)
+
+	return &OpenWeatherMapProviderAdapter{
+		apiKey:     params.APIKey,
+		baseURL:    baseURL,
+		httpClient: httpClient,
+		logger:     params.Logger,
+	}, nil
 }
 
 // GetCurrentWeather retrieves weather data from OpenWeatherMap
 func (p *OpenWeatherMapProviderAdapter) GetCurrentWeather(ctx context.Context, city string) (*ports.WeatherData, error) {
 	if city == "" {
-		return nil, infrastructure.NewValidationError("city cannot be empty")
+		return nil, infrastructure.NewValidationError(EmptyCityValidationMsg)
 	}
 
 	url := fmt.Sprintf("%s/weather?q=%s&appid=%s&units=metric", p.baseURL, city, p.apiKey)
 
-	resp, err := p.client.Get(url)
-	if err != nil {
-		return nil, infrastructure.NewExternalAPIError("failed to call OpenWeatherMap", err)
+	req := HTTPWeatherRequest{
+		URL:          url,
+		ProviderName: string(OpenWeatherMap),
 	}
-	defer func() {
-		if closeErr := resp.Body.Close(); closeErr != nil {
-			p.logger.Warn("Failed to close OpenWeatherMap response body", ports.F("error", closeErr))
-		}
-	}()
 
-	if resp.StatusCode != http.StatusOK {
-		if resp.StatusCode == http.StatusNotFound {
-			return nil, ports.NewNotFoundError("city not found")
-		}
-		return nil, infrastructure.NewExternalAPIError(fmt.Sprintf("OpenWeatherMap returned status %d", resp.StatusCode), nil)
+	resp, err := p.httpClient.ExecuteRequest(ctx, req)
+	if err != nil {
+		return nil, err
 	}
 
 	var apiResp OpenWeatherMapResponse
-	if err := json.NewDecoder(resp.Body).Decode(&apiResp); err != nil {
-		return nil, infrastructure.NewExternalAPIError("failed to decode OpenWeatherMap response", err)
+	if err := p.httpClient.DecodeJSONResponse(resp, &apiResp, string(OpenWeatherMap)); err != nil {
+		return nil, err
 	}
 
-	description := "N/A"
+	description := DefaultWeatherDescription
 	if len(apiResp.Weather) > 0 {
 		description = apiResp.Weather[0].Description
 	}
@@ -98,5 +97,5 @@ func (p *OpenWeatherMapProviderAdapter) GetCurrentWeather(ctx context.Context, c
 
 // GetProviderName returns the name of this weather provider
 func (p *OpenWeatherMapProviderAdapter) GetProviderName() string {
-	return "openweathermap"
+	return string(OpenWeatherMap)
 }

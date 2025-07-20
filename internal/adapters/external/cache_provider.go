@@ -179,24 +179,8 @@ func NewWeatherMetricsAdapter(cache ports.WeatherCache, manager ports.WeatherPro
 }
 
 // GetProviderInfo returns provider information
-func (m *WeatherMetricsAdapter) GetProviderInfo() map[string]interface{} {
-	// Get provider information from the provider manager
-	providerInfo := m.providerManager.GetProviderInfo()
-
-	// Merge with cache and status information
-	result := map[string]interface{}{
-		"providers_available": 1,
-		"primary_provider":    "weatherapi",
-		"status":              "active",
-		"cache_enabled":       true, // Add cache_enabled field
-	}
-
-	// Add provider_order from the provider manager if available
-	if providerOrder, ok := providerInfo["provider_order"]; ok {
-		result["provider_order"] = providerOrder
-	}
-
-	return result
+func (m *WeatherMetricsAdapter) GetProviderInfo() ports.ProviderInfo {
+	return m.providerManager.GetProviderInfo()
 }
 
 // GetCacheMetrics returns cache performance metrics

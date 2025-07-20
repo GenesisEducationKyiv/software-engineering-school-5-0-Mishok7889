@@ -16,7 +16,6 @@ const (
 	// Subscribe test constants
 	subscriptionSuccessful    = "Subscription successful"
 	confirmEmailSubject       = "Confirm your weather subscription"
-	emailAlreadyExistsError   = "subscription already exists and is confirmed"
 	invalidRequestFormatError = "Invalid request format"
 )
 

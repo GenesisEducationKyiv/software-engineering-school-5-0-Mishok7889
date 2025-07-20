@@ -6,6 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 	"weatherapi.app/internal/adapters/infrastructure"
 	"weatherapi.app/internal/mocks"
 )
@@ -35,20 +36,21 @@ func setupLoggerMockAccuWeather(t *testing.T) *mocks.Logger {
 func TestAccuWeatherProvider_GetCurrentWeather_Success(t *testing.T) {
 	mockLogger := setupLoggerMockAccuWeather(t)
 
-	provider := NewAccuWeatherProviderAdapter(AccuWeatherProviderParams{
+	provider, err := NewAccuWeatherProviderAdapter(AccuWeatherProviderParams{
 		APIKey:  "test-api-key",
 		BaseURL: "http://dataservice.accuweather.com/currentconditions/v1",
 		Logger:  mockLogger,
 	})
+	require.NoError(t, err)
 
 	ctx := context.Background()
 	weather, err := provider.GetCurrentWeather(ctx, "London")
 
 	assert.NoError(t, err)
 	assert.NotNil(t, weather)
-	assert.Equal(t, 22.5, weather.Temperature)
-	assert.Equal(t, 65.0, weather.Humidity)
-	assert.Equal(t, "Partly cloudy", weather.Description)
+	assert.Equal(t, DefaultTemperature, weather.Temperature)
+	assert.Equal(t, DefaultHumidity, weather.Humidity)
+	assert.Equal(t, DefaultMockDescription, weather.Description)
 	assert.Equal(t, "London", weather.City)
 	assert.False(t, weather.Timestamp.IsZero())
 }
@@ -56,11 +58,12 @@ func TestAccuWeatherProvider_GetCurrentWeather_Success(t *testing.T) {
 func TestAccuWeatherProvider_GetCurrentWeather_EmptyCity(t *testing.T) {
 	mockLogger := setupLoggerMockAccuWeather(t)
 
-	provider := NewAccuWeatherProviderAdapter(AccuWeatherProviderParams{
+	provider, err := NewAccuWeatherProviderAdapter(AccuWeatherProviderParams{
 		APIKey:  "test-api-key",
 		BaseURL: "http://dataservice.accuweather.com/currentconditions/v1",
 		Logger:  mockLogger,
 	})
+	require.NoError(t, err)
 
 	ctx := context.Background()
 	weather, err := provider.GetCurrentWeather(ctx, "")
@@ -71,40 +74,33 @@ func TestAccuWeatherProvider_GetCurrentWeather_EmptyCity(t *testing.T) {
 	var infraErr *infrastructure.InfrastructureError
 	if assert.ErrorAs(t, err, &infraErr) {
 		assert.Equal(t, "VALIDATION_ERROR", infraErr.Type)
-		assert.Contains(t, infraErr.Message, "city cannot be empty")
+		assert.Contains(t, infraErr.Message, EmptyCityValidationMsg)
 	}
 }
 
-func TestAccuWeatherProvider_GetCurrentWeather_NoAPIKey(t *testing.T) {
+func TestAccuWeatherProvider_Constructor_NoAPIKey(t *testing.T) {
 	mockLogger := setupLoggerMockAccuWeather(t)
 
-	provider := NewAccuWeatherProviderAdapter(AccuWeatherProviderParams{
+	provider, err := NewAccuWeatherProviderAdapter(AccuWeatherProviderParams{
 		APIKey:  "",
 		BaseURL: "http://dataservice.accuweather.com/currentconditions/v1",
 		Logger:  mockLogger,
 	})
 
-	ctx := context.Background()
-	weather, err := provider.GetCurrentWeather(ctx, "London")
-
 	assert.Error(t, err)
-	assert.Nil(t, weather)
-
-	var infraErr *infrastructure.InfrastructureError
-	if assert.ErrorAs(t, err, &infraErr) {
-		assert.Equal(t, "EXTERNAL_API_ERROR", infraErr.Type)
-		assert.Contains(t, infraErr.Message, "API key not configured")
-	}
+	assert.Nil(t, provider)
+	assert.Contains(t, err.Error(), "AccuWeather provider validation failed")
 }
 
 func TestAccuWeatherProvider_GetCurrentWeather_DefaultBaseURL(t *testing.T) {
 	mockLogger := setupLoggerMockAccuWeather(t)
 
-	provider := NewAccuWeatherProviderAdapter(AccuWeatherProviderParams{
+	provider, err := NewAccuWeatherProviderAdapter(AccuWeatherProviderParams{
 		APIKey:  "test-api-key",
 		BaseURL: "", // Empty baseURL should use default
 		Logger:  mockLogger,
 	})
+	require.NoError(t, err)
 
 	ctx := context.Background()
 	weather, err := provider.GetCurrentWeather(ctx, "London")
@@ -117,24 +113,26 @@ func TestAccuWeatherProvider_GetCurrentWeather_DefaultBaseURL(t *testing.T) {
 func TestAccuWeatherProvider_GetProviderName(t *testing.T) {
 	mockLogger := setupLoggerMockAccuWeather(t)
 
-	provider := NewAccuWeatherProviderAdapter(AccuWeatherProviderParams{
+	provider, err := NewAccuWeatherProviderAdapter(AccuWeatherProviderParams{
 		APIKey:  "test-api-key",
 		BaseURL: "http://dataservice.accuweather.com/currentconditions/v1",
 		Logger:  mockLogger,
 	})
+	require.NoError(t, err)
 
 	name := provider.GetProviderName()
-	assert.Equal(t, "accuweather", name)
+	assert.Equal(t, string(AccuWeather), name)
 }
 
 func TestAccuWeatherProvider_DifferentCities(t *testing.T) {
 	mockLogger := setupLoggerMockAccuWeather(t)
 
-	provider := NewAccuWeatherProviderAdapter(AccuWeatherProviderParams{
+	provider, err := NewAccuWeatherProviderAdapter(AccuWeatherProviderParams{
 		APIKey:  "test-api-key",
 		BaseURL: "http://dataservice.accuweather.com/currentconditions/v1",
 		Logger:  mockLogger,
 	})
+	require.NoError(t, err)
 
 	cities := []string{"London", "Paris", "New York", "Tokyo"}
 	ctx := context.Background()
@@ -144,8 +142,26 @@ func TestAccuWeatherProvider_DifferentCities(t *testing.T) {
 		assert.NoError(t, err)
 		assert.NotNil(t, weather)
 		assert.Equal(t, city, weather.City)
-		assert.Equal(t, 22.5, weather.Temperature)
-		assert.Equal(t, 65.0, weather.Humidity)
-		assert.Equal(t, "Partly cloudy", weather.Description)
+		assert.Equal(t, DefaultTemperature, weather.Temperature)
+		assert.Equal(t, DefaultHumidity, weather.Humidity)
+		assert.Equal(t, DefaultMockDescription, weather.Description)
 	}
+}
+
+func TestAccuWeatherProvider_GetCurrentWeather_NonExistentCity(t *testing.T) {
+	mockLogger := setupLoggerMockAccuWeather(t)
+
+	provider, err := NewAccuWeatherProviderAdapter(AccuWeatherProviderParams{
+		APIKey:  "test-api-key",
+		BaseURL: "http://dataservice.accuweather.com/currentconditions/v1",
+		Logger:  mockLogger,
+	})
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	weather, err := provider.GetCurrentWeather(ctx, "NonExistentCity")
+
+	assert.Error(t, err)
+	assert.Nil(t, weather)
+	assert.Contains(t, err.Error(), CityNotFoundMsg)
 }

@@ -8,6 +8,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 	"weatherapi.app/internal/adapters/infrastructure"
 	"weatherapi.app/internal/mocks"
 )
@@ -60,11 +61,12 @@ func TestOpenWeatherMapProvider_GetCurrentWeather_Success(t *testing.T) {
 	}))
 	defer mockServer.Close()
 
-	provider := NewOpenWeatherMapProviderAdapter(OpenWeatherMapProviderParams{
+	provider, err := NewOpenWeatherMapProviderAdapter(OpenWeatherMapProviderParams{
 		APIKey:  "test-api-key",
 		BaseURL: mockServer.URL,
 		Logger:  mockLogger,
 	})
+	require.NoError(t, err)
 
 	ctx := context.Background()
 	weather, err := provider.GetCurrentWeather(ctx, "London")
@@ -81,11 +83,12 @@ func TestOpenWeatherMapProvider_GetCurrentWeather_Success(t *testing.T) {
 func TestOpenWeatherMapProvider_GetCurrentWeather_EmptyCity(t *testing.T) {
 	mockLogger := setupLoggerMockOpenWeatherMap(t)
 
-	provider := NewOpenWeatherMapProviderAdapter(OpenWeatherMapProviderParams{
+	provider, err := NewOpenWeatherMapProviderAdapter(OpenWeatherMapProviderParams{
 		APIKey:  "test-api-key",
 		BaseURL: "https://api.openweathermap.org/data/2.5",
 		Logger:  mockLogger,
 	})
+	require.NoError(t, err)
 
 	ctx := context.Background()
 	weather, err := provider.GetCurrentWeather(ctx, "")
@@ -96,8 +99,22 @@ func TestOpenWeatherMapProvider_GetCurrentWeather_EmptyCity(t *testing.T) {
 	var infraErr *infrastructure.InfrastructureError
 	if assert.ErrorAs(t, err, &infraErr) {
 		assert.Equal(t, "VALIDATION_ERROR", infraErr.Type)
-		assert.Contains(t, infraErr.Message, "city cannot be empty")
+		assert.Contains(t, infraErr.Message, EmptyCityValidationMsg)
 	}
+}
+
+func TestOpenWeatherMapProvider_Constructor_NoAPIKey(t *testing.T) {
+	mockLogger := setupLoggerMockOpenWeatherMap(t)
+
+	provider, err := NewOpenWeatherMapProviderAdapter(OpenWeatherMapProviderParams{
+		APIKey:  "",
+		BaseURL: "https://api.openweathermap.org/data/2.5",
+		Logger:  mockLogger,
+	})
+
+	assert.Error(t, err)
+	assert.Nil(t, provider)
+	assert.Contains(t, err.Error(), "OpenWeatherMap provider validation failed")
 }
 
 func TestOpenWeatherMapProvider_GetCurrentWeather_APIError(t *testing.T) {
@@ -110,11 +127,12 @@ func TestOpenWeatherMapProvider_GetCurrentWeather_APIError(t *testing.T) {
 	}))
 	defer mockServer.Close()
 
-	provider := NewOpenWeatherMapProviderAdapter(OpenWeatherMapProviderParams{
+	provider, err := NewOpenWeatherMapProviderAdapter(OpenWeatherMapProviderParams{
 		APIKey:  "invalid-key",
 		BaseURL: mockServer.URL,
 		Logger:  mockLogger,
 	})
+	require.NoError(t, err)
 
 	ctx := context.Background()
 	weather, err := provider.GetCurrentWeather(ctx, "London")
@@ -140,11 +158,12 @@ func TestOpenWeatherMapProvider_GetCurrentWeather_InvalidJSON(t *testing.T) {
 	}))
 	defer mockServer.Close()
 
-	provider := NewOpenWeatherMapProviderAdapter(OpenWeatherMapProviderParams{
+	provider, err := NewOpenWeatherMapProviderAdapter(OpenWeatherMapProviderParams{
 		APIKey:  "test-api-key",
 		BaseURL: mockServer.URL,
 		Logger:  mockLogger,
 	})
+	require.NoError(t, err)
 
 	ctx := context.Background()
 	weather, err := provider.GetCurrentWeather(ctx, "London")
@@ -177,11 +196,12 @@ func TestOpenWeatherMapProvider_GetCurrentWeather_NoWeatherData(t *testing.T) {
 	}))
 	defer mockServer.Close()
 
-	provider := NewOpenWeatherMapProviderAdapter(OpenWeatherMapProviderParams{
+	provider, err := NewOpenWeatherMapProviderAdapter(OpenWeatherMapProviderParams{
 		APIKey:  "test-api-key",
 		BaseURL: mockServer.URL,
 		Logger:  mockLogger,
 	})
+	require.NoError(t, err)
 
 	ctx := context.Background()
 	weather, err := provider.GetCurrentWeather(ctx, "London")
@@ -190,44 +210,47 @@ func TestOpenWeatherMapProvider_GetCurrentWeather_NoWeatherData(t *testing.T) {
 	assert.NotNil(t, weather)
 	assert.Equal(t, 20.0, weather.Temperature)
 	assert.Equal(t, 60.0, weather.Humidity)
-	assert.Equal(t, "N/A", weather.Description) // Default description
+	assert.Equal(t, DefaultWeatherDescription, weather.Description) // Default description
 	assert.Equal(t, "London", weather.City)
 }
 
 func TestOpenWeatherMapProvider_GetCurrentWeather_DefaultBaseURL(t *testing.T) {
 	mockLogger := setupLoggerMockOpenWeatherMap(t)
 
-	provider := NewOpenWeatherMapProviderAdapter(OpenWeatherMapProviderParams{
+	provider, err := NewOpenWeatherMapProviderAdapter(OpenWeatherMapProviderParams{
 		APIKey:  "test-api-key",
 		BaseURL: "", // Empty baseURL should use default
 		Logger:  mockLogger,
 	})
+	require.NoError(t, err)
 
 	// This will fail with real API, but we're testing the provider creation
-	assert.Equal(t, "openweathermap", provider.GetProviderName())
+	assert.Equal(t, string(OpenWeatherMap), provider.GetProviderName())
 }
 
 func TestOpenWeatherMapProvider_GetProviderName(t *testing.T) {
 	mockLogger := setupLoggerMockOpenWeatherMap(t)
 
-	provider := NewOpenWeatherMapProviderAdapter(OpenWeatherMapProviderParams{
+	provider, err := NewOpenWeatherMapProviderAdapter(OpenWeatherMapProviderParams{
 		APIKey:  "test-api-key",
 		BaseURL: "https://api.openweathermap.org/data/2.5",
 		Logger:  mockLogger,
 	})
+	require.NoError(t, err)
 
 	name := provider.GetProviderName()
-	assert.Equal(t, "openweathermap", name)
+	assert.Equal(t, string(OpenWeatherMap), name)
 }
 
 func TestOpenWeatherMapProvider_NetworkError(t *testing.T) {
 	mockLogger := setupLoggerMockOpenWeatherMap(t)
 
-	provider := NewOpenWeatherMapProviderAdapter(OpenWeatherMapProviderParams{
+	provider, err := NewOpenWeatherMapProviderAdapter(OpenWeatherMapProviderParams{
 		APIKey:  "test-api-key",
 		BaseURL: "http://192.0.2.1:9999",
 		Logger:  mockLogger,
 	})
+	require.NoError(t, err)
 
 	ctx := context.Background()
 	weather, err := provider.GetCurrentWeather(ctx, "London")
@@ -238,6 +261,6 @@ func TestOpenWeatherMapProvider_NetworkError(t *testing.T) {
 	var infraErr *infrastructure.InfrastructureError
 	if assert.ErrorAs(t, err, &infraErr) {
 		assert.Equal(t, "EXTERNAL_API_ERROR", infraErr.Type)
-		assert.Contains(t, infraErr.Message, "failed to call OpenWeatherMap")
+		assert.Contains(t, infraErr.Message, "failed to call openweathermap")
 	}
 }

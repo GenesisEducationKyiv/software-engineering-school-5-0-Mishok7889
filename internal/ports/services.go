@@ -10,7 +10,7 @@ import (
 // WeatherService defines the contract for weather operations used by other bounded contexts
 type WeatherService interface {
 	GetWeather(ctx context.Context, city string) (*WeatherServiceData, error)
-	GetProviderInfo(ctx context.Context) map[string]interface{}
+	GetProviderInfo(ctx context.Context) ProviderInfo
 }
 
 // WeatherServiceData represents weather data for cross-context communication

@@ -4,7 +4,6 @@ package external
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"time"
@@ -15,10 +14,10 @@ import (
 
 // WeatherAPIProviderAdapter implements WeatherProvider port for WeatherAPI.com
 type WeatherAPIProviderAdapter struct {
-	apiKey  string
-	baseURL string
-	client  HTTPClient
-	logger  ports.Logger
+	apiKey     string
+	baseURL    string
+	httpClient *HTTPWeatherClient
+	logger     ports.Logger
 }
 
 // WeatherAPIProviderParams holds parameters for creating WeatherAPI provider
@@ -45,43 +44,48 @@ type WeatherAPIResponse struct {
 }
 
 // NewWeatherAPIProviderAdapter creates a new WeatherAPI provider adapter
-func NewWeatherAPIProviderAdapter(params WeatherAPIProviderParams) ports.WeatherProvider {
-	return &WeatherAPIProviderAdapter{
-		apiKey:  params.APIKey,
-		baseURL: params.BaseURL,
-		client:  &http.Client{Timeout: 10 * time.Second},
-		logger:  params.Logger,
+func NewWeatherAPIProviderAdapter(params WeatherAPIProviderParams) (ports.WeatherProvider, error) {
+	if err := ValidateConstructorParams(params.APIKey); err != nil {
+		return nil, fmt.Errorf("WeatherAPI provider validation failed: %w", err)
 	}
+
+	baseURL := params.BaseURL
+	if baseURL == "" {
+		baseURL = DefaultWeatherAPIURL
+	}
+
+	client := &http.Client{Timeout: DefaultHTTPTimeout}
+	httpClient := NewHTTPWeatherClient(client, params.Logger)
+
+	return &WeatherAPIProviderAdapter{
+		apiKey:     params.APIKey,
+		baseURL:    baseURL,
+		httpClient: httpClient,
+		logger:     params.Logger,
+	}, nil
 }
 
 // GetCurrentWeather retrieves weather data from WeatherAPI.com
 func (p *WeatherAPIProviderAdapter) GetCurrentWeather(ctx context.Context, city string) (*ports.WeatherData, error) {
 	if city == "" {
-		return nil, infrastructure.NewValidationError("city cannot be empty")
+		return nil, infrastructure.NewValidationError(EmptyCityValidationMsg)
 	}
 
 	url := fmt.Sprintf("%s/current.json?key=%s&q=%s", p.baseURL, p.apiKey, city)
 
-	resp, err := p.client.Get(url)
-	if err != nil {
-		return nil, infrastructure.NewExternalAPIError("failed to call WeatherAPI", err)
+	req := HTTPWeatherRequest{
+		URL:          url,
+		ProviderName: string(WeatherAPI),
 	}
-	defer func() {
-		if closeErr := resp.Body.Close(); closeErr != nil {
-			p.logger.Warn("Failed to close WeatherAPI response body", ports.F("error", closeErr))
-		}
-	}()
 
-	if resp.StatusCode != http.StatusOK {
-		if resp.StatusCode == http.StatusNotFound {
-			return nil, ports.NewNotFoundError("city not found")
-		}
-		return nil, infrastructure.NewExternalAPIError(fmt.Sprintf("WeatherAPI returned status %d", resp.StatusCode), nil)
+	resp, err := p.httpClient.ExecuteRequest(ctx, req)
+	if err != nil {
+		return nil, err
 	}
 
 	var apiResp WeatherAPIResponse
-	if err := json.NewDecoder(resp.Body).Decode(&apiResp); err != nil {
-		return nil, infrastructure.NewExternalAPIError("failed to decode WeatherAPI response", err)
+	if err := p.httpClient.DecodeJSONResponse(resp, &apiResp, string(WeatherAPI)); err != nil {
+		return nil, err
 	}
 
 	return &ports.WeatherData{
@@ -95,5 +99,5 @@ func (p *WeatherAPIProviderAdapter) GetCurrentWeather(ctx context.Context, city 
 
 // GetProviderName returns the name of this weather provider
 func (p *WeatherAPIProviderAdapter) GetProviderName() string {
-	return "weatherapi"
+	return string(WeatherAPI)
 }

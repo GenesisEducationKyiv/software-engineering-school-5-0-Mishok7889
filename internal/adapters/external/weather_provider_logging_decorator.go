@@ -116,8 +116,6 @@ func (d *WeatherProviderManagerLoggingDecorator) GetWeather(ctx context.Context,
 }
 
 // GetProviderInfo delegates to the wrapped manager
-func (d *WeatherProviderManagerLoggingDecorator) GetProviderInfo() map[string]interface{} {
-	info := d.manager.GetProviderInfo()
-	info["logging_enabled"] = true
-	return info
+func (d *WeatherProviderManagerLoggingDecorator) GetProviderInfo() ports.ProviderInfo {
+	return d.manager.GetProviderInfo()
 }

@@ -37,8 +37,9 @@ func (s *IntegrationTestSuite) TestWeatherProviderIntegration() {
 	s.NotNil(providerInfo, "Provider info should be available")
 
 	// Verify provider info contains expected fields
-	s.Contains(providerInfo, "cache_enabled")
-	s.Contains(providerInfo, "provider_order")
+	s.GreaterOrEqual(providerInfo.TotalProviders, 1, "Should have at least one provider")
+	s.NotEmpty(providerInfo.ProviderOrder, "Provider order should not be empty")
+	s.True(providerInfo.ChainEnabled, "Chain should be enabled")
 
 	// Test 3: Verify cache metrics if caching is enabled
 	cacheMetrics, err := weatherUseCase.GetCacheMetrics(ctx)

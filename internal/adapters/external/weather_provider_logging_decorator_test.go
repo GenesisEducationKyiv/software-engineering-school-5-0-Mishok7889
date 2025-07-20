@@ -179,9 +179,11 @@ func TestWeatherProviderManagerLoggingDecorator_BasicFunctionality(t *testing.T)
 func TestWeatherProviderManagerLoggingDecorator_GetProviderInfo(t *testing.T) {
 	// Create a test manager
 	testManager := &testWeatherProviderManager{
-		providerInfo: map[string]interface{}{
-			"total_providers": 2,
-			"provider_order":  []string{"weatherapi", "openweathermap"},
+		providerInfo: ports.ProviderInfo{
+			TotalProviders:  2,
+			ProviderOrder:   []string{"weatherapi", "openweathermap"},
+			ChainEnabled:    true,
+			FallbackEnabled: true,
 		},
 	}
 
@@ -195,12 +197,14 @@ func TestWeatherProviderManagerLoggingDecorator_GetProviderInfo(t *testing.T) {
 	result := decorator.GetProviderInfo()
 
 	// Verify results
-	assert.Equal(t, 2, result["total_providers"])
-	assert.Equal(t, []string{"weatherapi", "openweathermap"}, result["provider_order"])
-	assert.Equal(t, true, result["logging_enabled"])
+	assert.Equal(t, 2, result.TotalProviders)
+	assert.Equal(t, []string{"weatherapi", "openweathermap"}, result.ProviderOrder)
+	assert.True(t, result.ChainEnabled)
+	assert.True(t, result.FallbackEnabled)
 }
 
-// Test helper structs
+// Test structs
+
 type testWeatherProvider struct {
 	name     string
 	response *ports.WeatherData
@@ -244,7 +248,7 @@ func (p *testWeatherProviderWithDelay) GetProviderName() string {
 type testWeatherProviderManager struct {
 	response     *ports.WeatherData
 	err          error
-	providerInfo map[string]interface{}
+	providerInfo ports.ProviderInfo
 }
 
 func (m *testWeatherProviderManager) GetWeather(ctx context.Context, city string) (*ports.WeatherData, error) {
@@ -254,13 +258,15 @@ func (m *testWeatherProviderManager) GetWeather(ctx context.Context, city string
 	return m.response, nil
 }
 
-func (m *testWeatherProviderManager) GetProviderInfo() map[string]interface{} {
-	if m.providerInfo != nil {
+func (m *testWeatherProviderManager) GetProviderInfo() ports.ProviderInfo {
+	if m.providerInfo.TotalProviders > 0 {
 		return m.providerInfo
 	}
-	return map[string]interface{}{
-		"total_providers": 1,
-		"provider_order":  []string{"test"},
+	return ports.ProviderInfo{
+		TotalProviders:  1,
+		ProviderOrder:   []string{"test"},
+		ChainEnabled:    true,
+		FallbackEnabled: false,
 	}
 }
 

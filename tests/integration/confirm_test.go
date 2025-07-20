@@ -13,13 +13,10 @@ import (
 
 const (
 	// Confirmation test constants
-	subscriptionConfirmed     = "Subscription confirmed"
-	tokenTypeUnsubscribe      = "unsubscribe"
-	tokenTypeConfirmation     = "confirmation"
-	welcomeEmailSubject       = "Welcome to Weather Updates"
-	tokenNotFoundError        = "invalid or expired confirmation token"
-	invalidTokenTypeError     = "invalid token type"
-	subscriptionNotFoundError = "subscription not found"
+	subscriptionConfirmed = "Subscription confirmed"
+	tokenTypeUnsubscribe  = "unsubscribe"
+	tokenTypeConfirmation = "confirmation"
+	welcomeEmailSubject   = "Welcome to Weather Updates"
 )
 
 func (s *IntegrationTestSuite) TestConfirmSubscription_Success() {

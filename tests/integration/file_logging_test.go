@@ -28,12 +28,13 @@ func (s *IntegrationTestSuite) TestFileLogging_WeatherProviderIntegration() {
 	s.Require().NoError(err)
 
 	// Create weather provider manager with file logging
-	providerManager := external.NewWeatherProviderManagerAdapter(external.ProviderManagerConfig{
+	providerManager, err := external.NewWeatherProviderManagerAdapter(external.ProviderManagerConfig{
 		WeatherAPIKey:     s.config.Weather.APIKey,
 		WeatherAPIBaseURL: s.config.Weather.BaseURL,
 		ProviderOrder:     s.config.Weather.ProviderOrder,
 		Logger:            fileLogger,
 	})
+	s.Require().NoError(err)
 
 	// Wrap with logging decorator
 	loggedManager := external.NewWeatherProviderManagerLoggingDecorator(providerManager, fileLogger)
@@ -129,12 +130,13 @@ func (s *IntegrationTestSuite) TestFileLogging_WeatherUseCase() {
 	s.Require().NoError(err)
 
 	// Create weather provider manager with file logging
-	providerManager := external.NewWeatherProviderManagerAdapter(external.ProviderManagerConfig{
+	providerManager, err := external.NewWeatherProviderManagerAdapter(external.ProviderManagerConfig{
 		WeatherAPIKey:     s.config.Weather.APIKey,
 		WeatherAPIBaseURL: s.config.Weather.BaseURL,
 		ProviderOrder:     s.config.Weather.ProviderOrder,
 		Logger:            fileLogger,
 	})
+	s.Require().NoError(err)
 
 	// Wrap with logging decorator
 	loggedManager := external.NewWeatherProviderManagerLoggingDecorator(providerManager, fileLogger)
@@ -179,12 +181,13 @@ func (s *IntegrationTestSuite) TestFileLogging_ConcurrentRequests() {
 	s.Require().NoError(err)
 
 	// Create weather provider manager with file logging
-	providerManager := external.NewWeatherProviderManagerAdapter(external.ProviderManagerConfig{
+	providerManager, err := external.NewWeatherProviderManagerAdapter(external.ProviderManagerConfig{
 		WeatherAPIKey:     s.config.Weather.APIKey,
 		WeatherAPIBaseURL: s.config.Weather.BaseURL,
 		ProviderOrder:     s.config.Weather.ProviderOrder,
 		Logger:            fileLogger,
 	})
+	s.Require().NoError(err)
 
 	// Wrap with logging decorator
 	loggedManager := external.NewWeatherProviderManagerLoggingDecorator(providerManager, fileLogger)
@@ -254,12 +257,13 @@ func (s *IntegrationTestSuite) TestFileLogging_ErrorHandling() {
 	s.Require().NoError(err)
 
 	// Create weather provider manager with file logging
-	providerManager := external.NewWeatherProviderManagerAdapter(external.ProviderManagerConfig{
+	providerManager, err := external.NewWeatherProviderManagerAdapter(external.ProviderManagerConfig{
 		WeatherAPIKey:     s.config.Weather.APIKey,
 		WeatherAPIBaseURL: s.config.Weather.BaseURL,
 		ProviderOrder:     s.config.Weather.ProviderOrder,
 		Logger:            fileLogger,
 	})
+	s.Require().NoError(err)
 
 	// Wrap with logging decorator
 	loggedManager := external.NewWeatherProviderManagerLoggingDecorator(providerManager, fileLogger)
@@ -308,26 +312,15 @@ func (s *IntegrationTestSuite) TestFileLogging_Configuration() {
 	// Log the provider info for debugging
 	s.T().Logf("Provider info: %+v", providerInfo)
 
-	// In test configuration, logging should be enabled/disabled based on config
-	if s.config.Weather.EnableLogging {
-		// Check if logging_enabled key exists and is true
-		if loggingEnabled, exists := providerInfo["logging_enabled"]; exists {
-			s.Equal(true, loggingEnabled, "logging_enabled should be true when EnableLogging is true")
-		} else {
-			// If the key doesn't exist, we can't verify through provider info
-			// but we can still verify the configuration is correct
-			s.T().Logf("Provider info doesn't contain logging_enabled key, but config.Weather.EnableLogging is %v", s.config.Weather.EnableLogging)
-		}
-	} else {
-		// If logging is disabled, the provider info might not have this field
-		// or it might be false
-		if loggingEnabled, exists := providerInfo["logging_enabled"]; exists {
-			s.Equal(false, loggingEnabled, "logging_enabled should be false when EnableLogging is false")
-		}
-	}
+	// Verify provider info fields
+	s.GreaterOrEqual(providerInfo.TotalProviders, 1, "Should have at least one provider configured")
+	s.NotEmpty(providerInfo.ProviderOrder, "Provider order should not be empty")
+	s.True(providerInfo.ChainEnabled, "Chain should be enabled")
 
-	// Verify other expected provider info fields
-	s.Contains(providerInfo, "provider_order", "Provider info should contain provider_order")
+	// If multiple providers, fallback should be enabled
+	if providerInfo.TotalProviders > 1 {
+		s.True(providerInfo.FallbackEnabled, "Fallback should be enabled with multiple providers")
+	}
 }
 
 // Test helper functions

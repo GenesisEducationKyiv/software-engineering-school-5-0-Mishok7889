@@ -2,6 +2,7 @@ package external
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"weatherapi.app/internal/adapters/infrastructure"
@@ -24,37 +25,37 @@ type AccuWeatherProviderParams struct {
 }
 
 // NewAccuWeatherProviderAdapter creates a new AccuWeather provider adapter
-func NewAccuWeatherProviderAdapter(params AccuWeatherProviderParams) ports.WeatherProvider {
+func NewAccuWeatherProviderAdapter(params AccuWeatherProviderParams) (ports.WeatherProvider, error) {
+	if err := ValidateConstructorParams(params.APIKey); err != nil {
+		return nil, fmt.Errorf("AccuWeather provider validation failed: %w", err)
+	}
+
 	baseURL := params.BaseURL
 	if baseURL == "" {
-		baseURL = "http://dataservice.accuweather.com/currentconditions/v1"
+		baseURL = DefaultAccuWeatherURL
 	}
 
 	return &AccuWeatherProviderAdapter{
 		apiKey:  params.APIKey,
 		baseURL: baseURL,
 		logger:  params.Logger,
-	}
+	}, nil
 }
 
 // GetCurrentWeather retrieves weather data from AccuWeather (mock implementation)
 func (p *AccuWeatherProviderAdapter) GetCurrentWeather(ctx context.Context, city string) (*ports.WeatherData, error) {
 	if city == "" {
-		return nil, infrastructure.NewValidationError("city cannot be empty")
-	}
-
-	if p.apiKey == "" {
-		return nil, infrastructure.NewExternalAPIError("AccuWeather API key not configured", nil)
+		return nil, infrastructure.NewValidationError(EmptyCityValidationMsg)
 	}
 
 	if city == "NonExistentCity" {
-		return nil, ports.NewNotFoundError("city not found")
+		return nil, ports.NewNotFoundError(CityNotFoundMsg)
 	}
 
 	return &ports.WeatherData{
-		Temperature: 22.5,
-		Humidity:    65.0,
-		Description: "Partly cloudy",
+		Temperature: DefaultTemperature,
+		Humidity:    DefaultHumidity,
+		Description: DefaultMockDescription,
 		City:        city,
 		Timestamp:   time.Now(),
 	}, nil
@@ -62,5 +63,5 @@ func (p *AccuWeatherProviderAdapter) GetCurrentWeather(ctx context.Context, city
 
 // GetProviderName returns the name of this weather provider
 func (p *AccuWeatherProviderAdapter) GetProviderName() string {
-	return "accuweather"
+	return string(AccuWeather)
 }

@@ -101,7 +101,7 @@ func (c *DependencyContainer) initializePorts(appConfig *config.Config) error {
 	}
 
 	// Weather provider manager with Chain of Responsibility
-	providerManager := external.NewWeatherProviderManagerAdapter(external.ProviderManagerConfig{
+	providerManager, err := external.NewWeatherProviderManagerAdapter(external.ProviderManagerConfig{
 		WeatherAPIKey:     c.config.Weather.APIKey,
 		WeatherAPIBaseURL: c.config.Weather.BaseURL,
 		OpenWeatherKey:    c.config.Weather.OpenWeatherMapKey,
@@ -111,6 +111,10 @@ func (c *DependencyContainer) initializePorts(appConfig *config.Config) error {
 		ProviderOrder:     c.config.Weather.ProviderOrder,
 		Logger:            logger,
 	})
+	if err != nil {
+		slog.Error("Failed to create weather provider manager", "error", err)
+		return fmt.Errorf("create weather provider manager: %w", err)
+	}
 
 	// If logging is enabled, wrap the provider manager with logging decorator
 	if c.config.Weather.EnableLogging {
