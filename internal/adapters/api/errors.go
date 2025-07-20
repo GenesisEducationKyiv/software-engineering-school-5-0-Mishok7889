@@ -2,6 +2,10 @@ package api
 
 import "fmt"
 
+const (
+	APIValidationErrorType = "API_VALIDATION_ERROR"
+)
+
 // APIError represents errors specific to the API layer
 type APIError struct {
 	Type    string
@@ -23,7 +27,7 @@ func (e *APIError) Unwrap() error {
 // NewValidationError creates a new validation error for the API layer
 func NewValidationError(message string) *APIError {
 	return &APIError{
-		Type:    "API_VALIDATION_ERROR",
+		Type:    APIValidationErrorType,
 		Message: message,
 	}
 }

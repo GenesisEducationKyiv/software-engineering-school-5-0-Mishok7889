@@ -16,118 +16,76 @@ type ErrorResponse struct {
 
 // handleError handles different types of application errors
 func (s *HTTPServerAdapter) handleError(c *gin.Context, err error) {
-	var statusCode int
-	var message string
-
-	// Handle API-specific errors
-	var apiErr *APIError
-	if errors.As(err, &apiErr) {
-		switch apiErr.Type {
-		case "API_VALIDATION_ERROR":
-			statusCode = http.StatusBadRequest
-			message = apiErr.Message
-		default:
-			statusCode = http.StatusInternalServerError
-			message = "Internal server error"
-		}
-		c.JSON(statusCode, ErrorResponse{Error: message})
-		return
-	}
-
-	// Handle domain errors
-	var domainErr *shared.DomainError
-	if errors.As(err, &domainErr) {
-		switch domainErr.Code {
-		case shared.ErrCodeValidation:
-			statusCode = http.StatusBadRequest
-			message = domainErr.Message
-		case shared.ErrCodeNotFound:
-			statusCode = http.StatusNotFound
-			message = domainErr.Message
-		case shared.ErrCodeAlreadyExists:
-			statusCode = http.StatusConflict
-			message = domainErr.Message
-		case shared.ErrCodeUnauthorized:
-			statusCode = http.StatusUnauthorized
-			message = domainErr.Message
-		case shared.ErrCodeExternalService:
-			statusCode = http.StatusServiceUnavailable
-			message = "External service unavailable"
-		case shared.ErrCodeInternal:
-			statusCode = http.StatusInternalServerError
-			message = "Internal server error"
-		default:
-			statusCode = http.StatusInternalServerError
-			message = "Internal server error"
-		}
-		c.JSON(statusCode, ErrorResponse{Error: message})
-		return
-	}
-
-	// Handle port-level errors
-	if ports.IsNotFoundError(err) {
-		statusCode = http.StatusNotFound
-		message = err.Error()
-		c.JSON(statusCode, ErrorResponse{Error: message})
-		return
-	}
-
-	if ports.IsAlreadyExistsError(err) {
-		statusCode = http.StatusConflict
-		message = err.Error()
-		c.JSON(statusCode, ErrorResponse{Error: message})
-		return
-	}
-
-	// Default error handling
-	statusCode = http.StatusInternalServerError
-	message = "Internal server error"
+	statusCode, message := s.mapError(err)
 	c.JSON(statusCode, ErrorResponse{Error: message})
 }
 
-// getMetrics handles GET /api/metrics requests
-func (s *HTTPServerAdapter) getMetrics(c *gin.Context) {
-	s.logger.Debug("Metrics endpoint called")
-
-	metrics, err := s.metricsCollector.GetMetrics(c.Request.Context())
-	if err != nil {
-		s.logger.Error("Error getting metrics", ports.F("error", err))
-		s.handleError(c, err)
-		return
+// mapError determines the appropriate HTTP status code and message for an error
+func (s *HTTPServerAdapter) mapError(err error) (int, string) {
+	if statusCode, message := s.mapAPIError(err); statusCode != 0 {
+		return statusCode, message
 	}
 
-	c.JSON(http.StatusOK, metrics)
-}
-
-// getHealth handles GET /api/health requests
-func (s *HTTPServerAdapter) getHealth(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"status": "ok"})
-}
-
-// getDebug handles GET /api/debug requests
-func (s *HTTPServerAdapter) getDebug(c *gin.Context) {
-	s.logger.Debug("Debug endpoint called")
-
-	healthStatuses := s.systemHealthChecker.CheckAll(c.Request.Context())
-
-	response := gin.H{}
-
-	for component, status := range healthStatuses {
-		switch component {
-		case "database":
-			response["database"] = gin.H{
-				"connected": status.Status == "healthy",
-			}
-		case "weatherAPI":
-			response["weatherAPI"] = gin.H{
-				"connected": status.Status == "healthy",
-			}
-		case "smtp":
-			response["smtp"] = status.Details
-		case "config":
-			response["config"] = status.Details
-		}
+	if statusCode, message := s.mapDomainError(err); statusCode != 0 {
+		return statusCode, message
 	}
 
-	c.JSON(http.StatusOK, response)
+	if statusCode, message := s.mapPortError(err); statusCode != 0 {
+		return statusCode, message
+	}
+
+	return http.StatusInternalServerError, "Internal server error"
+}
+
+// mapAPIError maps API-specific errors to HTTP responses
+func (s *HTTPServerAdapter) mapAPIError(err error) (int, string) {
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) {
+		return 0, ""
+	}
+
+	switch apiErr.Type {
+	case APIValidationErrorType:
+		return http.StatusBadRequest, apiErr.Message
+	default:
+		return http.StatusInternalServerError, "Internal server error"
+	}
+}
+
+// mapDomainError maps domain errors to HTTP responses
+func (s *HTTPServerAdapter) mapDomainError(err error) (int, string) {
+	var domainErr *shared.DomainError
+	if !errors.As(err, &domainErr) {
+		return 0, ""
+	}
+
+	switch domainErr.Code {
+	case shared.ErrCodeValidation:
+		return http.StatusBadRequest, domainErr.Message
+	case shared.ErrCodeNotFound:
+		return http.StatusNotFound, domainErr.Message
+	case shared.ErrCodeAlreadyExists:
+		return http.StatusConflict, domainErr.Message
+	case shared.ErrCodeUnauthorized:
+		return http.StatusUnauthorized, domainErr.Message
+	case shared.ErrCodeExternalService:
+		return http.StatusServiceUnavailable, "External service unavailable"
+	case shared.ErrCodeInternal:
+		return http.StatusInternalServerError, "Internal server error"
+	default:
+		return http.StatusInternalServerError, "Internal server error"
+	}
+}
+
+// mapPortError maps port-level errors to HTTP responses
+func (s *HTTPServerAdapter) mapPortError(err error) (int, string) {
+	if ports.IsNotFoundError(err) {
+		return http.StatusNotFound, err.Error()
+	}
+
+	if ports.IsAlreadyExistsError(err) {
+		return http.StatusConflict, err.Error()
+	}
+
+	return 0, ""
 }
