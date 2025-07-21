@@ -136,7 +136,6 @@ func (r *SubscriptionRepositoryAdapter) Delete(ctx context.Context, sub *ports.S
 // Find retrieves subscriptions based on the provided filter criteria
 func (r *SubscriptionRepositoryAdapter) Find(ctx context.Context, filter ports.SubscriptionFilter) ([]*ports.SubscriptionData, error) {
 	if err := filter.Validate(); err != nil {
-		// Convert ports validation error to infrastructure error for consistency
 		return nil, infrastructure.NewDatabaseError(err.Error(), err)
 	}
 
@@ -198,7 +197,6 @@ func (r *SubscriptionRepositoryAdapter) CountConfirmed(ctx context.Context) (int
 	return count, nil
 }
 
-// dataToModel converts port data to database model
 func (r *SubscriptionRepositoryAdapter) dataToModel(data *ports.SubscriptionData) *SubscriptionModel {
 	return &SubscriptionModel{
 		ID:        data.ID,
@@ -211,7 +209,6 @@ func (r *SubscriptionRepositoryAdapter) dataToModel(data *ports.SubscriptionData
 	}
 }
 
-// modelToData converts database model to port data
 func (r *SubscriptionRepositoryAdapter) modelToData(model *SubscriptionModel) *ports.SubscriptionData {
 	return &ports.SubscriptionData{
 		ID:        model.ID,

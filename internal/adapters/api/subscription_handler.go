@@ -60,7 +60,6 @@ func (s *HTTPServerAdapter) subscribe(c *gin.Context) {
 
 // confirmSubscription handles GET /api/confirm/:token requests
 func (s *HTTPServerAdapter) confirmSubscription(c *gin.Context) {
-	// Get validated token from middleware
 	token := c.GetString(shared.ValidatedTokenKey)
 
 	s.logger.Debug(ConfirmingSubscriptionMsg, ports.F(TokenField, token))
@@ -81,7 +80,6 @@ func (s *HTTPServerAdapter) confirmSubscription(c *gin.Context) {
 
 // unsubscribe handles GET /api/unsubscribe/:token requests
 func (s *HTTPServerAdapter) unsubscribe(c *gin.Context) {
-	// Get validated token from middleware
 	token := c.GetString(shared.ValidatedTokenKey)
 
 	s.logger.Debug(UnsubscribingMsg, ports.F(TokenField, token))

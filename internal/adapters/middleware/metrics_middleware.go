@@ -46,7 +46,6 @@ func (m *MetricsMiddleware) CollectRequestMetrics() gin.HandlerFunc {
 	return gin.HandlerFunc(func(c *gin.Context) {
 		start := time.Now()
 
-		// Increment request counter
 		m.collector.IncrementCounter(APIRequestsTotalMetric, map[string]string{
 			EndpointLabelKey: extractEndpointFromPath(c.FullPath()),
 			MethodLabelKey:   c.Request.Method,
@@ -54,7 +53,6 @@ func (m *MetricsMiddleware) CollectRequestMetrics() gin.HandlerFunc {
 
 		c.Next()
 
-		// Only count successful responses (2xx status codes)
 		if c.Writer.Status() >= 200 && c.Writer.Status() < 300 {
 			m.collector.IncrementCounter(APIResponsesTotalMetric, map[string]string{
 				EndpointLabelKey: extractEndpointFromPath(c.FullPath()),

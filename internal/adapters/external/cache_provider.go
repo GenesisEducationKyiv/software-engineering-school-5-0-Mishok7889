@@ -9,7 +9,6 @@ import (
 	"weatherapi.app/internal/ports"
 )
 
-// MemoryCacheProviderAdapter implements WeatherCache port using in-memory storage
 type MemoryCacheProviderAdapter struct {
 	data  map[string]cachedItem
 	mutex sync.RWMutex
@@ -35,7 +34,6 @@ type operationStats struct {
 	minLatency   time.Duration
 }
 
-// NewMemoryCacheProviderAdapter creates a new in-memory cache adapter
 func NewMemoryCacheProviderAdapter() *MemoryCacheProviderAdapter {
 	return &MemoryCacheProviderAdapter{
 		data: make(map[string]cachedItem),
@@ -45,7 +43,6 @@ func NewMemoryCacheProviderAdapter() *MemoryCacheProviderAdapter {
 	}
 }
 
-// Get retrieves weather data from cache
 func (c *MemoryCacheProviderAdapter) Get(ctx context.Context, key string) (*ports.WeatherData, error) {
 	start := time.Now()
 	defer func() {
@@ -106,21 +103,18 @@ func (c *MemoryCacheProviderAdapter) GetStats() ports.CacheStats {
 	}
 }
 
-// RecordHit increments the cache hit counter
 func (c *MemoryCacheProviderAdapter) RecordHit() {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 	c.stats.hits++
 }
 
-// RecordMiss increments the cache miss counter
 func (c *MemoryCacheProviderAdapter) RecordMiss() {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 	c.stats.misses++
 }
 
-// RecordOperation records a cache operation with duration metrics
 func (c *MemoryCacheProviderAdapter) RecordOperation(operation string, duration time.Duration) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
@@ -146,7 +140,6 @@ func (c *MemoryCacheProviderAdapter) RecordOperation(operation string, duration 
 	}
 }
 
-// GetOperationMetrics returns operation-specific performance metrics
 func (c *MemoryCacheProviderAdapter) GetOperationMetrics() map[string]ports.OperationMetrics {
 	c.mutex.RLock()
 	defer c.mutex.RUnlock()
@@ -164,13 +157,11 @@ func (c *MemoryCacheProviderAdapter) GetOperationMetrics() map[string]ports.Oper
 	return result
 }
 
-// WeatherMetricsAdapter implements WeatherMetrics port
 type WeatherMetricsAdapter struct {
 	cache           ports.WeatherCache
 	providerManager ports.WeatherProviderManager
 }
 
-// NewWeatherMetricsAdapter creates a new weather metrics adapter
 func NewWeatherMetricsAdapter(cache ports.WeatherCache, manager ports.WeatherProviderManager) ports.WeatherMetrics {
 	return &WeatherMetricsAdapter{
 		cache:           cache,
@@ -178,12 +169,10 @@ func NewWeatherMetricsAdapter(cache ports.WeatherCache, manager ports.WeatherPro
 	}
 }
 
-// GetProviderInfo returns provider information
 func (m *WeatherMetricsAdapter) GetProviderInfo() ports.ProviderInfo {
 	return m.providerManager.GetProviderInfo()
 }
 
-// GetCacheMetrics returns cache performance metrics
 func (m *WeatherMetricsAdapter) GetCacheMetrics() (ports.CacheStats, error) {
 	if cacheWithStats, ok := m.cache.(interface{ GetStats() ports.CacheStats }); ok {
 		return cacheWithStats.GetStats(), nil

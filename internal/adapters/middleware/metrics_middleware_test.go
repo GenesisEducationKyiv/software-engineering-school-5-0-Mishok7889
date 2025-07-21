@@ -25,13 +25,11 @@ func TestMetricsMiddleware_CollectRequestMetrics_Success(t *testing.T) {
 	mockCollector := &mockMetricsCollector{}
 	middleware := NewMetricsMiddleware(mockCollector)
 
-	// Expect request counter increment
 	mockCollector.On("IncrementCounter", APIRequestsTotalMetric, map[string]string{
 		EndpointLabelKey: "weather",
 		MethodLabelKey:   "GET",
 	}).Once()
 
-	// Expect response counter increment for successful response
 	mockCollector.On("IncrementCounter", APIResponsesTotalMetric, map[string]string{
 		EndpointLabelKey: "weather",
 		StatusLabelKey:   SuccessStatus,
@@ -58,13 +56,10 @@ func TestMetricsMiddleware_CollectRequestMetrics_ErrorResponse(t *testing.T) {
 	mockCollector := &mockMetricsCollector{}
 	middleware := NewMetricsMiddleware(mockCollector)
 
-	// Expect only request counter increment for error response
 	mockCollector.On("IncrementCounter", APIRequestsTotalMetric, map[string]string{
 		EndpointLabelKey: "weather",
 		MethodLabelKey:   "GET",
 	}).Once()
-
-	// No response counter increment expected for error responses
 
 	router := gin.New()
 	router.Use(middleware.CollectRequestMetrics())

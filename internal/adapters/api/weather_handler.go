@@ -19,7 +19,6 @@ type WeatherResponse struct {
 
 // getWeather handles GET /api/weather requests
 func (s *HTTPServerAdapter) getWeather(c *gin.Context) {
-	// Get validated city from middleware
 	city := c.GetString(shared.ValidatedCityKey)
 
 	s.logger.Debug(GettingWeatherForCityMsg, ports.F(CityField, city))
@@ -30,7 +29,6 @@ func (s *HTTPServerAdapter) getWeather(c *gin.Context) {
 		s.logger.Error(WeatherUseCaseErrorMsg,
 			ports.F(ErrorField, err),
 			ports.F(CityField, city))
-		// Domain-specific error metrics
 		s.metricsCollector.IncrementCounter(APIErrorsTotalMetric, map[string]string{
 			EndpointLabelKey: WeatherEndpoint,
 			ErrorLabelKey:    UsecaseError,
