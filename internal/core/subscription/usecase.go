@@ -79,7 +79,6 @@ type CreateTokenParams struct {
 }
 
 func (uc *UseCase) validateSubscribeParams(params SubscribeParams) error {
-	// Validate email format
 	if !validation.IsNotEmpty(params.Email) {
 		return shared.NewValidationError("email is required")
 	}
@@ -87,16 +86,28 @@ func (uc *UseCase) validateSubscribeParams(params SubscribeParams) error {
 		return shared.NewValidationError("invalid email format")
 	}
 
-	// Validate city
 	if !validation.IsNotEmpty(params.City) {
 		return shared.NewValidationError("city is required")
 	}
 
-	// Validate frequency
 	if !params.Frequency.IsValid() {
 		return shared.NewValidationError("invalid frequency")
 	}
 
+	return nil
+}
+
+func (uc *UseCase) validateConfirmParams(params ConfirmParams) error {
+	if !validation.IsNotEmpty(params.Token) {
+		return shared.NewValidationError("confirmation token is required")
+	}
+	return nil
+}
+
+func (uc *UseCase) validateUnsubscribeParams(params UnsubscribeParams) error {
+	if !validation.IsNotEmpty(params.Token) {
+		return shared.NewValidationError("unsubscribe token is required")
+	}
 	return nil
 }
 
@@ -121,7 +132,6 @@ func (uc *UseCase) createToken(ctx context.Context, params CreateTokenParams) (*
 }
 
 func (uc *UseCase) Subscribe(ctx context.Context, params SubscribeParams) error {
-	// Validate input parameters first (fail-fast)
 	if err := uc.validateSubscribeParams(params); err != nil {
 		return err
 	}
@@ -137,57 +147,60 @@ func (uc *UseCase) Subscribe(ctx context.Context, params SubscribeParams) error 
 	}
 
 	if existing != nil {
-		subscription := uc.convertFromPortsSubscription(existing)
-		if subscription.IsConfirmed() {
-			return shared.NewAlreadyExistsError("already subscribed")
-		}
-
-		// If subscription exists but is not confirmed, update it with new parameters
-		if !subscription.IsExpired() {
-			uc.logger.Debug("Updating existing unconfirmed subscription",
-				ports.F("subscriptionID", existing.ID),
-				ports.F("oldFrequency", existing.Frequency),
-				ports.F("newFrequency", params.Frequency.String()))
-
-			// Update the existing subscription with new frequency
-			existing.Frequency = params.Frequency.String()
-			existing.UpdatedAt = time.Now()
-
-			if err := uc.subscriptionRepo.Update(ctx, existing); err != nil {
-				return fmt.Errorf("update existing subscription: %w", err)
-			}
-
-			// Create updated subscription entity for email
-			updatedSubscription := uc.convertFromPortsSubscription(existing)
-
-			// Send new confirmation email
-			if err := uc.sendConfirmationEmail(ctx, updatedSubscription); err != nil {
-				uc.logger.Error("Failed to send confirmation email for updated subscription",
-					ports.F("error", err),
-					ports.F("email", params.Email))
-				return fmt.Errorf("send confirmation email: %w", err)
-			}
-
-			uc.logger.Debug("Existing subscription updated successfully",
-				ports.F("email", params.Email),
-				ports.F("city", params.City),
-				ports.F("frequency", params.Frequency.String()))
-			return nil
-		}
-
-		// If expired, delete the old subscription
-		if err := uc.subscriptionRepo.Delete(ctx, existing); err != nil {
-			uc.logger.Warn("Failed to delete expired subscription", ports.F("error", err))
-		}
+		return uc.handleExistingSubscription(ctx, existing, params)
 	}
 
+	return uc.createNewSubscription(ctx, params)
+}
+
+func (uc *UseCase) handleExistingSubscription(ctx context.Context, existing *ports.SubscriptionData, params SubscribeParams) error {
+	subscription := uc.convertFromPortsSubscription(existing)
+	if subscription.IsConfirmed() {
+		return shared.NewAlreadyExistsError("already subscribed")
+	}
+
+	if !subscription.IsExpired() {
+		uc.logger.Debug("Updating existing unconfirmed subscription",
+			ports.F("subscriptionID", existing.ID),
+			ports.F("oldFrequency", existing.Frequency),
+			ports.F("newFrequency", params.Frequency.String()))
+
+		existing.Frequency = params.Frequency.String()
+		existing.UpdatedAt = time.Now()
+
+		if err := uc.subscriptionRepo.Update(ctx, existing); err != nil {
+			return fmt.Errorf("update existing subscription: %w", err)
+		}
+
+		updatedSubscription := uc.convertFromPortsSubscription(existing)
+		if err := uc.sendConfirmationEmail(ctx, updatedSubscription); err != nil {
+			uc.logger.Error("Failed to send confirmation email for updated subscription",
+				ports.F("error", err),
+				ports.F("email", params.Email))
+			return fmt.Errorf("send confirmation email: %w", err)
+		}
+
+		uc.logger.Debug("Existing subscription updated successfully",
+			ports.F("email", params.Email),
+			ports.F("city", params.City),
+			ports.F("frequency", params.Frequency.String()))
+		return nil
+	}
+
+	if err := uc.subscriptionRepo.Delete(ctx, existing); err != nil {
+		uc.logger.Warn("Failed to delete expired subscription", ports.F("error", err))
+	}
+
+	return uc.createNewSubscription(ctx, params)
+}
+
+func (uc *UseCase) createNewSubscription(ctx context.Context, params SubscribeParams) error {
 	subscription := NewSubscription(params.Email, params.City, params.Frequency)
 	subscriptionData := uc.convertToPortsSubscription(subscription)
 	if err := uc.subscriptionRepo.Save(ctx, subscriptionData); err != nil {
 		return fmt.Errorf("save subscription: %w", err)
 	}
 
-	// Update the subscription entity with the ID from the database
 	subscription.ID = subscriptionData.ID
 	uc.logger.Debug("Updated subscription with database ID",
 		ports.F("subscriptionID", subscription.ID))
@@ -206,6 +219,10 @@ func (uc *UseCase) Subscribe(ctx context.Context, params SubscribeParams) error 
 }
 
 func (uc *UseCase) ConfirmSubscription(ctx context.Context, params ConfirmParams) error {
+	if err := uc.validateConfirmParams(params); err != nil {
+		return err
+	}
+
 	uc.logger.Debug("Confirming subscription", ports.F("token", params.Token))
 
 	tokenData, err := uc.tokenRepo.FindByToken(ctx, params.Token)
@@ -258,6 +275,10 @@ func (uc *UseCase) ConfirmSubscription(ctx context.Context, params ConfirmParams
 }
 
 func (uc *UseCase) Unsubscribe(ctx context.Context, params UnsubscribeParams) error {
+	if err := uc.validateUnsubscribeParams(params); err != nil {
+		return err
+	}
+
 	uc.logger.Debug("Unsubscribing", ports.F("token", params.Token))
 
 	tokenData, err := uc.tokenRepo.FindByToken(ctx, params.Token)
