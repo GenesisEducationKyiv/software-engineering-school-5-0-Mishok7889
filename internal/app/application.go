@@ -12,8 +12,8 @@ import (
 	"github.com/go-playground/validator/v10"
 	"gorm.io/gorm"
 	"weatherapi.app/internal/adapters/api"
-	"weatherapi.app/internal/adapters/email"
 	"weatherapi.app/internal/adapters/infrastructure"
+	"weatherapi.app/internal/adapters/middleware"
 	"weatherapi.app/internal/config"
 	"weatherapi.app/internal/core/notification"
 	"weatherapi.app/internal/core/subscription"
@@ -91,16 +91,6 @@ func (a *Application) initializePorts() error {
 	return nil
 }
 
-func (a *Application) createEmailBuilder() ports.EmailBuilder {
-	emailBuilder, err := email.NewBuilder(a.ports.Infrastructure.ConfigProvider)
-	if err != nil {
-		// Log error but don't fail - use a fallback or panic based on requirements
-		slog.Error("Failed to create email builder", "error", err)
-		panic(fmt.Sprintf("failed to create email builder: %v", err))
-	}
-	return emailBuilder
-}
-
 func (a *Application) initializeUseCases() error {
 	slog.Info("Initializing use cases...")
 
@@ -121,7 +111,7 @@ func (a *Application) initializeUseCases() error {
 		TokenRepo:        a.ports.Infrastructure.TokenRepo,
 		TokenGenerator:   a.ports.Infrastructure.TokenGenerator,
 		EmailProvider:    a.ports.Notification.EmailProvider,
-		EmailBuilder:     a.createEmailBuilder(),
+		EmailBuilder:     a.depContainer.CreateEmailBuilder(),
 		Config:           a.ports.Infrastructure.ConfigProvider,
 		Logger:           a.ports.Infrastructure.Logger,
 	})
@@ -185,16 +175,20 @@ func (a *Application) initializeAdapters() error {
 		ConfigProvider:    a.ports.Infrastructure.ConfigProvider,
 	})
 
+	// Create middleware instances - managed by application layer
+	validationMiddleware := middleware.NewValidationMiddleware()
+
 	// Create HTTP server adapter with proper dependency injection
 	httpAdapter, err := api.NewHTTPServerAdapter(api.ServerOptions{
 		Config: api.ServerConfig{
 			Port: a.config.Server.Port,
 		},
-		WeatherUseCase:      a.weatherUseCase,
-		SubscriptionUseCase: a.subscriptionUseCase,
-		MetricsCollector:    metricsCollector,
-		SystemHealthChecker: systemHealthChecker,
-		Logger:              a.ports.Infrastructure.Logger,
+		WeatherUseCase:       a.weatherUseCase,
+		SubscriptionUseCase:  a.subscriptionUseCase,
+		MetricsCollector:     metricsCollector,
+		SystemHealthChecker:  systemHealthChecker,
+		Logger:               a.ports.Infrastructure.Logger,
+		ValidationMiddleware: validationMiddleware,
 	})
 	if err != nil {
 		return fmt.Errorf("create HTTP adapter: %w", err)

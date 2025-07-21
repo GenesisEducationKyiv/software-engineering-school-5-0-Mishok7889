@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -12,8 +13,13 @@ import (
 	"weatherapi.app/internal/ports"
 )
 
+var ginTestModeOnce sync.Once
+
 func setupErrorTestRouter() *gin.Engine {
-	gin.SetMode(gin.TestMode)
+	// Ensure gin.SetMode is called only once to avoid race conditions
+	ginTestModeOnce.Do(func() {
+		gin.SetMode(gin.TestMode)
+	})
 
 	server := &HTTPServerAdapter{}
 

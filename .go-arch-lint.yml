@@ -29,6 +29,9 @@ components:
 
   secondary_adapters_infrastructure: { in: internal/adapters/infrastructure/** }
 
+  # Email service adapters
+  secondary_adapters_email: { in: internal/adapters/email/** }
+
   # Service adapters for cross-context communication
   services: { in: internal/adapters/services/** }
 
@@ -83,6 +86,12 @@ deps:
       - ports
       - config
 
+  secondary_adapters_email:
+    mayDependOn:
+      - domain
+      - ports
+      - config
+
   services:
     mayDependOn:
       - domain
@@ -96,6 +105,7 @@ deps:
       - secondary_adapters_external
       - secondary_adapters_database
       - secondary_adapters_infrastructure
+      - secondary_adapters_email
       - services
       - config
       - middleware

@@ -8,6 +8,7 @@ import (
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"weatherapi.app/internal/adapters/database"
+	"weatherapi.app/internal/adapters/email"
 	"weatherapi.app/internal/adapters/external"
 	"weatherapi.app/internal/adapters/infrastructure"
 	"weatherapi.app/internal/adapters/services"
@@ -280,4 +281,15 @@ func (c *DependencyContainer) CreateSubscriptionServiceFromRepository() ports.Su
 		c.ports.Subscription.Repository,
 		c.ports.Infrastructure.TokenRepo,
 	)
+}
+
+// CreateEmailBuilder creates an email builder from the infrastructure
+func (c *DependencyContainer) CreateEmailBuilder() ports.EmailBuilder {
+	emailBuilder, err := email.NewBuilder(c.ports.Infrastructure.ConfigProvider)
+	if err != nil {
+		// Log error but don't fail - use a fallback or panic based on requirements
+		slog.Error("Failed to create email builder", "error", err)
+		panic(fmt.Sprintf("failed to create email builder: %v", err))
+	}
+	return emailBuilder
 }

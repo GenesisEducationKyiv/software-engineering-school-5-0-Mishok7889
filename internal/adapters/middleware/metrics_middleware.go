@@ -24,7 +24,7 @@ const (
 	SuccessStatus = "success"
 )
 
-// MetricsCollector interface for metrics operations
+// MetricsCollector interface for metrics operations within middleware
 type MetricsCollector interface {
 	IncrementCounter(name string, labels map[string]string)
 }

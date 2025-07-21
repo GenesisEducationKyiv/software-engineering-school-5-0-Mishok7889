@@ -29,10 +29,6 @@ func (s *HTTPServerAdapter) getWeather(c *gin.Context) {
 		s.logger.Error(WeatherUseCaseErrorMsg,
 			ports.F(ErrorField, err),
 			ports.F(CityField, city))
-		s.metricsCollector.IncrementCounter(APIErrorsTotalMetric, map[string]string{
-			EndpointLabelKey: WeatherEndpoint,
-			ErrorLabelKey:    UsecaseError,
-		})
 		s.handleError(c, err)
 		return
 	}

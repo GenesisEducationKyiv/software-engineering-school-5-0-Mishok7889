@@ -68,13 +68,13 @@ func (m *WeatherProviderManagerAdapter) createProviderMap(config ProviderManager
 		})
 		if err != nil {
 			if m.logger != nil {
-				m.logger.Error(ProviderValidationFailedMsg, ports.F(ProviderField, WeatherAPI), ports.F(ErrorField, err))
+				m.logger.Error(ProviderValidationFailedMsg, logField(ProviderField, WeatherAPI), logField(ErrorField, err))
 			}
 			return nil, fmt.Errorf("failed to create WeatherAPI provider: %w", err)
 		}
 		providers[WeatherAPI] = provider
 		if m.logger != nil {
-			m.logger.Debug(CreatedProviderMsg, ports.F(ProviderField, WeatherAPI))
+			m.logger.Debug(CreatedProviderMsg, logField(ProviderField, WeatherAPI))
 		}
 	}
 
@@ -87,13 +87,13 @@ func (m *WeatherProviderManagerAdapter) createProviderMap(config ProviderManager
 		})
 		if err != nil {
 			if m.logger != nil {
-				m.logger.Error(ProviderValidationFailedMsg, ports.F(ProviderField, OpenWeatherMap), ports.F(ErrorField, err))
+				m.logger.Error(ProviderValidationFailedMsg, logField(ProviderField, OpenWeatherMap), logField(ErrorField, err))
 			}
 			return nil, fmt.Errorf("failed to create OpenWeatherMap provider: %w", err)
 		}
 		providers[OpenWeatherMap] = provider
 		if m.logger != nil {
-			m.logger.Debug(CreatedProviderMsg, ports.F(ProviderField, OpenWeatherMap))
+			m.logger.Debug(CreatedProviderMsg, logField(ProviderField, OpenWeatherMap))
 		}
 	}
 
@@ -106,13 +106,13 @@ func (m *WeatherProviderManagerAdapter) createProviderMap(config ProviderManager
 		})
 		if err != nil {
 			if m.logger != nil {
-				m.logger.Error(ProviderValidationFailedMsg, ports.F(ProviderField, AccuWeather), ports.F(ErrorField, err))
+				m.logger.Error(ProviderValidationFailedMsg, logField(ProviderField, AccuWeather), logField(ErrorField, err))
 			}
 			return nil, fmt.Errorf("failed to create AccuWeather provider: %w", err)
 		}
 		providers[AccuWeather] = provider
 		if m.logger != nil {
-			m.logger.Debug(CreatedProviderMsg, ports.F(ProviderField, AccuWeather))
+			m.logger.Debug(CreatedProviderMsg, logField(ProviderField, AccuWeather))
 		}
 	}
 
@@ -133,18 +133,18 @@ func (m *WeatherProviderManagerAdapter) GetWeather(ctx context.Context, city str
 
 		if m.logger != nil {
 			m.logger.Debug(TryingProviderMsg,
-				ports.F(ProviderField, providerName),
-				ports.F(AttemptField, i+1),
-				ports.F(CityField, city))
+				logField(ProviderField, providerName),
+				logField(AttemptField, i+1),
+				logField(CityField, city))
 		}
 
 		weather, err := provider.GetCurrentWeather(ctx, city)
 		if err == nil {
 			if m.logger != nil {
 				m.logger.Debug(ProviderSucceededMsg,
-					ports.F(ProviderField, providerName),
-					ports.F(CityField, city),
-					ports.F(TemperatureField, weather.Temperature))
+					logField(ProviderField, providerName),
+					logField(CityField, city),
+					logField(TemperatureField, weather.Temperature))
 			}
 			return weather, nil
 		}
@@ -156,17 +156,17 @@ func (m *WeatherProviderManagerAdapter) GetWeather(ctx context.Context, city str
 		lastErr = err
 		if m.logger != nil {
 			m.logger.Warn(ProviderFailedMsg,
-				ports.F(ProviderField, providerName),
-				ports.F(ErrorField, err.Error()),
-				ports.F(CityField, city))
+				logField(ProviderField, providerName),
+				logField(ErrorField, err.Error()),
+				logField(CityField, city))
 		}
 	}
 
 	if m.logger != nil {
 		m.logger.Error(AllProvidersFailedMsg,
-			ports.F(CityField, city),
-			ports.F(ProvidersTriedField, len(m.providers)),
-			ports.F(LastErrorField, lastErr.Error()))
+			logField(CityField, city),
+			logField(ProvidersTriedField, len(m.providers)),
+			logField(LastErrorField, lastErr.Error()))
 	}
 
 	if len(notFoundErrors) == len(m.providers) {

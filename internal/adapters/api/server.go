@@ -5,10 +5,10 @@ package api
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"weatherapi.app/internal/adapters/middleware"
 	"weatherapi.app/internal/core/subscription"
 	"weatherapi.app/internal/core/weather"
 	"weatherapi.app/internal/ports"
@@ -28,6 +28,8 @@ type HTTPServerAdapter struct {
 	metricsCollector    MetricsCollector
 	systemHealthChecker ports.SystemHealthChecker
 	logger              ports.Logger
+	// Middleware instances - injected from application layer
+	validationMiddleware ValidationMiddleware
 }
 
 // Use case interfaces that the HTTP adapter depends on
@@ -46,6 +48,12 @@ type MetricsCollector interface {
 	GetMetrics(ctx context.Context) (map[string]interface{}, error)
 }
 
+// Middleware interfaces that the HTTP adapter depends on
+type ValidationMiddleware interface {
+	ValidateTokenParam() gin.HandlerFunc
+	ValidateCityQuery() gin.HandlerFunc
+}
+
 // ServerOptions represents options for creating the HTTP server
 type ServerOptions struct {
 	Config              ServerConfig
@@ -54,6 +62,8 @@ type ServerOptions struct {
 	MetricsCollector    MetricsCollector
 	SystemHealthChecker ports.SystemHealthChecker
 	Logger              ports.Logger
+	// Middleware dependencies - injected from application layer
+	ValidationMiddleware ValidationMiddleware
 }
 
 // NewHTTPServerAdapter creates a new HTTP server adapter
@@ -65,13 +75,14 @@ func NewHTTPServerAdapter(opts ServerOptions) (*HTTPServerAdapter, error) {
 	router := gin.Default()
 
 	server := &HTTPServerAdapter{
-		router:              router,
-		config:              opts.Config,
-		weatherUseCase:      opts.WeatherUseCase,
-		subscriptionUseCase: opts.SubscriptionUseCase,
-		metricsCollector:    opts.MetricsCollector,
-		systemHealthChecker: opts.SystemHealthChecker,
-		logger:              opts.Logger,
+		router:               router,
+		config:               opts.Config,
+		weatherUseCase:       opts.WeatherUseCase,
+		subscriptionUseCase:  opts.SubscriptionUseCase,
+		metricsCollector:     opts.MetricsCollector,
+		systemHealthChecker:  opts.SystemHealthChecker,
+		logger:               opts.Logger,
+		validationMiddleware: opts.ValidationMiddleware,
 	}
 
 	server.setupRoutes()
@@ -95,23 +106,51 @@ func (opts *ServerOptions) Validate() error {
 	if opts.Logger == nil {
 		return NewValidationError(LoggerRequiredMsg)
 	}
+	if opts.ValidationMiddleware == nil {
+		return NewValidationError("validation middleware is required")
+	}
 	return nil
+}
+
+// collectRequestMetrics creates a gin middleware that collects HTTP request metrics
+func (s *HTTPServerAdapter) collectRequestMetrics() gin.HandlerFunc {
+	return gin.HandlerFunc(func(c *gin.Context) {
+		start := time.Now()
+
+		c.Next()
+
+		duration := time.Since(start)
+		status := "success"
+		if c.Writer.Status() >= 400 {
+			status = "error"
+		}
+
+		s.metricsCollector.IncrementCounter("api_requests_total", map[string]string{
+			"endpoint": c.FullPath(),
+			"method":   c.Request.Method,
+			"status":   status,
+		})
+
+		s.metricsCollector.IncrementCounter("api_request_duration_ms", map[string]string{
+			"endpoint": c.FullPath(),
+			"method":   c.Request.Method,
+			"duration": fmt.Sprintf("%.2f", float64(duration.Nanoseconds())/1e6),
+		})
+	})
 }
 
 // setupRoutes configures all HTTP routes
 func (s *HTTPServerAdapter) setupRoutes() {
-	validationMiddleware := middleware.NewValidationMiddleware()
-	metricsMiddleware := middleware.NewMetricsMiddleware(s.metricsCollector)
-
+	// Use injected middleware and built-in metrics collection
 	api := s.router.Group("/api")
-	api.Use(metricsMiddleware.CollectRequestMetrics())
+	api.Use(s.collectRequestMetrics())
 	{
 		api.GET("/health", s.getHealth)
 		api.GET("/debug", s.getDebug)
-		api.GET("/weather", validationMiddleware.ValidateCityQuery(), s.getWeather)
+		api.GET("/weather", s.validationMiddleware.ValidateCityQuery(), s.getWeather)
 		api.POST("/subscribe", s.subscribe)
-		api.GET("/confirm/:token", validationMiddleware.ValidateTokenParam(), s.confirmSubscription)
-		api.GET("/unsubscribe/:token", validationMiddleware.ValidateTokenParam(), s.unsubscribe)
+		api.GET("/confirm/:token", s.validationMiddleware.ValidateTokenParam(), s.confirmSubscription)
+		api.GET("/unsubscribe/:token", s.validationMiddleware.ValidateTokenParam(), s.unsubscribe)
 		api.GET("/metrics", s.getMetrics)
 	}
 
