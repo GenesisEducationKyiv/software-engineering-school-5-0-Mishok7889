@@ -210,7 +210,7 @@ func TestSubscription_IsValid(t *testing.T) {
 				Frequency: FrequencyUnknown,
 			},
 			wantErr: true,
-			errMsg:  "frequency must be hourly or daily",
+			errMsg:  "frequency must be valid",
 		},
 	}
 
@@ -272,7 +272,7 @@ func TestSubscriptionRequest_IsValid(t *testing.T) {
 				Frequency: FrequencyUnknown,
 			},
 			wantErr: true,
-			errMsg:  "frequency must be hourly or daily",
+			errMsg:  "frequency must be valid",
 		},
 	}
 

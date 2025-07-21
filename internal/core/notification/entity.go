@@ -1,7 +1,6 @@
 package notification
 
 import (
-	"errors"
 	"time"
 
 	"github.com/google/uuid"
@@ -55,12 +54,4 @@ func NewNotificationToken(tokenType string, expiresIn time.Duration) *Token {
 // IsExpired checks if the token has expired
 func (t *Token) IsExpired() bool {
 	return time.Now().After(t.ExpiresAt)
-}
-
-// IsValid validates notification request
-func (n *NotificationRequest) IsValid() error {
-	if !n.Frequency.IsValid() {
-		return errors.New("frequency must be hourly or daily")
-	}
-	return nil
 }

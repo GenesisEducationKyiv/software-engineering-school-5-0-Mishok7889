@@ -2,8 +2,9 @@ package weather
 
 import (
 	"fmt"
-	"strings"
 	"time"
+
+	"weatherapi.app/pkg/validation"
 )
 
 const (
@@ -46,10 +47,10 @@ type WeatherRequest struct {
 
 // IsValid validates weather data
 func (w *Weather) IsValid() error {
-	if strings.TrimSpace(w.City) == "" {
+	if !validation.IsNotEmpty(w.City) {
 		return fmt.Errorf("city cannot be empty")
 	}
-	if strings.TrimSpace(w.Description) == "" {
+	if !validation.IsNotEmpty(w.Description) {
 		return fmt.Errorf("description cannot be empty")
 	}
 	if w.Temperature < absoluteZeroCelsius {
@@ -63,7 +64,7 @@ func (w *Weather) IsValid() error {
 
 // IsValid validates weather request
 func (wr *WeatherRequest) IsValid() error {
-	if strings.TrimSpace(wr.City) == "" {
+	if !validation.IsNotEmpty(wr.City) {
 		return fmt.Errorf("city cannot be empty")
 	}
 	return nil
@@ -71,7 +72,7 @@ func (wr *WeatherRequest) IsValid() error {
 
 // NormalizeCity normalizes city name for consistent processing
 func (wr *WeatherRequest) NormalizeCity() {
-	wr.City = strings.TrimSpace(wr.City)
+	wr.City, _ = validation.TrimAndValidate(wr.City)
 }
 
 // TemperatureInFahrenheit converts temperature from Celsius to Fahrenheit

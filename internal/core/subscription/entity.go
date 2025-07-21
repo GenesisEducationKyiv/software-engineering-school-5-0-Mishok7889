@@ -4,8 +4,9 @@ import (
 	"encoding/json"
 	"errors"
 	"regexp"
-	"strings"
 	"time"
+
+	"weatherapi.app/pkg/validation"
 )
 
 // Subscription represents a user's weather notification subscription
@@ -32,11 +33,11 @@ const (
 func (f Frequency) String() string {
 	switch f {
 	case FrequencyHourly:
-		return "hourly"
+		return FrequencyStringHourly
 	case FrequencyDaily:
-		return "daily"
+		return FrequencyStringDaily
 	default:
-		return "unknown"
+		return FrequencyStringUnknown
 	}
 }
 
@@ -48,9 +49,9 @@ func (f Frequency) IsValid() bool {
 // FromString converts string to Frequency enum
 func FrequencyFromString(s string) Frequency {
 	switch s {
-	case "hourly":
+	case FrequencyStringHourly:
 		return FrequencyHourly
-	case "daily":
+	case FrequencyStringDaily:
 		return FrequencyDaily
 	default:
 		return FrequencyUnknown
@@ -134,9 +135,11 @@ func (s *Subscription) Confirm() {
 // NewSubscription creates a new subscription with current timestamp
 func NewSubscription(email, city string, frequency Frequency) *Subscription {
 	now := time.Now()
+	trimmedEmail, _ := validation.TrimAndValidate(email)
+	trimmedCity, _ := validation.TrimAndValidate(city)
 	return &Subscription{
-		Email:     strings.TrimSpace(email),
-		City:      strings.TrimSpace(city),
+		Email:     trimmedEmail,
+		City:      trimmedCity,
 		Frequency: frequency,
 		Confirmed: false,
 		CreatedAt: now,
@@ -158,7 +161,7 @@ func (s *Subscription) IsExpired() bool {
 }
 
 func (s *Subscription) validateEmail() error {
-	if strings.TrimSpace(s.Email) == "" {
+	if !validation.IsNotEmpty(s.Email) {
 		return errors.New(ErrEmailEmpty)
 	}
 	if !emailRegex.MatchString(s.Email) {
@@ -168,7 +171,7 @@ func (s *Subscription) validateEmail() error {
 }
 
 func (s *Subscription) validateCity() error {
-	if strings.TrimSpace(s.City) == "" {
+	if !validation.IsNotEmpty(s.City) {
 		return errors.New(ErrCityEmpty)
 	}
 	return nil
@@ -182,7 +185,7 @@ func (s *Subscription) validateFrequency() error {
 }
 
 func (sr *SubscriptionRequest) validateEmail() error {
-	if strings.TrimSpace(sr.Email) == "" {
+	if !validation.IsNotEmpty(sr.Email) {
 		return errors.New(ErrEmailEmpty)
 	}
 	if !emailRegex.MatchString(sr.Email) {
@@ -192,14 +195,14 @@ func (sr *SubscriptionRequest) validateEmail() error {
 }
 
 func (sr *SubscriptionRequest) validateCity() error {
-	if strings.TrimSpace(sr.City) == "" {
+	if !validation.IsNotEmpty(sr.City) {
 		return errors.New(ErrCityEmpty)
 	}
 	return nil
 }
 
 func (sr *SubscriptionRequest) validateFrequency() error {
-	if sr.Frequency != FrequencyHourly && sr.Frequency != FrequencyDaily {
+	if !sr.Frequency.IsValid() {
 		return errors.New(ErrFrequencyRequired)
 	}
 	return nil
@@ -208,9 +211,11 @@ func (sr *SubscriptionRequest) validateFrequency() error {
 // ToSubscription converts request to subscription entity
 func (sr *SubscriptionRequest) ToSubscription() *Subscription {
 	now := time.Now()
+	trimmedEmail, _ := validation.TrimAndValidate(sr.Email)
+	trimmedCity, _ := validation.TrimAndValidate(sr.City)
 	return &Subscription{
-		Email:     strings.TrimSpace(sr.Email),
-		City:      strings.TrimSpace(sr.City),
+		Email:     trimmedEmail,
+		City:      trimmedCity,
 		Frequency: sr.Frequency,
 		Confirmed: false,
 		CreatedAt: now,

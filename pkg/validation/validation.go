@@ -17,11 +17,6 @@ func IsNotEmpty(s string) bool {
 	return strings.TrimSpace(s) != ""
 }
 
-// IsValidFrequency validates subscription frequency
-func IsValidFrequency(frequency string) bool {
-	return frequency == "hourly" || frequency == "daily"
-}
-
 // TrimAndValidate trims string and validates it's not empty
 func TrimAndValidate(s string) (string, bool) {
 	trimmed := strings.TrimSpace(s)

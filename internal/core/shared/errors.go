@@ -16,6 +16,14 @@ const (
 	ErrCodeInternal        ErrorCode = "INTERNAL"
 )
 
+type NotFoundChecker interface {
+	IsNotFound() bool
+}
+
+type AlreadyExistsChecker interface {
+	IsAlreadyExists() bool
+}
+
 type DomainError struct {
 	Code    ErrorCode
 	Message string
@@ -97,8 +105,8 @@ func IsNotFoundError(err error) bool {
 		return false
 	}
 
-	// Check if it implements the NotFoundError interface
-	if nfe, ok := err.(interface{ IsNotFound() bool }); ok {
+	// Check if it implements the NotFoundChecker interface
+	if nfe, ok := err.(NotFoundChecker); ok {
 		return nfe.IsNotFound()
 	}
 
@@ -116,8 +124,8 @@ func IsAlreadyExistsError(err error) bool {
 		return false
 	}
 
-	// Check if it implements the AlreadyExistsError interface
-	if aee, ok := err.(interface{ IsAlreadyExists() bool }); ok {
+	// Check if it implements the AlreadyExistsChecker interface
+	if aee, ok := err.(AlreadyExistsChecker); ok {
 		return aee.IsAlreadyExists()
 	}
 

@@ -16,7 +16,7 @@ func TestTokenTypeString(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		if got := tt.tokenType.String(); got != tt.expected {
+		if got := string(tt.tokenType); got != tt.expected {
 			t.Errorf("Type.String() = %v, want %v", got, tt.expected)
 		}
 	}
@@ -42,7 +42,7 @@ func TestFromString(t *testing.T) {
 
 func TestNewToken(t *testing.T) {
 	subscriptionID := uint(123)
-	tokenType := TypeConfirmation
+	tokenType := Type(TypeConfirmation)
 	expiresIn := 24 * time.Hour
 
 	token := NewToken(subscriptionID, tokenType, expiresIn)

@@ -6,38 +6,27 @@ import (
 	"github.com/google/uuid"
 )
 
-// Type represents the type of authentication token
-type Type int
-
+// Token type string constants
 const (
-	TypeUnknown Type = iota
-	TypeConfirmation
-	TypeUnsubscribe
+	TypeConfirmation = "confirmation"
+	TypeUnsubscribe  = "unsubscribe"
+	TypeUnknown      = "unknown"
 )
 
-// String returns the string representation of token type
-func (t Type) String() string {
-	switch t {
-	case TypeConfirmation:
-		return "confirmation"
-	case TypeUnsubscribe:
-		return "unsubscribe"
-	default:
-		return "unknown"
-	}
-}
+// Type represents the type of authentication token
+type Type string
 
 // IsValid checks if the token type is valid
 func (t Type) IsValid() bool {
 	return t == TypeConfirmation || t == TypeUnsubscribe
 }
 
-// FromString converts string to Type enum
+// FromString converts string to Type, validating the input
 func FromString(s string) Type {
 	switch s {
-	case "confirmation":
+	case TypeConfirmation:
 		return TypeConfirmation
-	case "unsubscribe":
+	case TypeUnsubscribe:
 		return TypeUnsubscribe
 	default:
 		return TypeUnknown

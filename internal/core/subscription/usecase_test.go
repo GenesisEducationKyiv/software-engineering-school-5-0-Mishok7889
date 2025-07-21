@@ -74,7 +74,7 @@ func TestUseCase_Subscribe_Success(t *testing.T) {
 
 	mockTokenRepo.EXPECT().
 		Save(mock.Anything, mock.MatchedBy(func(token *ports.TokenData) bool {
-			return token.Type == tokenEntity.TypeConfirmation.String() && token.Value == "test-confirmation-token"
+			return token.Type == tokenEntity.TypeConfirmation && token.Value == "test-confirmation-token"
 		})).
 		Return(nil)
 
@@ -275,7 +275,7 @@ func TestUseCase_ConfirmSubscription_Success(t *testing.T) {
 		ID:             1,
 		Value:          "valid-confirmation-token",
 		SubscriptionID: 1,
-		Type:           tokenEntity.TypeConfirmation.String(),
+		Type:           tokenEntity.TypeConfirmation,
 		ExpiresAt:      time.Now().Add(24 * time.Hour), // Set expiration in the future
 	}
 	mockTokenRepo.EXPECT().FindByToken(mock.Anything, "valid-confirmation-token").Return(token, nil)
@@ -302,7 +302,7 @@ func TestUseCase_ConfirmSubscription_Success(t *testing.T) {
 
 	mockTokenRepo.EXPECT().
 		Save(mock.Anything, mock.MatchedBy(func(token *ports.TokenData) bool {
-			return token.SubscriptionID == uint(1) && token.Type == tokenEntity.TypeUnsubscribe.String() && token.Value == "unsubscribe-token"
+			return token.SubscriptionID == uint(1) && token.Type == tokenEntity.TypeUnsubscribe && token.Value == "unsubscribe-token"
 		})).
 		Return(nil)
 

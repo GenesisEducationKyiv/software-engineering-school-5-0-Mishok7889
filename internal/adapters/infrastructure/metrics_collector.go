@@ -15,6 +15,16 @@ type CounterMetric struct {
 	Value  int64             `json:"value"`
 }
 
+// CacheMetrics represents cache performance metrics
+type CacheMetrics struct {
+	Hits       int64                             `json:"hits"`
+	Misses     int64                             `json:"misses"`
+	TotalOps   int64                             `json:"total_ops"`
+	HitRatio   float64                           `json:"hit_ratio"`
+	Updated    time.Time                         `json:"updated"`
+	Operations map[string]ports.OperationMetrics `json:"operations,omitempty"`
+}
+
 // MetricsCollectorAdapter implements the MetricsCollector interface for HTTPServerAdapter
 // This adapter aggregates metrics from various domain services
 type MetricsCollectorAdapter struct {
@@ -68,17 +78,17 @@ func (m *MetricsCollectorAdapter) GetMetrics(ctx context.Context) (map[string]in
 	}
 
 	if cacheStats, err := m.weatherMetrics.GetCacheMetrics(); err == nil {
-		cacheMetrics := map[string]interface{}{
-			"hits":      cacheStats.Hits,
-			"misses":    cacheStats.Misses,
-			"total_ops": cacheStats.TotalOps,
-			"hit_ratio": cacheStats.HitRatio,
-			"updated":   cacheStats.LastUpdated,
+		cacheMetrics := CacheMetrics{
+			Hits:     cacheStats.Hits,
+			Misses:   cacheStats.Misses,
+			TotalOps: cacheStats.TotalOps,
+			HitRatio: cacheStats.HitRatio,
+			Updated:  cacheStats.LastUpdated,
 		}
 
 		if m.cacheMetrics != nil {
 			if operationMetrics := m.cacheMetrics.GetOperationMetrics(); len(operationMetrics) > 0 {
-				cacheMetrics["operations"] = operationMetrics
+				cacheMetrics.Operations = operationMetrics
 			}
 		}
 

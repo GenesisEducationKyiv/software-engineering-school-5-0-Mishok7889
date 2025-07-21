@@ -31,6 +31,31 @@ type UseCaseDependencies struct {
 	Logger           ports.Logger
 }
 
+func (deps UseCaseDependencies) Validate() error {
+	if deps.SubscriptionRepo == nil {
+		return shared.NewValidationError(ErrRepoRequired)
+	}
+	if deps.TokenRepo == nil {
+		return shared.NewValidationError(ErrTokenRepoRequired)
+	}
+	if deps.TokenGenerator == nil {
+		return shared.NewValidationError(ErrGeneratorRequired)
+	}
+	if deps.EmailProvider == nil {
+		return shared.NewValidationError(ErrEmailProviderRequired)
+	}
+	if deps.EmailBuilder == nil {
+		return shared.NewValidationError(ErrEmailBuilderRequired)
+	}
+	if deps.Config == nil {
+		return shared.NewValidationError(ErrConfigRequired)
+	}
+	if deps.Logger == nil {
+		return shared.NewValidationError(ErrLoggerRequired)
+	}
+	return nil
+}
+
 type SubscribeParams struct {
 	Email     string
 	City      string
@@ -46,26 +71,8 @@ type UnsubscribeParams struct {
 }
 
 func NewUseCase(deps UseCaseDependencies) (*UseCase, error) {
-	if deps.SubscriptionRepo == nil {
-		return nil, shared.NewValidationError(ErrRepoRequired)
-	}
-	if deps.TokenRepo == nil {
-		return nil, shared.NewValidationError(ErrTokenRepoRequired)
-	}
-	if deps.TokenGenerator == nil {
-		return nil, shared.NewValidationError(ErrGeneratorRequired)
-	}
-	if deps.EmailProvider == nil {
-		return nil, shared.NewValidationError(ErrEmailProviderRequired)
-	}
-	if deps.EmailBuilder == nil {
-		return nil, shared.NewValidationError(ErrEmailBuilderRequired)
-	}
-	if deps.Config == nil {
-		return nil, shared.NewValidationError(ErrConfigRequired)
-	}
-	if deps.Logger == nil {
-		return nil, shared.NewValidationError(ErrLoggerRequired)
+	if err := deps.Validate(); err != nil {
+		return nil, err
 	}
 
 	return &UseCase{
@@ -81,7 +88,7 @@ func NewUseCase(deps UseCaseDependencies) (*UseCase, error) {
 
 type CreateTokenParams struct {
 	SubscriptionID uint
-	TokenType      string
+	TokenType      token.Type
 	ExpiresIn      time.Duration
 }
 
@@ -126,13 +133,13 @@ func (uc *UseCase) createToken(ctx context.Context, params CreateTokenParams) (*
 	token := &ports.TokenData{
 		Value:          uc.tokenGenerator.GenerateToken(),
 		SubscriptionID: params.SubscriptionID,
-		Type:           params.TokenType,
+		Type:           string(params.TokenType),
 		ExpiresAt:      time.Now().Add(params.ExpiresIn),
 		CreatedAt:      time.Now(),
 	}
 
 	if err := uc.tokenRepo.Save(ctx, token); err != nil {
-		return nil, fmt.Errorf("save %s token: %w", params.TokenType, err)
+		return nil, fmt.Errorf("save %s token: %w", string(params.TokenType), err)
 	}
 
 	return token, nil
@@ -166,39 +173,38 @@ func (uc *UseCase) handleExistingSubscription(ctx context.Context, existing *por
 		return shared.NewAlreadyExistsError(ErrSubscriptionExists)
 	}
 
-	if !subscription.IsExpired() {
-		uc.logger.Debug("Updating existing unconfirmed subscription",
-			ports.F("subscriptionID", existing.ID),
-			ports.F("oldFrequency", existing.Frequency),
-			ports.F("newFrequency", params.Frequency.String()))
-
-		existing.Frequency = params.Frequency.String()
-		existing.UpdatedAt = time.Now()
-
-		if err := uc.subscriptionRepo.Update(ctx, existing); err != nil {
-			return fmt.Errorf("update existing subscription: %w", err)
+	if subscription.IsExpired() {
+		if err := uc.subscriptionRepo.Delete(ctx, existing); err != nil {
+			uc.logger.Warn("Failed to delete expired subscription", ports.F("error", err))
 		}
-
-		updatedSubscription := uc.convertFromPortsSubscription(existing)
-		if err := uc.sendConfirmationEmail(ctx, updatedSubscription); err != nil {
-			uc.logger.Error("Failed to send confirmation email for updated subscription",
-				ports.F("error", err),
-				ports.F("email", params.Email))
-			return fmt.Errorf("send confirmation email: %w", err)
-		}
-
-		uc.logger.Debug("Existing subscription updated successfully",
-			ports.F("email", params.Email),
-			ports.F("city", params.City),
-			ports.F("frequency", params.Frequency.String()))
-		return nil
+		return uc.createNewSubscription(ctx, params)
 	}
 
-	if err := uc.subscriptionRepo.Delete(ctx, existing); err != nil {
-		uc.logger.Warn("Failed to delete expired subscription", ports.F("error", err))
+	uc.logger.Debug("Updating existing unconfirmed subscription",
+		ports.F("subscriptionID", existing.ID),
+		ports.F("oldFrequency", existing.Frequency),
+		ports.F("newFrequency", params.Frequency.String()))
+
+	existing.Frequency = params.Frequency.String()
+	existing.UpdatedAt = time.Now()
+
+	if err := uc.subscriptionRepo.Update(ctx, existing); err != nil {
+		return fmt.Errorf("update existing subscription: %w", err)
 	}
 
-	return uc.createNewSubscription(ctx, params)
+	updatedSubscription := uc.convertFromPortsSubscription(existing)
+	if err := uc.sendConfirmationEmail(ctx, updatedSubscription); err != nil {
+		uc.logger.Error("Failed to send confirmation email for updated subscription",
+			ports.F("error", err),
+			ports.F("email", params.Email))
+		return fmt.Errorf("send confirmation email: %w", err)
+	}
+
+	uc.logger.Debug("Existing subscription updated successfully",
+		ports.F("email", params.Email),
+		ports.F("city", params.City),
+		ports.F("frequency", params.Frequency.String()))
+	return nil
 }
 
 func (uc *UseCase) createNewSubscription(ctx context.Context, params SubscribeParams) error {
@@ -240,11 +246,11 @@ func (uc *UseCase) ConfirmSubscription(ctx context.Context, params ConfirmParams
 		return fmt.Errorf("find token: %w", err)
 	}
 
-	if time.Now().After(tokenData.ExpiresAt) {
+	if tokenData.IsExpired() {
 		return shared.NewValidationError(ErrTokenConfirmExpired)
 	}
 
-	if tokenData.Type != token.TypeConfirmation.String() {
+	if tokenData.Type != token.TypeConfirmation {
 		return shared.NewValidationError(ErrTokenInvalidType)
 	}
 
@@ -296,11 +302,11 @@ func (uc *UseCase) Unsubscribe(ctx context.Context, params UnsubscribeParams) er
 		return fmt.Errorf("find token: %w", err)
 	}
 
-	if time.Now().After(tokenData.ExpiresAt) {
+	if tokenData.IsExpired() {
 		return shared.NewValidationError(ErrTokenUnsubExpired)
 	}
 
-	if tokenData.Type != token.TypeUnsubscribe.String() {
+	if tokenData.Type != token.TypeUnsubscribe {
 		return shared.NewValidationError(ErrTokenInvalidType)
 	}
 
@@ -362,7 +368,7 @@ func (uc *UseCase) sendConfirmationEmail(ctx context.Context, subscription *Subs
 
 	confirmToken, err := uc.createToken(ctx, CreateTokenParams{
 		SubscriptionID: subscription.ID,
-		TokenType:      token.TypeConfirmation.String(),
+		TokenType:      token.TypeConfirmation,
 		ExpiresIn:      ConfirmationTokenTTL,
 	})
 	if err != nil {
@@ -385,7 +391,7 @@ func (uc *UseCase) sendConfirmationEmail(ctx context.Context, subscription *Subs
 func (uc *UseCase) sendWelcomeEmail(ctx context.Context, subscription *Subscription) error {
 	unsubscribeToken, err := uc.createToken(ctx, CreateTokenParams{
 		SubscriptionID: subscription.ID,
-		TokenType:      token.TypeUnsubscribe.String(),
+		TokenType:      token.TypeUnsubscribe,
 		ExpiresIn:      UnsubscribeTokenTTL,
 	})
 	if err != nil {

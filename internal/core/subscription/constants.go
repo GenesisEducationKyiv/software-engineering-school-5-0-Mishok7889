@@ -17,7 +17,7 @@ const (
 	ErrCityRequired          = "city is required"
 	ErrCityEmpty             = "city cannot be empty"
 	ErrFrequencyInvalid      = "invalid frequency"
-	ErrFrequencyRequired     = "frequency must be hourly or daily"
+	ErrFrequencyRequired     = "frequency must be valid"
 	ErrTokenConfirmEmpty     = "confirmation token is required"
 	ErrTokenUnsubEmpty       = "unsubscribe token is required"
 	ErrTokenConfirmExpired   = "invalid or expired confirmation token"
@@ -61,6 +61,13 @@ const (
 		<p>You have been successfully unsubscribed from weather updates for <strong>{{.City}}</strong>.</p>
 		<p>We're sorry to see you go!</p>
 	`
+)
+
+// Frequency string constants
+const (
+	FrequencyStringHourly  = "hourly"
+	FrequencyStringDaily   = "daily"
+	FrequencyStringUnknown = "unknown"
 )
 
 // API paths

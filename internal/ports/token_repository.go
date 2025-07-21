@@ -15,6 +15,11 @@ type TokenData struct {
 	CreatedAt      time.Time
 }
 
+// IsExpired checks if the token has expired
+func (td *TokenData) IsExpired() bool {
+	return time.Now().After(td.ExpiresAt)
+}
+
 // TokenRepository defines the contract for token data persistence
 type TokenRepository interface {
 	Save(ctx context.Context, token *TokenData) error

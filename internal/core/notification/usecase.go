@@ -1,13 +1,28 @@
 package notification
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"html/template"
 	"time"
 
 	"weatherapi.app/internal/core/shared"
 	"weatherapi.app/internal/ports"
 )
+
+type weatherUpdateData struct {
+	City             string
+	Temperature      float64
+	TemperatureUnit  string
+	Humidity         float64
+	HumidityUnit     string
+	Description      string
+	LastUpdated      string
+	Frequency        string
+	SubscriptionCity string
+	UnsubscribeURL   string
+}
 
 type UseCase struct {
 	weatherService      ports.WeatherService
@@ -131,10 +146,15 @@ func (uc *UseCase) sendWeatherUpdateToSubscription(ctx context.Context, sub *por
 		return fmt.Errorf("get weather for city %s: %w", sub.City, err)
 	}
 
+	emailBody, err := uc.buildWeatherUpdateEmailBody(sub, currentWeather)
+	if err != nil {
+		return fmt.Errorf("build weather update email body: %w", err)
+	}
+
 	emailParams := ports.EmailParams{
 		To:      sub.Email,
 		Subject: fmt.Sprintf("Weather Update for %s", currentWeather.City),
-		Body:    uc.buildWeatherUpdateEmailBody(sub, currentWeather),
+		Body:    emailBody,
 		Format:  ports.FormatHTML,
 	}
 
@@ -150,53 +170,37 @@ func (uc *UseCase) sendWeatherUpdateToSubscription(ctx context.Context, sub *por
 	return nil
 }
 
-func (uc *UseCase) buildWeatherUpdateEmailBody(sub *ports.SubscriptionServiceData, weather *ports.WeatherServiceData) string {
+func (uc *UseCase) buildWeatherUpdateEmailBody(sub *ports.SubscriptionServiceData, weather *ports.WeatherServiceData) (string, error) {
 	baseURL := uc.config.GetAppConfig().BaseURL
 	unsubscribeURL := ""
 	if sub.UnsubscribeToken != "" {
 		unsubscribeURL = fmt.Sprintf("%s/api/unsubscribe/%s", baseURL, sub.UnsubscribeToken)
 	}
 
-	temperatureUnit := "°C"
-	humidityUnit := "%"
-
-	emailBody := fmt.Sprintf(`
-		<h2>Weather Update for %s</h2>
-		<div style="background-color: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
-			<h3 style="color: #333; margin-top: 0;">Current Weather</h3>
-			<p style="font-size: 18px; margin: 10px 0;">
-				<strong>Temperature:</strong> %.1f%s
-			</p>
-			<p style="font-size: 16px; margin: 10px 0;">
-				<strong>Humidity:</strong> %.1f%s
-			</p>
-			<p style="font-size: 16px; margin: 10px 0;">
-				<strong>Description:</strong> %s
-			</p>
-			<p style="font-size: 14px; color: #666; margin: 10px 0;">
-				<strong>Last Updated:</strong> %s
-			</p>
-		</div>
-		<hr style="border: none; border-top: 1px solid #ddd; margin: 20px 0;">
-		<p style="font-size: 12px; color: #888;">
-			You are receiving this because you subscribed to <strong>%s</strong> weather updates for <strong>%s</strong>.
-		</p>`,
-		weather.City,
-		weather.Temperature, temperatureUnit,
-		weather.Humidity, humidityUnit,
-		weather.Description,
-		weather.Timestamp.Format("2006-01-02 15:04:05 MST"),
-		sub.Frequency,
-		sub.City)
-
-	if unsubscribeURL != "" {
-		emailBody += fmt.Sprintf(`
-		<p style="font-size: 12px; color: #888;">
-			To unsubscribe from these updates, <a href="%s" style="color: #0066cc;">click here</a>.
-		</p>`, unsubscribeURL)
+	data := weatherUpdateData{
+		City:             weather.City,
+		Temperature:      weather.Temperature,
+		TemperatureUnit:  "°C",
+		Humidity:         weather.Humidity,
+		HumidityUnit:     "%",
+		Description:      weather.Description,
+		LastUpdated:      weather.Timestamp.Format("2006-01-02 15:04:05 MST"),
+		Frequency:        sub.Frequency,
+		SubscriptionCity: sub.City,
+		UnsubscribeURL:   unsubscribeURL,
 	}
 
-	return emailBody
+	tmpl, err := template.New("weatherUpdate").Parse(WeatherUpdateTemplate)
+	if err != nil {
+		return "", fmt.Errorf("parse weather update template: %w", err)
+	}
+
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, data); err != nil {
+		return "", fmt.Errorf("execute weather update template: %w", err)
+	}
+
+	return buf.String(), nil
 }
 
 func (uc *UseCase) CleanupExpiredTokens(ctx context.Context) error {
