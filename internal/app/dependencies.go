@@ -270,7 +270,7 @@ func (c *DependencyContainer) SetSubscriptionService(service ports.SubscriptionS
 }
 
 // CreateWeatherServiceFromUseCase creates a weather service adapter from a use case
-func CreateWeatherServiceFromUseCase(weatherUseCase *weather.UseCase) ports.WeatherService {
+func CreateWeatherServiceFromUseCase(weatherUseCase weather.Service) ports.WeatherService {
 	return services.NewWeatherServiceAdapter(weatherUseCase)
 }
 

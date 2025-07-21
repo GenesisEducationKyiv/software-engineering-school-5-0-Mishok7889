@@ -8,6 +8,13 @@ import (
 	"weatherapi.app/internal/ports"
 )
 
+// Service defines the contract for weather use case operations
+type Service interface {
+	GetWeather(ctx context.Context, request WeatherRequest) (*Weather, error)
+	GetProviderInfo(ctx context.Context) ports.ProviderInfo
+	GetCacheMetrics(ctx context.Context) (ports.CacheStats, error)
+}
+
 type UseCase struct {
 	weatherProvider ports.WeatherProviderManager
 	cache           ports.WeatherCache
@@ -15,6 +22,9 @@ type UseCase struct {
 	logger          ports.Logger
 	metrics         ports.WeatherMetrics
 }
+
+// Compile-time verification that UseCase implements Service
+var _ Service = (*UseCase)(nil)
 
 type UseCaseDependencies struct {
 	WeatherProvider ports.WeatherProviderManager

@@ -9,11 +9,11 @@ import (
 
 // WeatherServiceAdapter adapts the weather use case to the WeatherService port
 type WeatherServiceAdapter struct {
-	weatherUseCase *weather.UseCase
+	weatherUseCase weather.Service
 }
 
 // NewWeatherServiceAdapter creates a new weather service adapter
-func NewWeatherServiceAdapter(weatherUseCase *weather.UseCase) ports.WeatherService {
+func NewWeatherServiceAdapter(weatherUseCase weather.Service) ports.WeatherService {
 	return &WeatherServiceAdapter{
 		weatherUseCase: weatherUseCase,
 	}
