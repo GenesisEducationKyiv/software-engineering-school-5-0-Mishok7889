@@ -34,26 +34,9 @@ type SendWeatherUpdateParams struct {
 }
 
 func NewUseCase(deps UseCaseDependencies) (*UseCase, error) {
-	if deps.WeatherService == nil {
-		return nil, shared.NewValidationError("weather service is required")
-	}
-	if deps.SubscriptionService == nil {
-		return nil, shared.NewValidationError("subscription service is required")
-	}
-	if deps.EmailProvider == nil {
-		return nil, shared.NewValidationError("email provider is required")
-	}
-	if deps.TokenRepo == nil {
-		return nil, shared.NewValidationError("token repository is required")
-	}
-	if deps.SubscriptionRepo == nil {
-		return nil, shared.NewValidationError("subscription repository is required")
-	}
-	if deps.Config == nil {
-		return nil, shared.NewValidationError("config is required")
-	}
-	if deps.Logger == nil {
-		return nil, shared.NewValidationError("logger is required")
+
+	if err := ValidateDeps(deps); err != nil {
+		return nil, err
 	}
 
 	return &UseCase{
@@ -65,6 +48,32 @@ func NewUseCase(deps UseCaseDependencies) (*UseCase, error) {
 		config:              deps.Config,
 		logger:              deps.Logger,
 	}, nil
+}
+
+func ValidateDeps(deps UseCaseDependencies) error {
+	if deps.WeatherService == nil {
+		return shared.NewValidationError("weather service is required")
+	}
+	if deps.SubscriptionService == nil {
+		return shared.NewValidationError("subscription service is required")
+	}
+	if deps.EmailProvider == nil {
+		return shared.NewValidationError("email provider is required")
+	}
+	if deps.TokenRepo == nil {
+		return shared.NewValidationError("token repository is required")
+	}
+	if deps.SubscriptionRepo == nil {
+		return shared.NewValidationError("subscription repository is required")
+	}
+	if deps.Config == nil {
+		return shared.NewValidationError("config is required")
+	}
+	if deps.Logger == nil {
+		return shared.NewValidationError("logger is required")
+	}
+
+	return nil
 }
 
 func (uc *UseCase) SendWeatherUpdates(ctx context.Context, params SendWeatherUpdateParams) error {
