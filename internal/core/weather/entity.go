@@ -6,6 +6,30 @@ import (
 	"time"
 )
 
+const (
+	// Temperature constants
+	absoluteZeroCelsius  = -273.15   // Absolute zero in Celsius
+	kelvinOffset         = 273.15    // Offset to convert Celsius to Kelvin
+	fahrenheitMultiplier = 9.0 / 5.0 // Multiplier for Celsius to Fahrenheit
+	fahrenheitOffset     = 32.0      // Offset for Celsius to Fahrenheit
+
+	// Comfort range constants
+	comfortTempMin     = 18.0 // Minimum comfortable temperature in Celsius
+	comfortTempMax     = 28.0 // Maximum comfortable temperature in Celsius
+	comfortHumidityMin = 30.0 // Minimum comfortable humidity percentage
+	comfortHumidityMax = 70.0 // Maximum comfortable humidity percentage
+
+	// Humidity thresholds for descriptions
+	humidityVeryDry     = 20.0 // Below this is very dry
+	humidityDry         = 30.0 // Below this is dry
+	humidityComfortable = 60.0 // Below this is comfortable
+	humidityHumid       = 80.0 // Below this is humid, above is very humid
+
+	// Validation constants
+	minHumidity = 0.0   // Minimum valid humidity percentage
+	maxHumidity = 100.0 // Maximum valid humidity percentage
+)
+
 // Weather represents weather information for a specific location
 type Weather struct {
 	Temperature float64
@@ -28,10 +52,10 @@ func (w *Weather) IsValid() error {
 	if strings.TrimSpace(w.Description) == "" {
 		return fmt.Errorf("description cannot be empty")
 	}
-	if w.Temperature < -273.15 {
+	if w.Temperature < absoluteZeroCelsius {
 		return fmt.Errorf("temperature cannot be below absolute zero")
 	}
-	if w.Humidity < 0 || w.Humidity > 100 {
+	if w.Humidity < minHumidity || w.Humidity > maxHumidity {
 		return fmt.Errorf("humidity must be between 0 and 100")
 	}
 	return nil
@@ -52,25 +76,25 @@ func (wr *WeatherRequest) NormalizeCity() {
 
 // TemperatureInFahrenheit converts temperature from Celsius to Fahrenheit
 func (w *Weather) TemperatureInFahrenheit() float64 {
-	return w.Temperature*9/5 + 32
+	return w.Temperature*fahrenheitMultiplier + fahrenheitOffset
 }
 
 // TemperatureInKelvin converts temperature from Celsius to Kelvin
 func (w *Weather) TemperatureInKelvin() float64 {
-	return w.Temperature + 273.15
+	return w.Temperature + kelvinOffset
 }
 
 // HumidityDescription provides a human-readable description of humidity level
 func (w *Weather) HumidityDescription() string {
 	switch {
-	case w.Humidity < 30:
-		if w.Humidity < 20 {
+	case w.Humidity < humidityDry:
+		if w.Humidity < humidityVeryDry {
 			return "Very dry"
 		}
 		return "Dry"
-	case w.Humidity < 60:
+	case w.Humidity < humidityComfortable:
 		return "Comfortable"
-	case w.Humidity < 80:
+	case w.Humidity < humidityHumid:
 		return "Humid"
 	default:
 		return "Very humid"
@@ -85,8 +109,6 @@ func (w *Weather) String() string {
 
 // IsComfortable determines if the weather conditions are comfortable
 func (w *Weather) IsComfortable() bool {
-	// Comfortable temperature range: 18-28°C
-	// Comfortable humidity range: 30-70%
-	return w.Temperature >= 18 && w.Temperature <= 28 &&
-		w.Humidity >= 30 && w.Humidity <= 70
+	return w.Temperature >= comfortTempMin && w.Temperature <= comfortTempMax &&
+		w.Humidity >= comfortHumidityMin && w.Humidity <= comfortHumidityMax
 }
