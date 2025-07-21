@@ -20,6 +20,7 @@ packages:
       SubscriptionRepository:
       SubscriptionService:
       TokenRepository:
+      TokenService:
       EmailProvider:
       EmailBuilder:
       ConfigProvider:

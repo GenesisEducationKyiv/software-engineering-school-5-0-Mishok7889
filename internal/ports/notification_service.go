@@ -16,7 +16,6 @@ type NotificationStats struct {
 // NotificationService defines the contract for notification operations
 type NotificationService interface {
 	SendWeatherUpdates(ctx context.Context, frequency string) error
-	CleanupExpiredTokens(ctx context.Context) error
 	GetNotificationStats(ctx context.Context) (NotificationStats, error)
 }
 
