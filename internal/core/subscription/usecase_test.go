@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"weatherapi.app/internal/core/shared"
+	tokenEntity "weatherapi.app/internal/core/token"
 	mocks "weatherapi.app/internal/mocks"
 	"weatherapi.app/internal/ports"
 )
@@ -72,7 +73,7 @@ func TestUseCase_Subscribe_Success(t *testing.T) {
 
 	mockTokenRepo.EXPECT().
 		Save(mock.Anything, mock.MatchedBy(func(token *ports.TokenData) bool {
-			return token.Type == TokenTypeConfirmation.String() && token.Value == "test-confirmation-token"
+			return token.Type == tokenEntity.TypeConfirmation.String() && token.Value == "test-confirmation-token"
 		})).
 		Return(nil)
 
@@ -266,7 +267,7 @@ func TestUseCase_ConfirmSubscription_Success(t *testing.T) {
 		ID:             1,
 		Value:          "valid-confirmation-token",
 		SubscriptionID: 1,
-		Type:           TokenTypeConfirmation.String(),
+		Type:           tokenEntity.TypeConfirmation.String(),
 		ExpiresAt:      time.Now().Add(24 * time.Hour), // Set expiration in the future
 	}
 	mockTokenRepo.EXPECT().FindByToken(mock.Anything, "valid-confirmation-token").Return(token, nil)
@@ -293,7 +294,7 @@ func TestUseCase_ConfirmSubscription_Success(t *testing.T) {
 
 	mockTokenRepo.EXPECT().
 		Save(mock.Anything, mock.MatchedBy(func(token *ports.TokenData) bool {
-			return token.SubscriptionID == uint(1) && token.Type == TokenTypeUnsubscribe.String() && token.Value == "unsubscribe-token"
+			return token.SubscriptionID == uint(1) && token.Type == tokenEntity.TypeUnsubscribe.String() && token.Value == "unsubscribe-token"
 		})).
 		Return(nil)
 

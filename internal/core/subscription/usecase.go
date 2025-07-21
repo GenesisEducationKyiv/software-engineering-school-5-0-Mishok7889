@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"weatherapi.app/internal/core/shared"
+	"weatherapi.app/internal/core/token"
 	"weatherapi.app/internal/ports"
 	"weatherapi.app/pkg/validation"
 )
@@ -44,22 +45,22 @@ type UnsubscribeParams struct {
 
 func NewUseCase(deps UseCaseDependencies) (*UseCase, error) {
 	if deps.SubscriptionRepo == nil {
-		return nil, shared.NewValidationError("subscription repository is required")
+		return nil, shared.NewValidationError(ErrRepoRequired)
 	}
 	if deps.TokenRepo == nil {
-		return nil, shared.NewValidationError("token repository is required")
+		return nil, shared.NewValidationError(ErrTokenRepoRequired)
 	}
 	if deps.TokenGenerator == nil {
-		return nil, shared.NewValidationError("token generator is required")
+		return nil, shared.NewValidationError(ErrGeneratorRequired)
 	}
 	if deps.EmailProvider == nil {
-		return nil, shared.NewValidationError("email provider is required")
+		return nil, shared.NewValidationError(ErrEmailProviderRequired)
 	}
 	if deps.Config == nil {
-		return nil, shared.NewValidationError("config is required")
+		return nil, shared.NewValidationError(ErrConfigRequired)
 	}
 	if deps.Logger == nil {
-		return nil, shared.NewValidationError("logger is required")
+		return nil, shared.NewValidationError(ErrLoggerRequired)
 	}
 
 	return &UseCase{
@@ -80,18 +81,18 @@ type CreateTokenParams struct {
 
 func (uc *UseCase) validateSubscribeParams(params SubscribeParams) error {
 	if !validation.IsNotEmpty(params.Email) {
-		return shared.NewValidationError("email is required")
+		return shared.NewValidationError(ErrEmailRequired)
 	}
 	if !validation.IsValidEmail(params.Email) {
-		return shared.NewValidationError("invalid email format")
+		return shared.NewValidationError(ErrEmailInvalid)
 	}
 
 	if !validation.IsNotEmpty(params.City) {
-		return shared.NewValidationError("city is required")
+		return shared.NewValidationError(ErrCityRequired)
 	}
 
 	if !params.Frequency.IsValid() {
-		return shared.NewValidationError("invalid frequency")
+		return shared.NewValidationError(ErrFrequencyInvalid)
 	}
 
 	return nil
@@ -99,21 +100,21 @@ func (uc *UseCase) validateSubscribeParams(params SubscribeParams) error {
 
 func (uc *UseCase) validateConfirmParams(params ConfirmParams) error {
 	if !validation.IsNotEmpty(params.Token) {
-		return shared.NewValidationError("confirmation token is required")
+		return shared.NewValidationError(ErrTokenConfirmEmpty)
 	}
 	return nil
 }
 
 func (uc *UseCase) validateUnsubscribeParams(params UnsubscribeParams) error {
 	if !validation.IsNotEmpty(params.Token) {
-		return shared.NewValidationError("unsubscribe token is required")
+		return shared.NewValidationError(ErrTokenUnsubEmpty)
 	}
 	return nil
 }
 
 func (uc *UseCase) createToken(ctx context.Context, params CreateTokenParams) (*ports.TokenData, error) {
 	if params.SubscriptionID == 0 {
-		return nil, shared.NewValidationError("subscription ID cannot be zero")
+		return nil, shared.NewValidationError(ErrSubscriptionIDZero)
 	}
 
 	token := &ports.TokenData{
@@ -156,7 +157,7 @@ func (uc *UseCase) Subscribe(ctx context.Context, params SubscribeParams) error 
 func (uc *UseCase) handleExistingSubscription(ctx context.Context, existing *ports.SubscriptionData, params SubscribeParams) error {
 	subscription := uc.convertFromPortsSubscription(existing)
 	if subscription.IsConfirmed() {
-		return shared.NewAlreadyExistsError("already subscribed")
+		return shared.NewAlreadyExistsError(ErrSubscriptionExists)
 	}
 
 	if !subscription.IsExpired() {
@@ -228,30 +229,30 @@ func (uc *UseCase) ConfirmSubscription(ctx context.Context, params ConfirmParams
 	tokenData, err := uc.tokenRepo.FindByToken(ctx, params.Token)
 	if err != nil {
 		if shared.IsNotFoundError(err) || ports.IsNotFoundError(err) {
-			return shared.NewValidationError("invalid or expired confirmation token")
+			return shared.NewValidationError(ErrTokenConfirmExpired)
 		}
 		return fmt.Errorf("find token: %w", err)
 	}
 
 	if time.Now().After(tokenData.ExpiresAt) {
-		return shared.NewValidationError("invalid or expired confirmation token")
+		return shared.NewValidationError(ErrTokenConfirmExpired)
 	}
 
-	if tokenData.Type != TokenTypeConfirmation.String() {
-		return shared.NewValidationError("invalid token type")
+	if tokenData.Type != token.TypeConfirmation.String() {
+		return shared.NewValidationError(ErrTokenInvalidType)
 	}
 
 	subscriptionData, err := uc.subscriptionRepo.FindByID(ctx, tokenData.SubscriptionID)
 	if err != nil {
 		if shared.IsNotFoundError(err) || ports.IsNotFoundError(err) {
-			return shared.NewNotFoundError("subscription not found")
+			return shared.NewNotFoundError(ErrSubscriptionNotFound)
 		}
 		return fmt.Errorf("find subscription: %w", err)
 	}
 
 	subscription := uc.convertFromPortsSubscription(subscriptionData)
 	if subscription.IsConfirmed() {
-		return shared.NewAlreadyExistsError("subscription is already confirmed")
+		return shared.NewAlreadyExistsError(ErrSubscriptionConfirmed)
 	}
 
 	subscription.Confirm()
@@ -284,23 +285,23 @@ func (uc *UseCase) Unsubscribe(ctx context.Context, params UnsubscribeParams) er
 	tokenData, err := uc.tokenRepo.FindByToken(ctx, params.Token)
 	if err != nil {
 		if shared.IsNotFoundError(err) || ports.IsNotFoundError(err) {
-			return shared.NewValidationError("invalid unsubscribe token")
+			return shared.NewValidationError(ErrTokenUnsubExpired)
 		}
 		return fmt.Errorf("find token: %w", err)
 	}
 
 	if time.Now().After(tokenData.ExpiresAt) {
-		return shared.NewValidationError("invalid unsubscribe token")
+		return shared.NewValidationError(ErrTokenUnsubExpired)
 	}
 
-	if tokenData.Type != TokenTypeUnsubscribe.String() {
-		return shared.NewValidationError("invalid token type")
+	if tokenData.Type != token.TypeUnsubscribe.String() {
+		return shared.NewValidationError(ErrTokenInvalidType)
 	}
 
 	subscriptionData, err := uc.subscriptionRepo.FindByID(ctx, tokenData.SubscriptionID)
 	if err != nil {
 		if shared.IsNotFoundError(err) || ports.IsNotFoundError(err) {
-			return shared.NewNotFoundError("subscription not found")
+			return shared.NewNotFoundError(ErrSubscriptionNotFound)
 		}
 		return fmt.Errorf("find subscription: %w", err)
 	}
@@ -326,7 +327,7 @@ func (uc *UseCase) Unsubscribe(ctx context.Context, params UnsubscribeParams) er
 
 func (uc *UseCase) GetSubscriptionsForUpdates(ctx context.Context, frequency Frequency) ([]*Subscription, error) {
 	if !frequency.IsValid() {
-		return nil, shared.NewValidationError("invalid frequency")
+		return nil, shared.NewValidationError(ErrFrequencyInvalid)
 	}
 
 	freqStr := frequency.String()
@@ -355,8 +356,8 @@ func (uc *UseCase) sendConfirmationEmail(ctx context.Context, subscription *Subs
 
 	confirmToken, err := uc.createToken(ctx, CreateTokenParams{
 		SubscriptionID: subscription.ID,
-		TokenType:      TokenTypeConfirmation.String(),
-		ExpiresIn:      24 * time.Hour,
+		TokenType:      token.TypeConfirmation.String(),
+		ExpiresIn:      ConfirmationTokenTTL,
 	})
 	if err != nil {
 		return fmt.Errorf("create confirmation token: %w", err)
@@ -364,7 +365,7 @@ func (uc *UseCase) sendConfirmationEmail(ctx context.Context, subscription *Subs
 
 	emailParams := ports.EmailParams{
 		To:      subscription.Email,
-		Subject: "Confirm your weather subscription",
+		Subject: EmailSubjectConfirmation,
 		Body:    uc.buildConfirmationEmailBody(subscription, confirmToken.Value),
 		Format:  ports.FormatHTML,
 	}
@@ -379,8 +380,8 @@ func (uc *UseCase) sendConfirmationEmail(ctx context.Context, subscription *Subs
 func (uc *UseCase) sendWelcomeEmail(ctx context.Context, subscription *Subscription) error {
 	unsubscribeToken, err := uc.createToken(ctx, CreateTokenParams{
 		SubscriptionID: subscription.ID,
-		TokenType:      TokenTypeUnsubscribe.String(),
-		ExpiresIn:      365 * 24 * time.Hour,
+		TokenType:      token.TypeUnsubscribe.String(),
+		ExpiresIn:      UnsubscribeTokenTTL,
 	})
 	if err != nil {
 		uc.logger.Warn("Failed to create unsubscribe token", ports.F("error", err))
@@ -389,7 +390,7 @@ func (uc *UseCase) sendWelcomeEmail(ctx context.Context, subscription *Subscript
 
 	emailParams := ports.EmailParams{
 		To:      subscription.Email,
-		Subject: "Welcome to Weather Updates!",
+		Subject: EmailSubjectWelcome,
 		Body:    uc.buildWelcomeEmailBody(subscription, unsubscribeToken.Value),
 		Format:  ports.FormatHTML,
 	}
@@ -404,7 +405,7 @@ func (uc *UseCase) sendWelcomeEmail(ctx context.Context, subscription *Subscript
 func (uc *UseCase) sendUnsubscribeConfirmationEmail(ctx context.Context, subscription *Subscription) error {
 	emailParams := ports.EmailParams{
 		To:      subscription.Email,
-		Subject: "You have been unsubscribed from weather updates",
+		Subject: EmailSubjectUnsubscribe,
 		Body:    uc.buildUnsubscribeConfirmationBody(subscription),
 		Format:  ports.FormatHTML,
 	}
@@ -442,36 +443,18 @@ func (uc *UseCase) convertFromPortsSubscription(data *ports.SubscriptionData) *S
 
 func (uc *UseCase) buildConfirmationEmailBody(subscription *Subscription, token string) string {
 	baseURL := uc.config.GetAppConfig().BaseURL
-	confirmURL := fmt.Sprintf("%s/api/confirm/%s", baseURL, token)
+	confirmURL := fmt.Sprintf("%s"+APIPathConfirm, baseURL, token)
 
-	return fmt.Sprintf(`
-		<h2>Confirm Your Weather Subscription</h2>
-		<p>Hello!</p>
-		<p>Thank you for subscribing to weather updates for <strong>%s</strong>.</p>
-		<p>Please click the link below to confirm your subscription:</p>
-		<p><a href="%s">Confirm Subscription</a></p>
-		<p>If you didn't request this subscription, you can safely ignore this email.</p>
-	`, subscription.City, confirmURL)
+	return fmt.Sprintf(EmailBodyConfirmation, subscription.City, confirmURL)
 }
 
 func (uc *UseCase) buildWelcomeEmailBody(subscription *Subscription, unsubscribeToken string) string {
 	baseURL := uc.config.GetAppConfig().BaseURL
-	unsubscribeURL := fmt.Sprintf("%s/api/unsubscribe/%s", baseURL, unsubscribeToken)
+	unsubscribeURL := fmt.Sprintf("%s"+APIPathUnsubscribe, baseURL, unsubscribeToken)
 
-	return fmt.Sprintf(`
-		<h2>Welcome to Weather Updates!</h2>
-		<p>Hello!</p>
-		<p>Your subscription for <strong>%s</strong> weather updates has been confirmed.</p>
-		<p>You will receive <strong>%s</strong> weather updates.</p>
-		<p>If you wish to unsubscribe, click <a href="%s">here</a>.</p>
-	`, subscription.City, subscription.Frequency, unsubscribeURL)
+	return fmt.Sprintf(EmailBodyWelcome, subscription.City, subscription.Frequency, unsubscribeURL)
 }
 
 func (uc *UseCase) buildUnsubscribeConfirmationBody(subscription *Subscription) string {
-	return fmt.Sprintf(`
-		<h2>Unsubscribed Successfully</h2>
-		<p>Hello!</p>
-		<p>You have been successfully unsubscribed from weather updates for <strong>%s</strong>.</p>
-		<p>We're sorry to see you go!</p>
-	`, subscription.City)
+	return fmt.Sprintf(EmailBodyUnsubscribe, subscription.City)
 }
