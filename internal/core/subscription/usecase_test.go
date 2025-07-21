@@ -42,6 +42,7 @@ func TestUseCase_Subscribe_Success(t *testing.T) {
 	mockTokenRepo := mocks.NewTokenRepository(t)
 	mockTokenGenerator := mocks.NewTokenGenerator(t)
 	mockEmailProvider := mocks.NewEmailProvider(t)
+	mockEmailBuilder := mocks.NewEmailBuilder(t)
 	mockConfig := mocks.NewConfigProvider(t)
 	mockLogger := setupLoggerMock(t)
 
@@ -78,14 +79,15 @@ func TestUseCase_Subscribe_Success(t *testing.T) {
 		Return(nil)
 
 	// Send confirmation email
+	mockEmailBuilder.EXPECT().BuildConfirmationEmail("London", "test-confirmation-token").Return(ports.EmailParams{
+		Subject: "Confirm your weather subscription",
+		Body:    "<p>Confirmation email body</p>",
+		Format:  ports.FormatHTML,
+	}, nil)
+
 	mockEmailProvider.EXPECT().SendEmail(mock.Anything, mock.MatchedBy(func(params ports.EmailParams) bool {
 		return params.To == "test@example.com" && len(params.Subject) > 0
 	})).Return(nil)
-
-	// Mock config for app base URL
-	mockConfig.EXPECT().GetAppConfig().Return(ports.AppConfig{
-		BaseURL: "http://localhost:8080",
-	})
 
 	// Create use case
 	uc, err := NewUseCase(UseCaseDependencies{
@@ -93,6 +95,7 @@ func TestUseCase_Subscribe_Success(t *testing.T) {
 		TokenRepo:        mockTokenRepo,
 		TokenGenerator:   mockTokenGenerator,
 		EmailProvider:    mockEmailProvider,
+		EmailBuilder:     mockEmailBuilder,
 		Config:           mockConfig,
 		Logger:           mockLogger,
 	})
@@ -163,6 +166,7 @@ func TestUseCase_Subscribe_ValidationError(t *testing.T) {
 			mockTokenRepo := mocks.NewTokenRepository(t)
 			mockTokenGenerator := mocks.NewTokenGenerator(t)
 			mockEmailProvider := mocks.NewEmailProvider(t)
+			mockEmailBuilder := mocks.NewEmailBuilder(t)
 			mockConfig := mocks.NewConfigProvider(t)
 
 			// No mock expectations - validation should fail before any calls
@@ -174,6 +178,7 @@ func TestUseCase_Subscribe_ValidationError(t *testing.T) {
 				TokenRepo:        mockTokenRepo,
 				TokenGenerator:   mockTokenGenerator,
 				EmailProvider:    mockEmailProvider,
+				EmailBuilder:     mockEmailBuilder,
 				Config:           mockConfig,
 				Logger:           mockLogger,
 			})
@@ -204,6 +209,7 @@ func TestUseCase_Subscribe_AlreadyExists(t *testing.T) {
 	mockTokenRepo := mocks.NewTokenRepository(t)
 	mockTokenGenerator := mocks.NewTokenGenerator(t)
 	mockEmailProvider := mocks.NewEmailProvider(t)
+	mockEmailBuilder := mocks.NewEmailBuilder(t)
 	mockConfig := mocks.NewConfigProvider(t)
 	mockLogger := setupLoggerMock(t)
 
@@ -228,6 +234,7 @@ func TestUseCase_Subscribe_AlreadyExists(t *testing.T) {
 		TokenRepo:        mockTokenRepo,
 		TokenGenerator:   mockTokenGenerator,
 		EmailProvider:    mockEmailProvider,
+		EmailBuilder:     mockEmailBuilder,
 		Config:           mockConfig,
 		Logger:           mockLogger,
 	})
@@ -257,6 +264,7 @@ func TestUseCase_ConfirmSubscription_Success(t *testing.T) {
 	mockTokenRepo := mocks.NewTokenRepository(t)
 	mockTokenGenerator := mocks.NewTokenGenerator(t)
 	mockEmailProvider := mocks.NewEmailProvider(t)
+	mockEmailBuilder := mocks.NewEmailBuilder(t)
 	mockConfig := mocks.NewConfigProvider(t)
 	mockLogger := setupLoggerMock(t)
 
@@ -298,15 +306,17 @@ func TestUseCase_ConfirmSubscription_Success(t *testing.T) {
 		})).
 		Return(nil)
 
+	// Mock EmailBuilder for welcome email
+	mockEmailBuilder.EXPECT().BuildWelcomeEmail("London", "daily", "unsubscribe-token").Return(ports.EmailParams{
+		Subject: "Welcome to Weather Updates!",
+		Body:    "<p>Welcome email body</p>",
+		Format:  ports.FormatHTML,
+	}, nil)
+
 	// Send welcome email
 	mockEmailProvider.EXPECT().SendEmail(mock.Anything, mock.MatchedBy(func(params ports.EmailParams) bool {
 		return params.To == "test@example.com"
 	})).Return(nil)
-
-	// Mock config for app base URL
-	mockConfig.EXPECT().GetAppConfig().Return(ports.AppConfig{
-		BaseURL: "http://localhost:8080",
-	})
 
 	// Delete confirmation token
 	mockTokenRepo.EXPECT().Delete(mock.Anything, token).Return(nil)
@@ -316,6 +326,7 @@ func TestUseCase_ConfirmSubscription_Success(t *testing.T) {
 		TokenRepo:        mockTokenRepo,
 		TokenGenerator:   mockTokenGenerator,
 		EmailProvider:    mockEmailProvider,
+		EmailBuilder:     mockEmailBuilder,
 		Config:           mockConfig,
 		Logger:           mockLogger,
 	})
@@ -347,6 +358,7 @@ func TestUseCase_Constructor_Validation(t *testing.T) {
 				TokenRepo:        mocks.NewTokenRepository(t),
 				TokenGenerator:   mocks.NewTokenGenerator(t),
 				EmailProvider:    mocks.NewEmailProvider(t),
+				EmailBuilder:     mocks.NewEmailBuilder(t),
 				Config:           mocks.NewConfigProvider(t),
 				Logger:           mocks.NewLogger(t),
 			},
@@ -360,11 +372,26 @@ func TestUseCase_Constructor_Validation(t *testing.T) {
 				TokenRepo:        mocks.NewTokenRepository(t),
 				TokenGenerator:   nil,
 				EmailProvider:    mocks.NewEmailProvider(t),
+				EmailBuilder:     mocks.NewEmailBuilder(t),
 				Config:           mocks.NewConfigProvider(t),
 				Logger:           mocks.NewLogger(t),
 			},
 			wantErr: true,
 			errMsg:  "token generator is required",
+		},
+		{
+			name: "missing_email_builder",
+			deps: UseCaseDependencies{
+				SubscriptionRepo: mocks.NewSubscriptionRepository(t),
+				TokenRepo:        mocks.NewTokenRepository(t),
+				TokenGenerator:   mocks.NewTokenGenerator(t),
+				EmailProvider:    mocks.NewEmailProvider(t),
+				EmailBuilder:     nil,
+				Config:           mocks.NewConfigProvider(t),
+				Logger:           mocks.NewLogger(t),
+			},
+			wantErr: true,
+			errMsg:  "email builder is required",
 		},
 		{
 			name: "valid_dependencies",
@@ -373,6 +400,7 @@ func TestUseCase_Constructor_Validation(t *testing.T) {
 				TokenRepo:        mocks.NewTokenRepository(t),
 				TokenGenerator:   mocks.NewTokenGenerator(t),
 				EmailProvider:    mocks.NewEmailProvider(t),
+				EmailBuilder:     mocks.NewEmailBuilder(t),
 				Config:           mocks.NewConfigProvider(t),
 				Logger:           mocks.NewLogger(t),
 			},

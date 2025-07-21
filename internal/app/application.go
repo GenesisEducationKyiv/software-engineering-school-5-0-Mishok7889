@@ -12,6 +12,7 @@ import (
 	"github.com/go-playground/validator/v10"
 	"gorm.io/gorm"
 	"weatherapi.app/internal/adapters/api"
+	"weatherapi.app/internal/adapters/email"
 	"weatherapi.app/internal/adapters/infrastructure"
 	"weatherapi.app/internal/config"
 	"weatherapi.app/internal/core/notification"
@@ -90,6 +91,16 @@ func (a *Application) initializePorts() error {
 	return nil
 }
 
+func (a *Application) createEmailBuilder() ports.EmailBuilder {
+	emailBuilder, err := email.NewBuilder(a.ports.Infrastructure.ConfigProvider)
+	if err != nil {
+		// Log error but don't fail - use a fallback or panic based on requirements
+		slog.Error("Failed to create email builder", "error", err)
+		panic(fmt.Sprintf("failed to create email builder: %v", err))
+	}
+	return emailBuilder
+}
+
 func (a *Application) initializeUseCases() error {
 	slog.Info("Initializing use cases...")
 
@@ -110,6 +121,7 @@ func (a *Application) initializeUseCases() error {
 		TokenRepo:        a.ports.Infrastructure.TokenRepo,
 		TokenGenerator:   a.ports.Infrastructure.TokenGenerator,
 		EmailProvider:    a.ports.Notification.EmailProvider,
+		EmailBuilder:     a.createEmailBuilder(),
 		Config:           a.ports.Infrastructure.ConfigProvider,
 		Logger:           a.ports.Infrastructure.Logger,
 	})

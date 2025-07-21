@@ -21,6 +21,7 @@ packages:
       SubscriptionService:
       TokenRepository:
       EmailProvider:
+      EmailBuilder:
       ConfigProvider:
       Logger:
       CacheProvider:

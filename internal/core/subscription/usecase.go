@@ -16,6 +16,7 @@ type UseCase struct {
 	tokenRepo        ports.TokenRepository
 	tokenGenerator   ports.TokenGenerator
 	emailProvider    ports.EmailProvider
+	emailBuilder     ports.EmailBuilder
 	config           ports.ConfigProvider
 	logger           ports.Logger
 }
@@ -25,6 +26,7 @@ type UseCaseDependencies struct {
 	TokenRepo        ports.TokenRepository
 	TokenGenerator   ports.TokenGenerator
 	EmailProvider    ports.EmailProvider
+	EmailBuilder     ports.EmailBuilder
 	Config           ports.ConfigProvider
 	Logger           ports.Logger
 }
@@ -56,6 +58,9 @@ func NewUseCase(deps UseCaseDependencies) (*UseCase, error) {
 	if deps.EmailProvider == nil {
 		return nil, shared.NewValidationError(ErrEmailProviderRequired)
 	}
+	if deps.EmailBuilder == nil {
+		return nil, shared.NewValidationError(ErrEmailBuilderRequired)
+	}
 	if deps.Config == nil {
 		return nil, shared.NewValidationError(ErrConfigRequired)
 	}
@@ -68,6 +73,7 @@ func NewUseCase(deps UseCaseDependencies) (*UseCase, error) {
 		tokenRepo:        deps.TokenRepo,
 		tokenGenerator:   deps.TokenGenerator,
 		emailProvider:    deps.EmailProvider,
+		emailBuilder:     deps.EmailBuilder,
 		config:           deps.Config,
 		logger:           deps.Logger,
 	}, nil
@@ -363,13 +369,12 @@ func (uc *UseCase) sendConfirmationEmail(ctx context.Context, subscription *Subs
 		return fmt.Errorf("create confirmation token: %w", err)
 	}
 
-	emailParams := ports.EmailParams{
-		To:      subscription.Email,
-		Subject: EmailSubjectConfirmation,
-		Body:    uc.buildConfirmationEmailBody(subscription, confirmToken.Value),
-		Format:  ports.FormatHTML,
+	emailParams, err := uc.emailBuilder.BuildConfirmationEmail(subscription.City, confirmToken.Value)
+	if err != nil {
+		return fmt.Errorf("build confirmation email: %w", err)
 	}
 
+	emailParams.To = subscription.Email
 	if err := uc.emailProvider.SendEmail(ctx, emailParams); err != nil {
 		return fmt.Errorf("send confirmation email: %w", err)
 	}
@@ -388,13 +393,16 @@ func (uc *UseCase) sendWelcomeEmail(ctx context.Context, subscription *Subscript
 		return nil
 	}
 
-	emailParams := ports.EmailParams{
-		To:      subscription.Email,
-		Subject: EmailSubjectWelcome,
-		Body:    uc.buildWelcomeEmailBody(subscription, unsubscribeToken.Value),
-		Format:  ports.FormatHTML,
+	emailParams, err := uc.emailBuilder.BuildWelcomeEmail(
+		subscription.City,
+		subscription.Frequency.String(),
+		unsubscribeToken.Value,
+	)
+	if err != nil {
+		return fmt.Errorf("build welcome email: %w", err)
 	}
 
+	emailParams.To = subscription.Email
 	if err := uc.emailProvider.SendEmail(ctx, emailParams); err != nil {
 		return fmt.Errorf("send welcome email: %w", err)
 	}
@@ -403,13 +411,12 @@ func (uc *UseCase) sendWelcomeEmail(ctx context.Context, subscription *Subscript
 }
 
 func (uc *UseCase) sendUnsubscribeConfirmationEmail(ctx context.Context, subscription *Subscription) error {
-	emailParams := ports.EmailParams{
-		To:      subscription.Email,
-		Subject: EmailSubjectUnsubscribe,
-		Body:    uc.buildUnsubscribeConfirmationBody(subscription),
-		Format:  ports.FormatHTML,
+	emailParams, err := uc.emailBuilder.BuildUnsubscribeEmail(subscription.City)
+	if err != nil {
+		return fmt.Errorf("build unsubscribe email: %w", err)
 	}
 
+	emailParams.To = subscription.Email
 	if err := uc.emailProvider.SendEmail(ctx, emailParams); err != nil {
 		return fmt.Errorf("send unsubscribe confirmation email: %w", err)
 	}
@@ -439,22 +446,4 @@ func (uc *UseCase) convertFromPortsSubscription(data *ports.SubscriptionData) *S
 		CreatedAt: data.CreatedAt,
 		UpdatedAt: data.UpdatedAt,
 	}
-}
-
-func (uc *UseCase) buildConfirmationEmailBody(subscription *Subscription, token string) string {
-	baseURL := uc.config.GetAppConfig().BaseURL
-	confirmURL := fmt.Sprintf("%s"+APIPathConfirm, baseURL, token)
-
-	return fmt.Sprintf(EmailBodyConfirmation, subscription.City, confirmURL)
-}
-
-func (uc *UseCase) buildWelcomeEmailBody(subscription *Subscription, unsubscribeToken string) string {
-	baseURL := uc.config.GetAppConfig().BaseURL
-	unsubscribeURL := fmt.Sprintf("%s"+APIPathUnsubscribe, baseURL, unsubscribeToken)
-
-	return fmt.Sprintf(EmailBodyWelcome, subscription.City, subscription.Frequency, unsubscribeURL)
-}
-
-func (uc *UseCase) buildUnsubscribeConfirmationBody(subscription *Subscription) string {
-	return fmt.Sprintf(EmailBodyUnsubscribe, subscription.City)
 }

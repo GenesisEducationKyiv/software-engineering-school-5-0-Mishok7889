@@ -36,6 +36,7 @@ func setupSubscriptionTestRouter(t *testing.T) SubscriptionTestDependencies {
 	mockTokenRepo := mocks.NewTokenRepository(t)
 	mockTokenGenerator := mocks.NewTokenGenerator(t)
 	mockEmailProvider := mocks.NewEmailProvider(t)
+	mockEmailBuilder := mocks.NewEmailBuilder(t)
 	mockConfig := mocks.NewConfigProvider(t)
 	mockLogger := mocks.NewLogger(t)
 
@@ -57,11 +58,31 @@ func setupSubscriptionTestRouter(t *testing.T) SubscriptionTestDependencies {
 		BaseURL: "http://localhost:8080",
 	}).Maybe()
 
+	// Set up default EmailBuilder expectations
+	mockEmailBuilder.EXPECT().BuildConfirmationEmail(mock.Anything, mock.Anything).Return(ports.EmailParams{
+		Subject: "Confirm your weather subscription",
+		Body:    "<p>Confirmation email body</p>",
+		Format:  ports.FormatHTML,
+	}, nil).Maybe()
+
+	mockEmailBuilder.EXPECT().BuildWelcomeEmail(mock.Anything, mock.Anything, mock.Anything).Return(ports.EmailParams{
+		Subject: "Welcome to Weather Updates!",
+		Body:    "<p>Welcome email body</p>",
+		Format:  ports.FormatHTML,
+	}, nil).Maybe()
+
+	mockEmailBuilder.EXPECT().BuildUnsubscribeEmail(mock.Anything).Return(ports.EmailParams{
+		Subject: "You have been unsubscribed from weather updates",
+		Body:    "<p>Unsubscribe confirmation body</p>",
+		Format:  ports.FormatHTML,
+	}, nil).Maybe()
+
 	subscriptionUseCase, err := subscription.NewUseCase(subscription.UseCaseDependencies{
 		SubscriptionRepo: mockSubscriptionRepo,
 		TokenRepo:        mockTokenRepo,
 		TokenGenerator:   mockTokenGenerator,
 		EmailProvider:    mockEmailProvider,
+		EmailBuilder:     mockEmailBuilder,
 		Config:           mockConfig,
 		Logger:           mockLogger,
 	})
