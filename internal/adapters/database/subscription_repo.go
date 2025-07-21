@@ -2,35 +2,12 @@ package database
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"gorm.io/gorm"
 	"weatherapi.app/internal/adapters/infrastructure"
 	"weatherapi.app/internal/ports"
-)
-
-// Error message constants for subscription repository
-const (
-	// Validation error messages
-	ErrSubscriptionNil             = "subscription cannot be nil"
-	ErrSubscriptionIDZero          = "subscription ID cannot be zero"
-	ErrSubscriptionIDZeroForUpdate = "subscription ID cannot be zero for update"
-	ErrSubscriptionIDZeroForDelete = "subscription ID cannot be zero for delete"
-	ErrEmailEmpty                  = "email cannot be empty"
-	ErrCityEmpty                   = "city cannot be empty"
-	ErrFrequencyEmpty              = "frequency cannot be empty"
-
-	// Operation error messages
-	ErrFailedToSave             = "failed to save subscription"
-	ErrFailedToFindByID         = "failed to find subscription by ID"
-	ErrFailedToFind             = "failed to find subscription"
-	ErrFailedToUpdate           = "failed to update subscription"
-	ErrFailedToDelete           = "failed to delete subscription"
-	ErrFailedToCountByFrequency = "failed to count subscriptions by frequency"
-	ErrFailedToCountConfirmed   = "failed to count confirmed subscriptions"
-
-	// Not found error messages
-	ErrSubscriptionNotFound = "subscription not found"
 )
 
 // SubscriptionModel represents the database model for subscriptions
@@ -91,7 +68,7 @@ func (r *SubscriptionRepositoryAdapter) FindByID(ctx context.Context, id uint) (
 	var model SubscriptionModel
 	result := r.db.WithContext(ctx).First(&model, id)
 	if result.Error != nil {
-		if result.Error == gorm.ErrRecordNotFound {
+		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
 			return nil, ports.NewNotFoundError(ErrSubscriptionNotFound)
 		}
 		return nil, infrastructure.NewDatabaseError(ErrFailedToFindByID, result.Error)
@@ -112,7 +89,7 @@ func (r *SubscriptionRepositoryAdapter) FindByEmail(ctx context.Context, email, 
 	var model SubscriptionModel
 	result := r.db.WithContext(ctx).Where("email = ? AND city = ?", email, city).First(&model)
 	if result.Error != nil {
-		if result.Error == gorm.ErrRecordNotFound {
+		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
 			return nil, ports.NewNotFoundError(ErrSubscriptionNotFound)
 		}
 		return nil, infrastructure.NewDatabaseError(ErrFailedToFind, result.Error)
@@ -158,35 +135,23 @@ func (r *SubscriptionRepositoryAdapter) Delete(ctx context.Context, sub *ports.S
 
 // Find retrieves subscriptions based on the provided filter criteria
 func (r *SubscriptionRepositoryAdapter) Find(ctx context.Context, filter ports.SubscriptionFilter) ([]*ports.SubscriptionData, error) {
-	// Validate that at least one filter criterion is provided
-	if filter.ID == nil && filter.Email == nil && filter.City == nil && filter.Frequency == nil && filter.Confirmed == nil {
-		return nil, infrastructure.NewDatabaseError("at least one filter criterion must be provided", nil)
+	if err := filter.Validate(); err != nil {
+		// Convert ports validation error to infrastructure error for consistency
+		return nil, infrastructure.NewDatabaseError(err.Error(), err)
 	}
 
 	query := r.db.WithContext(ctx).Model(&SubscriptionModel{})
 
 	if filter.ID != nil {
-		if *filter.ID == 0 {
-			return nil, infrastructure.NewDatabaseError(ErrSubscriptionIDZero, nil)
-		}
 		query = query.Where("id = ?", *filter.ID)
 	}
 	if filter.Email != nil {
-		if *filter.Email == "" {
-			return nil, infrastructure.NewDatabaseError(ErrEmailEmpty, nil)
-		}
 		query = query.Where("email = ?", *filter.Email)
 	}
 	if filter.City != nil {
-		if *filter.City == "" {
-			return nil, infrastructure.NewDatabaseError(ErrCityEmpty, nil)
-		}
 		query = query.Where("city = ?", *filter.City)
 	}
 	if filter.Frequency != nil {
-		if *filter.Frequency == "" {
-			return nil, infrastructure.NewDatabaseError(ErrFrequencyEmpty, nil)
-		}
 		query = query.Where("frequency = ?", *filter.Frequency)
 	}
 	if filter.Confirmed != nil {

@@ -19,12 +19,6 @@ type WeatherResponse struct {
 
 // getWeather handles GET /api/weather requests
 func (s *HTTPServerAdapter) getWeather(c *gin.Context) {
-	// Increment API call counter
-	s.metricsCollector.IncrementCounter(APIRequestsTotalMetric, map[string]string{
-		EndpointLabelKey: WeatherEndpoint,
-		MethodLabelKey:   GetMethod,
-	})
-
 	// Get validated city from middleware
 	city := c.GetString(shared.ValidatedCityKey)
 
@@ -36,6 +30,7 @@ func (s *HTTPServerAdapter) getWeather(c *gin.Context) {
 		s.logger.Error(WeatherUseCaseErrorMsg,
 			ports.F(ErrorField, err),
 			ports.F(CityField, city))
+		// Domain-specific error metrics
 		s.metricsCollector.IncrementCounter(APIErrorsTotalMetric, map[string]string{
 			EndpointLabelKey: WeatherEndpoint,
 			ErrorLabelKey:    UsecaseError,
@@ -50,11 +45,6 @@ func (s *HTTPServerAdapter) getWeather(c *gin.Context) {
 		Description: weatherData.Description,
 		City:        weatherData.City,
 	}
-
-	s.metricsCollector.IncrementCounter(APIResponsesTotalMetric, map[string]string{
-		EndpointLabelKey: WeatherEndpoint,
-		StatusLabelKey:   SuccessStatus,
-	})
 
 	s.logger.Debug(WeatherResultMsg,
 		ports.F(TemperatureField, response.Temperature),

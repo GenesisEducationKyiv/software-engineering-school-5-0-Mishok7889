@@ -17,25 +17,19 @@ const (
 
 // Metrics names
 const (
-	APIRequestsTotalMetric  = "api_requests_total"
-	APIErrorsTotalMetric    = "api_errors_total"
-	APIResponsesTotalMetric = "api_responses_total"
+	APIErrorsTotalMetric = "api_errors_total"
 )
 
 // Metrics label keys
 const (
 	EndpointLabelKey = "endpoint"
-	MethodLabelKey   = "method"
 	ErrorLabelKey    = "error"
-	StatusLabelKey   = "status"
 )
 
 // Metrics label values
 const (
 	WeatherEndpoint = "weather"
-	GetMethod       = "GET"
 	UsecaseError    = "usecase"
-	SuccessStatus   = "success"
 )
 
 // Health check component names

@@ -101,8 +101,10 @@ func (opts *ServerOptions) Validate() error {
 // setupRoutes configures all HTTP routes
 func (s *HTTPServerAdapter) setupRoutes() {
 	validationMiddleware := middleware.NewValidationMiddleware()
+	metricsMiddleware := middleware.NewMetricsMiddleware(s.metricsCollector)
 
 	api := s.router.Group("/api")
+	api.Use(metricsMiddleware.CollectRequestMetrics())
 	{
 		api.GET("/health", s.getHealth)
 		api.GET("/debug", s.getDebug)
