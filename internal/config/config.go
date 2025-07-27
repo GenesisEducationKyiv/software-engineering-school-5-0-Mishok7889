@@ -12,6 +12,12 @@ const (
 	maxCacheTTLMinutes = 1440
 	maxDailyInterval   = 10080
 	maxPortNumber      = 65535
+
+	// Default service ports
+	defaultWeatherServicePort      = 8081
+	defaultUserServicePort         = 8082
+	defaultSubscriptionServicePort = 8083
+	defaultNotificationServicePort = 8084
 )
 
 // Configuration structures matching the original config package
@@ -19,6 +25,7 @@ const (
 // Config represents the application configuration structure
 type Config struct {
 	Server     ServerConfig    `split_words:"true"`
+	Services   ServicesConfig  `split_words:"true"`
 	Database   DatabaseConfig  `split_words:"true"`
 	Weather    WeatherConfig   `split_words:"true"`
 	Email      EmailConfig     `split_words:"true"`
@@ -29,6 +36,18 @@ type Config struct {
 
 type ServerConfig struct {
 	Port int `envconfig:"SERVER_PORT" default:"8080"`
+}
+
+type ServicesConfig struct {
+	Weather      ServiceConfig `split_words:"true"`
+	User         ServiceConfig `split_words:"true"`
+	Subscription ServiceConfig `split_words:"true"`
+	Notification ServiceConfig `split_words:"true"`
+}
+
+type ServiceConfig struct {
+	Port int    `envconfig:"PORT"`
+	Host string `envconfig:"HOST" default:"localhost"`
 }
 
 type DatabaseConfig struct {
@@ -142,6 +161,20 @@ func LoadConfig() (*Config, error) {
 		return nil, fmt.Errorf("error processing config: %w", err)
 	}
 
+	// Set default service ports if not provided
+	if config.Services.Weather.Port == 0 {
+		config.Services.Weather.Port = defaultWeatherServicePort
+	}
+	if config.Services.User.Port == 0 {
+		config.Services.User.Port = defaultUserServicePort
+	}
+	if config.Services.Subscription.Port == 0 {
+		config.Services.Subscription.Port = defaultSubscriptionServicePort
+	}
+	if config.Services.Notification.Port == 0 {
+		config.Services.Notification.Port = defaultNotificationServicePort
+	}
+
 	if err := config.Validate(); err != nil {
 		return nil, err
 	}
@@ -151,6 +184,9 @@ func LoadConfig() (*Config, error) {
 
 func (c *Config) Validate() error {
 	if err := c.Server.Validate(); err != nil {
+		return err
+	}
+	if err := c.Services.Validate(); err != nil {
 		return err
 	}
 	if err := c.Database.Validate(); err != nil {
@@ -187,6 +223,32 @@ func (c *Config) validateAppBaseURL() error {
 func (s *ServerConfig) Validate() error {
 	if s.Port < 1 || s.Port > maxPortNumber {
 		return fmt.Errorf("SERVER_PORT must be between 1 and 65535")
+	}
+	return nil
+}
+
+func (s *ServicesConfig) Validate() error {
+	if err := s.Weather.Validate(); err != nil {
+		return fmt.Errorf("weather service config: %w", err)
+	}
+	if err := s.User.Validate(); err != nil {
+		return fmt.Errorf("user service config: %w", err)
+	}
+	if err := s.Subscription.Validate(); err != nil {
+		return fmt.Errorf("subscription service config: %w", err)
+	}
+	if err := s.Notification.Validate(); err != nil {
+		return fmt.Errorf("notification service config: %w", err)
+	}
+	return nil
+}
+
+func (s *ServiceConfig) Validate() error {
+	if s.Port < 1 || s.Port > maxPortNumber {
+		return fmt.Errorf("port must be between 1 and 65535")
+	}
+	if s.Host == "" {
+		return fmt.Errorf("host cannot be empty")
 	}
 	return nil
 }

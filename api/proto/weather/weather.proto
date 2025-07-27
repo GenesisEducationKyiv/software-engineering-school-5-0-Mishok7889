@@ -1,0 +1,63 @@
+syntax = "proto3";
+
+package weather;
+option go_package = "weatherapi.app/api/proto";
+
+import "google/protobuf/timestamp.proto";
+
+service WeatherService {
+  rpc GetWeather(GetWeatherRequest) returns (GetWeatherResponse);
+  rpc GetWeatherBatch(GetWeatherBatchRequest) returns (GetWeatherBatchResponse);
+  rpc GetProviderInfo(GetProviderInfoRequest) returns (GetProviderInfoResponse);
+  rpc GetCacheMetrics(GetCacheMetricsRequest) returns (GetCacheMetricsResponse);
+}
+
+message GetWeatherRequest {
+  string city = 1;
+}
+
+message GetWeatherResponse {
+  WeatherData weather = 1;
+}
+
+message GetWeatherBatchRequest {
+  repeated string cities = 1;
+}
+
+message GetWeatherBatchResponse {
+  repeated WeatherData weather_data = 1;
+}
+
+message GetProviderInfoRequest {}
+
+message GetProviderInfoResponse {
+  ProviderInfo provider_info = 1;
+}
+
+message GetCacheMetricsRequest {}
+
+message GetCacheMetricsResponse {
+  CacheStats cache_stats = 1;
+}
+
+message WeatherData {
+  double temperature = 1;
+  double humidity = 2;
+  string description = 3;
+  string city = 4;
+  google.protobuf.Timestamp timestamp = 5;
+}
+
+message ProviderInfo {
+  int32 total_providers = 1;
+  repeated string provider_order = 2;
+  bool chain_enabled = 3;
+  bool fallback_enabled = 4;
+}
+
+message CacheStats {
+  int64 hits = 1;
+  int64 misses = 2;
+  int64 total_ops = 3;
+  double hit_ratio = 4;
+}
