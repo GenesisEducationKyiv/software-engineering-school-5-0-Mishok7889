@@ -24,15 +24,16 @@ const (
 
 // Config represents the application configuration structure
 type Config struct {
-	Server     ServerConfig       `split_words:"true"`
-	Services   ServicesConfig     `split_words:"true"`
-	Database   DatabaseConfig     `split_words:"true"`
-	UserDB     UserDatabaseConfig `split_words:"true"`
-	Weather    WeatherConfig      `split_words:"true"`
-	Email      EmailConfig        `split_words:"true"`
-	Scheduler  SchedulerConfig    `split_words:"true"`
-	Cache      CacheConfig        `split_words:"true"`
-	AppBaseURL string             `envconfig:"APP_URL" default:"http://localhost:8080"`
+	Server         ServerConfig               `split_words:"true"`
+	Services       ServicesConfig             `split_words:"true"`
+	Database       DatabaseConfig             `split_words:"true"`
+	UserDB         UserDatabaseConfig         `split_words:"true"`
+	SubscriptionDB SubscriptionDatabaseConfig `split_words:"true"`
+	Weather        WeatherConfig              `split_words:"true"`
+	Email          EmailConfig                `split_words:"true"`
+	Scheduler      SchedulerConfig            `split_words:"true"`
+	Cache          CacheConfig                `split_words:"true"`
+	AppBaseURL     string                     `envconfig:"APP_URL" default:"http://localhost:8080"`
 }
 
 type ServerConfig struct {
@@ -75,6 +76,20 @@ type UserDatabaseConfig struct {
 }
 
 func (c UserDatabaseConfig) GetDSN() string {
+	return fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
+		c.Host, c.Port, c.User, c.Password, c.Name, c.SSLMode)
+}
+
+type SubscriptionDatabaseConfig struct {
+	Host     string `envconfig:"SUBSCRIPTION_DB_HOST" default:"localhost"`
+	Port     int    `envconfig:"SUBSCRIPTION_DB_PORT" default:"5434"`
+	User     string `envconfig:"SUBSCRIPTION_DB_USER" default:"postgres"`
+	Password string `envconfig:"SUBSCRIPTION_DB_PASSWORD" default:"postgres"`
+	Name     string `envconfig:"SUBSCRIPTION_DB_NAME" default:"subscriptionapi"`
+	SSLMode  string `envconfig:"SUBSCRIPTION_DB_SSL_MODE" default:"disable"`
+}
+
+func (c SubscriptionDatabaseConfig) GetDSN() string {
 	return fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
 		c.Host, c.Port, c.User, c.Password, c.Name, c.SSLMode)
 }
@@ -210,6 +225,9 @@ func (c *Config) Validate() error {
 	if err := c.UserDB.Validate(); err != nil {
 		return err
 	}
+	if err := c.SubscriptionDB.Validate(); err != nil {
+		return err
+	}
 	if err := c.Weather.Validate(); err != nil {
 		return err
 	}
@@ -327,6 +345,35 @@ func (d *UserDatabaseConfig) ValidateSSLMode() error {
 		}
 	}
 	return fmt.Errorf("USER_DB_SSL_MODE must be one of: %s", strings.Join(validSSLModes, ", "))
+}
+
+func (d *SubscriptionDatabaseConfig) Validate() error {
+	if d.Host == "" {
+		return fmt.Errorf("SUBSCRIPTION_DB_HOST cannot be empty")
+	}
+	if d.Port < 1 || d.Port > maxPortNumber {
+		return fmt.Errorf("SUBSCRIPTION_DB_PORT must be between 1 and 65535")
+	}
+	if d.User == "" {
+		return fmt.Errorf("SUBSCRIPTION_DB_USER cannot be empty")
+	}
+	if d.Name == "" {
+		return fmt.Errorf("SUBSCRIPTION_DB_NAME cannot be empty")
+	}
+	if err := d.ValidateSSLMode(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (d *SubscriptionDatabaseConfig) ValidateSSLMode() error {
+	validSSLModes := []string{"disable", "require", "verify-ca", "verify-full"}
+	for _, mode := range validSSLModes {
+		if d.SSLMode == mode {
+			return nil
+		}
+	}
+	return fmt.Errorf("SUBSCRIPTION_DB_SSL_MODE must be one of: %s", strings.Join(validSSLModes, ", "))
 }
 
 func (w *WeatherConfig) Validate() error {

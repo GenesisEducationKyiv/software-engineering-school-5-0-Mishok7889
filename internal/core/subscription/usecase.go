@@ -241,7 +241,7 @@ func (uc *UseCase) ConfirmSubscription(ctx context.Context, params ConfirmParams
 	tokenData, err := uc.tokenRepo.FindByToken(ctx, params.Token)
 	if err != nil {
 		if shared.IsNotFoundError(err) || ports.IsNotFoundError(err) {
-			return shared.NewValidationError(ErrTokenConfirmExpired)
+			return shared.NewNotFoundError("token not found")
 		}
 		return fmt.Errorf("find token: %w", err)
 	}
@@ -297,7 +297,7 @@ func (uc *UseCase) Unsubscribe(ctx context.Context, params UnsubscribeParams) er
 	tokenData, err := uc.tokenRepo.FindByToken(ctx, params.Token)
 	if err != nil {
 		if shared.IsNotFoundError(err) || ports.IsNotFoundError(err) {
-			return shared.NewValidationError(ErrTokenUnsubExpired)
+			return shared.NewNotFoundError("token not found")
 		}
 		return fmt.Errorf("find token: %w", err)
 	}
