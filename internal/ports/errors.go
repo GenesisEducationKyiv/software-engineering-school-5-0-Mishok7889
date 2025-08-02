@@ -16,6 +16,12 @@ type AlreadyExistsError interface {
 	IsAlreadyExists() bool
 }
 
+// TokenExpiredError represents an error when a token is expired
+type TokenExpiredError interface {
+	error
+	IsTokenExpired() bool
+}
+
 // NotFoundErrorImpl is a simple implementation of NotFoundError
 type NotFoundErrorImpl struct {
 	Message string
@@ -68,6 +74,33 @@ func IsAlreadyExistsError(err error) bool {
 	}
 	aee, ok := err.(AlreadyExistsError)
 	return ok && aee.IsAlreadyExists()
+}
+
+// TokenExpiredErrorImpl is a simple implementation of TokenExpiredError
+type TokenExpiredErrorImpl struct {
+	Message string
+}
+
+func (e *TokenExpiredErrorImpl) Error() string {
+	return e.Message
+}
+
+func (e *TokenExpiredErrorImpl) IsTokenExpired() bool {
+	return true
+}
+
+// NewTokenExpiredError creates a new TokenExpiredError
+func NewTokenExpiredError(message string) error {
+	return &TokenExpiredErrorImpl{Message: message}
+}
+
+// IsTokenExpiredError checks if an error is a TokenExpiredError
+func IsTokenExpiredError(err error) bool {
+	if err == nil {
+		return false
+	}
+	tee, ok := err.(TokenExpiredError)
+	return ok && tee.IsTokenExpired()
 }
 
 // AdapterError represents errors from adapter layer

@@ -30,3 +30,10 @@ packages:
       CacheSerializer:
       MetricsCollector:
       TokenGenerator:
+  weatherapi.app/internal/ports/messaging:
+    interfaces:
+      MessageBroker:
+      Publisher:
+      Consumer:
+      Event:
+      Command:

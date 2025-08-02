@@ -243,6 +243,9 @@ func (uc *UseCase) ConfirmSubscription(ctx context.Context, params ConfirmParams
 		if shared.IsNotFoundError(err) || ports.IsNotFoundError(err) {
 			return shared.NewNotFoundError("token not found")
 		}
+		if ports.IsTokenExpiredError(err) {
+			return shared.NewValidationError(err.Error())
+		}
 		return fmt.Errorf("find token: %w", err)
 	}
 
@@ -299,9 +302,11 @@ func (uc *UseCase) Unsubscribe(ctx context.Context, params UnsubscribeParams) er
 		if shared.IsNotFoundError(err) || ports.IsNotFoundError(err) {
 			return shared.NewNotFoundError("token not found")
 		}
+		if ports.IsTokenExpiredError(err) {
+			return shared.NewValidationError(err.Error())
+		}
 		return fmt.Errorf("find token: %w", err)
 	}
-
 	if tokenData.IsExpired() {
 		return shared.NewValidationError(ErrTokenUnsubExpired)
 	}
@@ -381,7 +386,8 @@ func (uc *UseCase) sendConfirmationEmail(ctx context.Context, subscription *Subs
 	}
 
 	emailParams.To = subscription.Email
-	if err := uc.emailProvider.SendEmail(ctx, emailParams); err != nil {
+	emailRequest := uc.convertEmailParamsToRequest(emailParams)
+	if err := uc.emailProvider.SendEmail(ctx, emailRequest); err != nil {
 		return fmt.Errorf("send confirmation email: %w", err)
 	}
 
@@ -409,7 +415,8 @@ func (uc *UseCase) sendWelcomeEmail(ctx context.Context, subscription *Subscript
 	}
 
 	emailParams.To = subscription.Email
-	if err := uc.emailProvider.SendEmail(ctx, emailParams); err != nil {
+	emailRequest := uc.convertEmailParamsToRequest(emailParams)
+	if err := uc.emailProvider.SendEmail(ctx, emailRequest); err != nil {
 		return fmt.Errorf("send welcome email: %w", err)
 	}
 
@@ -423,7 +430,8 @@ func (uc *UseCase) sendUnsubscribeConfirmationEmail(ctx context.Context, subscri
 	}
 
 	emailParams.To = subscription.Email
-	if err := uc.emailProvider.SendEmail(ctx, emailParams); err != nil {
+	emailRequest := uc.convertEmailParamsToRequest(emailParams)
+	if err := uc.emailProvider.SendEmail(ctx, emailRequest); err != nil {
 		return fmt.Errorf("send unsubscribe confirmation email: %w", err)
 	}
 
@@ -451,5 +459,14 @@ func (uc *UseCase) convertFromPortsSubscription(data *ports.SubscriptionData) *S
 		Confirmed: data.Confirmed,
 		CreatedAt: data.CreatedAt,
 		UpdatedAt: data.UpdatedAt,
+	}
+}
+
+// convertEmailParamsToRequest converts ports.EmailParams to shared.EmailRequest
+func (uc *UseCase) convertEmailParamsToRequest(params ports.EmailParams) shared.EmailRequest {
+	return shared.EmailRequest{
+		To:      params.To,
+		Subject: params.Subject,
+		Body:    params.Body,
 	}
 }

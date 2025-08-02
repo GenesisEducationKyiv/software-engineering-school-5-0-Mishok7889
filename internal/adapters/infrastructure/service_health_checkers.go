@@ -30,6 +30,12 @@ func (e *EmailHealthChecker) Check(ctx context.Context) ports.HealthStatus {
 	return status
 }
 
+// IsHealthy implements the HealthChecker interface
+func (e *EmailHealthChecker) IsHealthy(ctx context.Context) bool {
+	status := e.Check(ctx)
+	return status.Status == "healthy"
+}
+
 // WeatherAPIHealthChecker implements weather API health checking
 type WeatherAPIHealthChecker struct {
 	weatherProvider ports.WeatherProviderManager
@@ -59,4 +65,10 @@ func (w *WeatherAPIHealthChecker) Check(ctx context.Context) ports.HealthStatus 
 	}
 
 	return status
+}
+
+// IsHealthy implements the HealthChecker interface
+func (w *WeatherAPIHealthChecker) IsHealthy(ctx context.Context) bool {
+	status := w.Check(ctx)
+	return status.Status == "healthy"
 }

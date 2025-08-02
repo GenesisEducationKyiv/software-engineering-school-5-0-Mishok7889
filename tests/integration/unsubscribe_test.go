@@ -55,7 +55,7 @@ func (s *IntegrationTestSuite) TestUnsubscribe_InvalidToken() {
 	var errorResponse ErrorResponse
 	err := json.Unmarshal(w.Body.Bytes(), &errorResponse)
 	s.NoError(err)
-	s.Contains(errorResponse.Error, "invalid unsubscribe token")
+	s.Contains(errorResponse.Error, "invalid or expired")
 }
 
 func (s *IntegrationTestSuite) TestUnsubscribe_ExpiredToken() {
@@ -72,7 +72,7 @@ func (s *IntegrationTestSuite) TestUnsubscribe_ExpiredToken() {
 	var errorResponse ErrorResponse
 	err := json.Unmarshal(w.Body.Bytes(), &errorResponse)
 	s.NoError(err)
-	s.Contains(errorResponse.Error, "invalid unsubscribe token")
+	s.Contains(errorResponse.Error, "expired")
 }
 
 func (s *IntegrationTestSuite) TestUnsubscribe_WrongTokenType() {

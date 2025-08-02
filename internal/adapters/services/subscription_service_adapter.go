@@ -2,7 +2,9 @@ package services
 
 import (
 	"context"
+	"strconv"
 
+	"weatherapi.app/internal/core/shared"
 	"weatherapi.app/internal/ports"
 )
 
@@ -34,6 +36,39 @@ func (a *SubscriptionServiceAdapter) GetConfirmedSubscriptions(ctx context.Conte
 	}
 
 	return a.convertToServiceData(ctx, subscriptions)
+}
+
+// GetActiveSubscriptionsByCity returns active subscriptions for a specific city
+func (a *SubscriptionServiceAdapter) GetActiveSubscriptionsByCity(ctx context.Context, city string) ([]shared.Subscription, error) {
+	confirmed := true
+	filter := ports.SubscriptionFilter{
+		City:      &city,
+		Confirmed: &confirmed,
+	}
+
+	subscriptions, err := a.subscriptionRepo.Find(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+
+	return a.convertToSharedSubscriptions(subscriptions), nil
+}
+
+// GetActiveSubscriptionsByFrequency returns active subscriptions for a specific frequency
+func (a *SubscriptionServiceAdapter) GetActiveSubscriptionsByFrequency(ctx context.Context, frequency shared.Frequency) ([]shared.Subscription, error) {
+	confirmed := true
+	frequencyStr := frequency.String()
+	filter := ports.SubscriptionFilter{
+		Frequency: &frequencyStr,
+		Confirmed: &confirmed,
+	}
+
+	subscriptions, err := a.subscriptionRepo.Find(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+
+	return a.convertToSharedSubscriptions(subscriptions), nil
 }
 
 // FindByID finds a subscription by ID
@@ -81,4 +116,25 @@ func (a *SubscriptionServiceAdapter) convertToServiceData(ctx context.Context, s
 	}
 
 	return result, nil
+}
+
+// convertToSharedSubscriptions converts repository data to shared subscription format
+func (a *SubscriptionServiceAdapter) convertToSharedSubscriptions(subscriptions []*ports.SubscriptionData) []shared.Subscription {
+	result := make([]shared.Subscription, 0, len(subscriptions))
+
+	for _, sub := range subscriptions {
+		frequency := shared.FrequencyFromString(sub.Frequency)
+
+		result = append(result, shared.Subscription{
+			ID:        strconv.Itoa(int(sub.ID)),
+			Email:     sub.Email,
+			City:      sub.City,
+			Frequency: frequency,
+			IsActive:  sub.Confirmed,
+			CreatedAt: sub.CreatedAt,
+			UpdatedAt: sub.UpdatedAt,
+		})
+	}
+
+	return result
 }

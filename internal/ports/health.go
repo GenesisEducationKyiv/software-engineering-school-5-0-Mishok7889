@@ -5,6 +5,7 @@ import "context"
 // HealthChecker defines the contract for component health checking
 type HealthChecker interface {
 	Check(ctx context.Context) HealthStatus
+	IsHealthy(ctx context.Context) bool
 }
 
 // HealthStatus represents the health status of a component

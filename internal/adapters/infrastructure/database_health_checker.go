@@ -47,3 +47,9 @@ func (d *DatabaseHealthChecker) Check(ctx context.Context) ports.HealthStatus {
 	status.Details["connected"] = true
 	return status
 }
+
+// IsHealthy implements the HealthChecker interface
+func (d *DatabaseHealthChecker) IsHealthy(ctx context.Context) bool {
+	status := d.Check(ctx)
+	return status.Status == "healthy"
+}

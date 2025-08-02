@@ -33,6 +33,7 @@ type Config struct {
 	Email          EmailConfig                `split_words:"true"`
 	Scheduler      SchedulerConfig            `split_words:"true"`
 	Cache          CacheConfig                `split_words:"true"`
+	MessageBroker  MessageBrokerConfig        `split_words:"true"`
 	AppBaseURL     string                     `envconfig:"APP_URL" default:"http://localhost:8080"`
 }
 
@@ -185,6 +186,12 @@ type SchedulerConfig struct {
 	DailyInterval  int `envconfig:"DAILY_INTERVAL" default:"1440"`
 }
 
+type MessageBrokerConfig struct {
+	URL      string `envconfig:"MESSAGE_BROKER_URL" default:"nats://localhost:4222"`
+	Username string `envconfig:"MESSAGE_BROKER_USERNAME"`
+	Password string `envconfig:"MESSAGE_BROKER_PASSWORD"`
+}
+
 func LoadConfig() (*Config, error) {
 	var config Config
 	if err := envconfig.Process("", &config); err != nil {
@@ -238,6 +245,9 @@ func (c *Config) Validate() error {
 		return err
 	}
 	if err := c.Cache.Validate(); err != nil {
+		return err
+	}
+	if err := c.MessageBroker.Validate(); err != nil {
 		return err
 	}
 	if err := c.validateAppBaseURL(); err != nil {
@@ -474,6 +484,19 @@ func (s *SchedulerConfig) Validate() error {
 	}
 	if s.DailyInterval > maxDailyInterval {
 		return fmt.Errorf("DAILY_INTERVAL cannot exceed 10080 minutes (7 days)")
+	}
+	return nil
+}
+
+func (m *MessageBrokerConfig) Validate() error {
+	if m.URL == "" {
+		return fmt.Errorf("MESSAGE_BROKER_URL cannot be empty")
+	}
+	if !strings.HasPrefix(m.URL, "nats://") {
+		return fmt.Errorf("MESSAGE_BROKER_URL must start with nats:// protocol")
+	}
+	if (m.Username == "") != (m.Password == "") {
+		return fmt.Errorf("MESSAGE_BROKER_USERNAME and MESSAGE_BROKER_PASSWORD must both be provided or both be empty")
 	}
 	return nil
 }

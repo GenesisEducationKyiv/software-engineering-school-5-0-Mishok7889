@@ -62,3 +62,28 @@ func (s *SystemHealthChecker) CheckAll(ctx context.Context) map[string]ports.Hea
 
 	return results
 }
+
+// Check implements the HealthChecker interface
+func (s *SystemHealthChecker) Check(ctx context.Context) ports.HealthStatus {
+	results := s.CheckAll(ctx)
+
+	overallStatus := "healthy"
+	for _, status := range results {
+		if status.Status != "healthy" {
+			overallStatus = "unhealthy"
+			break
+		}
+	}
+
+	return ports.HealthStatus{
+		Component: "system",
+		Status:    overallStatus,
+		Details:   map[string]interface{}{"components": results},
+	}
+}
+
+// IsHealthy implements the HealthChecker interface
+func (s *SystemHealthChecker) IsHealthy(ctx context.Context) bool {
+	status := s.Check(ctx)
+	return status.Status == "healthy"
+}

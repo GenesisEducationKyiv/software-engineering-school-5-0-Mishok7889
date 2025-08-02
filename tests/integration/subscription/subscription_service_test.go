@@ -15,6 +15,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/suite"
+	"weatherapi.app/internal/core/shared"
 	"weatherapi.app/internal/core/subscription"
 	"weatherapi.app/internal/mocks"
 	"weatherapi.app/internal/ports"
@@ -201,7 +202,9 @@ func (s *SubscriptionServiceIntegrationSuite) TestSubscribe() {
 						Body:    "Please confirm",
 						Format:  ports.FormatText,
 					}, nil).Once()
-				s.mockEmailProvider.EXPECT().SendEmail(mock.Anything, mock.Anything).Return(nil).Once()
+				s.mockEmailProvider.EXPECT().SendEmail(mock.Anything, mock.MatchedBy(func(req shared.EmailRequest) bool {
+					return req.To == testEmail && req.Subject == "Confirm subscription"
+				})).Return(nil).Once()
 			},
 		},
 		{
@@ -358,7 +361,9 @@ func (s *SubscriptionServiceIntegrationSuite) TestConfirmSubscription() {
 						Body:    "Welcome to weather updates",
 						Format:  ports.FormatText,
 					}, nil).Once()
-				s.mockEmailProvider.EXPECT().SendEmail(mock.Anything, mock.Anything).Return(nil).Once()
+				s.mockEmailProvider.EXPECT().SendEmail(mock.Anything, mock.MatchedBy(func(req shared.EmailRequest) bool {
+					return req.To == testEmail && req.Subject == "Welcome"
+				})).Return(nil).Once()
 			},
 		},
 		{
@@ -469,8 +474,8 @@ func (s *SubscriptionServiceIntegrationSuite) TestUnsubscribe() {
 					Format:  ports.FormatHTML,
 				}
 				s.mockEmailBuilder.EXPECT().BuildUnsubscribeEmail(testCity).Return(unsubscribeEmailParams, nil).Once()
-				s.mockEmailProvider.EXPECT().SendEmail(mock.Anything, mock.MatchedBy(func(params ports.EmailParams) bool {
-					return params.To == testEmail && params.Subject == unsubscribeEmailParams.Subject
+				s.mockEmailProvider.EXPECT().SendEmail(mock.Anything, mock.MatchedBy(func(req shared.EmailRequest) bool {
+					return req.To == testEmail && req.Subject == "Unsubscribe Confirmation"
 				})).Return(nil).Once()
 			},
 		},
@@ -552,7 +557,9 @@ func (s *SubscriptionServiceIntegrationSuite) TestSubscriptionLifecycleWorkflow(
 	}).Once()
 	s.mockEmailBuilder.EXPECT().BuildConfirmationEmail(mock.Anything, mock.Anything).
 		Return(ports.EmailParams{To: testEmail, Subject: "Confirm", Body: "Please confirm", Format: ports.FormatText}, nil).Once()
-	s.mockEmailProvider.EXPECT().SendEmail(mock.Anything, mock.Anything).Return(nil).Once()
+	s.mockEmailProvider.EXPECT().SendEmail(mock.Anything, mock.MatchedBy(func(req shared.EmailRequest) bool {
+		return req.To == testEmail && req.Subject == "Confirm"
+	})).Return(nil).Once()
 
 	// Step 1: Subscribe
 	subscribeReq := map[string]interface{}{
@@ -609,8 +616,8 @@ func (s *SubscriptionServiceIntegrationSuite) TestSubscriptionLifecycleWorkflow(
 			Body:    "Welcome to weather updates",
 			Format:  ports.FormatText,
 		}, nil).Once()
-	s.mockEmailProvider.EXPECT().SendEmail(mock.Anything, mock.MatchedBy(func(params ports.EmailParams) bool {
-		return params.To == testEmail && params.Subject == "Welcome"
+	s.mockEmailProvider.EXPECT().SendEmail(mock.Anything, mock.MatchedBy(func(req shared.EmailRequest) bool {
+		return req.To == testEmail && req.Subject == "Welcome"
 	})).Return(nil).Once()
 
 	// Step 2: Confirm subscription
@@ -657,8 +664,8 @@ func (s *SubscriptionServiceIntegrationSuite) TestSubscriptionLifecycleWorkflow(
 		Format:  ports.FormatHTML,
 	}
 	s.mockEmailBuilder.EXPECT().BuildUnsubscribeEmail(testCity).Return(unsubscribeEmailParams, nil).Once()
-	s.mockEmailProvider.EXPECT().SendEmail(mock.Anything, mock.MatchedBy(func(params ports.EmailParams) bool {
-		return params.To == testEmail && params.Subject == unsubscribeEmailParams.Subject
+	s.mockEmailProvider.EXPECT().SendEmail(mock.Anything, mock.MatchedBy(func(req shared.EmailRequest) bool {
+		return req.To == testEmail && req.Subject == "Unsubscribe Confirmation"
 	})).Return(nil).Once()
 
 	// Step 3: Unsubscribe
@@ -699,7 +706,9 @@ func (s *SubscriptionServiceIntegrationSuite) TestConcurrentSubscriptions() {
 		}).Once()
 		s.mockEmailBuilder.EXPECT().BuildConfirmationEmail(mock.Anything, mock.Anything).
 			Return(ports.EmailParams{To: email, Subject: "Confirm", Body: "Please confirm", Format: ports.FormatText}, nil).Once()
-		s.mockEmailProvider.EXPECT().SendEmail(mock.Anything, mock.Anything).Return(nil).Once()
+		s.mockEmailProvider.EXPECT().SendEmail(mock.Anything, mock.MatchedBy(func(req shared.EmailRequest) bool {
+			return req.To == email && req.Subject == "Confirm"
+		})).Return(nil).Once()
 	}
 
 	results := make(chan error, numConcurrentReqs)

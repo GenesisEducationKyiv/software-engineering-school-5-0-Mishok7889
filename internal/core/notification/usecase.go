@@ -151,14 +151,13 @@ func (uc *UseCase) sendWeatherUpdateToSubscription(ctx context.Context, sub *por
 		return fmt.Errorf("build weather update email body: %w", err)
 	}
 
-	emailParams := ports.EmailParams{
+	emailRequest := shared.EmailRequest{
 		To:      sub.Email,
 		Subject: fmt.Sprintf("Weather Update for %s", currentWeather.City),
 		Body:    emailBody,
-		Format:  ports.FormatHTML,
 	}
 
-	if err := uc.emailProvider.SendEmail(ctx, emailParams); err != nil {
+	if err := uc.emailProvider.SendEmail(ctx, emailRequest); err != nil {
 		return fmt.Errorf("send weather update email: %w", err)
 	}
 

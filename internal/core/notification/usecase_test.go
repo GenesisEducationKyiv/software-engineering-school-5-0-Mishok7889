@@ -70,8 +70,8 @@ func TestUseCase_SendWeatherUpdates_Success(t *testing.T) {
 	// Setup mock expectations
 	mockSubscriptionService.EXPECT().GetConfirmedSubscriptions(mock.Anything, "daily").Return(subscriptionsData, nil)
 	mockWeatherService.EXPECT().GetWeather(mock.Anything, "London").Return(weatherData, nil)
-	mockEmailProvider.EXPECT().SendEmail(mock.Anything, mock.MatchedBy(func(params ports.EmailParams) bool {
-		return params.To == "user1@example.com" && len(params.Subject) > 0
+	mockEmailProvider.EXPECT().SendEmail(mock.Anything, mock.MatchedBy(func(req shared.EmailRequest) bool {
+		return req.To == "user1@example.com" && len(req.Subject) > 0
 	})).Return(nil)
 	mockConfig.EXPECT().GetAppConfig().Return(ports.AppConfig{BaseURL: "http://localhost:8080"}).Maybe()
 

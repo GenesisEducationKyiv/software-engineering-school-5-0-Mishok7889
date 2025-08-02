@@ -87,5 +87,9 @@ func (s *HTTPServerAdapter) mapPortError(err error) (int, string) {
 		return http.StatusConflict, err.Error()
 	}
 
+	if ports.IsTokenExpiredError(err) {
+		return http.StatusBadRequest, err.Error()
+	}
+
 	return 0, ""
 }

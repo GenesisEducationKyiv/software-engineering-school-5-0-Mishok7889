@@ -3,6 +3,8 @@ package ports
 import (
 	"context"
 	"time"
+
+	"weatherapi.app/internal/core/shared"
 )
 
 // Service ports for cross-context communication
@@ -10,6 +12,7 @@ import (
 // WeatherService defines the contract for weather operations used by other bounded contexts
 type WeatherService interface {
 	GetWeather(ctx context.Context, city string) (*WeatherServiceData, error)
+	GetWeatherByCity(ctx context.Context, city string) (*shared.WeatherData, error)
 	GetProviderInfo(ctx context.Context) ProviderInfo
 }
 
@@ -25,6 +28,8 @@ type WeatherServiceData struct {
 // SubscriptionService defines the contract for subscription operations used by other bounded contexts
 type SubscriptionService interface {
 	GetConfirmedSubscriptions(ctx context.Context, frequency string) ([]*SubscriptionServiceData, error)
+	GetActiveSubscriptionsByCity(ctx context.Context, city string) ([]shared.Subscription, error)
+	GetActiveSubscriptionsByFrequency(ctx context.Context, frequency shared.Frequency) ([]shared.Subscription, error)
 	FindByID(ctx context.Context, id uint) (*SubscriptionServiceData, error)
 }
 

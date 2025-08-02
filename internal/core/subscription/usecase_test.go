@@ -85,8 +85,8 @@ func TestUseCase_Subscribe_Success(t *testing.T) {
 		Format:  ports.FormatHTML,
 	}, nil)
 
-	mockEmailProvider.EXPECT().SendEmail(mock.Anything, mock.MatchedBy(func(params ports.EmailParams) bool {
-		return params.To == "test@example.com" && len(params.Subject) > 0
+	mockEmailProvider.EXPECT().SendEmail(mock.Anything, mock.MatchedBy(func(req shared.EmailRequest) bool {
+		return req.To == "test@example.com" && len(req.Subject) > 0
 	})).Return(nil)
 
 	// Create use case
@@ -314,8 +314,8 @@ func TestUseCase_ConfirmSubscription_Success(t *testing.T) {
 	}, nil)
 
 	// Send welcome email
-	mockEmailProvider.EXPECT().SendEmail(mock.Anything, mock.MatchedBy(func(params ports.EmailParams) bool {
-		return params.To == "test@example.com"
+	mockEmailProvider.EXPECT().SendEmail(mock.Anything, mock.MatchedBy(func(req shared.EmailRequest) bool {
+		return req.To == "test@example.com"
 	})).Return(nil)
 
 	// Delete confirmation token
