@@ -51,7 +51,7 @@ func main() {
 }
 
 func run() error {
-	cfg, err := config.LoadConfig()
+	cfg, err := config.LoadWeatherServiceConfig()
 	if err != nil {
 		return fmt.Errorf(errLoadConfig, err)
 	}

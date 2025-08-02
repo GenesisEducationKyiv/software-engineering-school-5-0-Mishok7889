@@ -1,0 +1,37 @@
+# Dockerfile for Subscription Service
+FROM golang:1.24-alpine AS builder
+
+# Install dependencies
+RUN apk add --no-cache git ca-certificates
+
+# Set working directory
+WORKDIR /app
+
+# Copy go mod files
+COPY go.mod go.sum ./
+
+# Download dependencies
+RUN go mod download
+
+# Copy source code
+COPY . .
+
+# Build the subscription service
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o subscription-service ./cmd/subscription-service
+
+# Final stage
+FROM alpine:latest
+
+# Install ca-certificates for HTTPS calls
+RUN apk --no-cache add ca-certificates
+
+WORKDIR /root/
+
+# Copy the binary from builder stage
+COPY --from=builder /app/subscription-service .
+
+# Expose port for HTTP API
+EXPOSE 8083
+
+# Run the subscription service
+CMD ["./subscription-service"]

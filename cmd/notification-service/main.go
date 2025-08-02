@@ -49,7 +49,7 @@ func main() {
 }
 
 func run() error {
-	cfg, err := config.LoadConfig()
+	cfg, err := config.LoadNotificationServiceConfig()
 	if err != nil {
 		return fmt.Errorf(errLoadConfig, err)
 	}

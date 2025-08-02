@@ -49,8 +49,8 @@ type ServicesConfig struct {
 }
 
 type ServiceConfig struct {
-	Port int    `envconfig:"PORT"`
-	Host string `envconfig:"HOST" default:"localhost"`
+	Port int    `envconfig:"SERVICE_PORT"`
+	Host string `envconfig:"SERVICE_HOST" default:"localhost"`
 }
 
 type DatabaseConfig struct {
