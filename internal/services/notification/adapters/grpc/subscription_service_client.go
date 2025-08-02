@@ -70,6 +70,21 @@ func (c *SubscriptionServiceClient) FindByID(ctx context.Context, id uint) (*por
 	}, nil
 }
 
+// Subscribe creates a new subscription (for API Gateway compatibility)
+func (c *SubscriptionServiceClient) Subscribe(ctx context.Context, email, city, frequency string) error {
+	return fmt.Errorf("not implemented - would call subscription service")
+}
+
+// ConfirmSubscription confirms a subscription using a token (for API Gateway compatibility)
+func (c *SubscriptionServiceClient) ConfirmSubscription(ctx context.Context, token string) error {
+	return fmt.Errorf("not implemented - would call subscription service")
+}
+
+// Unsubscribe removes a subscription using a token (for API Gateway compatibility)
+func (c *SubscriptionServiceClient) Unsubscribe(ctx context.Context, token string) error {
+	return fmt.Errorf("not implemented - would call subscription service")
+}
+
 func (c *SubscriptionServiceClient) Close() error {
 	if c.conn != nil {
 		return c.conn.Close()

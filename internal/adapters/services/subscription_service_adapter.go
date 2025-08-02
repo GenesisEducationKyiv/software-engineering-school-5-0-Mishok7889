@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 
 	"weatherapi.app/internal/core/shared"
@@ -137,4 +138,19 @@ func (a *SubscriptionServiceAdapter) convertToSharedSubscriptions(subscriptions 
 	}
 
 	return result
+}
+
+// Subscribe creates a new subscription (for API Gateway compatibility)
+func (a *SubscriptionServiceAdapter) Subscribe(ctx context.Context, email, city, frequency string) error {
+	return fmt.Errorf("subscribe operation should be handled by subscription service")
+}
+
+// ConfirmSubscription confirms a subscription using a token (for API Gateway compatibility)
+func (a *SubscriptionServiceAdapter) ConfirmSubscription(ctx context.Context, token string) error {
+	return fmt.Errorf("confirm subscription operation should be handled by subscription service")
+}
+
+// Unsubscribe removes a subscription using a token (for API Gateway compatibility)
+func (a *SubscriptionServiceAdapter) Unsubscribe(ctx context.Context, token string) error {
+	return fmt.Errorf("unsubscribe operation should be handled by subscription service")
 }

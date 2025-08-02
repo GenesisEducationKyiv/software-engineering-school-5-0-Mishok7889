@@ -36,6 +36,7 @@ type WeatherApplication struct {
 	config      *config.Config
 	weatherUC   *weather.UseCase
 	grpcHandler *weathergrpc.WeatherServiceServer
+	logger      ports.Logger
 }
 
 func NewWeatherApplication(cfg *config.Config) (*WeatherApplication, error) {
@@ -45,6 +46,7 @@ func NewWeatherApplication(cfg *config.Config) (*WeatherApplication, error) {
 
 	app := &WeatherApplication{
 		config: cfg,
+		logger: &infrastructure.SlogLoggerAdapter{},
 	}
 
 	if err := app.initializeWeatherUseCase(); err != nil {

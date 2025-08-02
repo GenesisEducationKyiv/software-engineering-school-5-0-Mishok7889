@@ -48,6 +48,7 @@ type UserApplication struct {
 	tokenUC     *token.UseCase
 	grpcHandler *usergrpc.AuthServiceServer
 	db          *gorm.DB
+	logger      ports.Logger
 }
 
 func NewUserApplication(cfg *config.Config) (*UserApplication, error) {
@@ -57,6 +58,7 @@ func NewUserApplication(cfg *config.Config) (*UserApplication, error) {
 
 	app := &UserApplication{
 		config: cfg,
+		logger: &infrastructure.SlogLoggerAdapter{},
 	}
 
 	if err := app.initializeDatabase(); err != nil {

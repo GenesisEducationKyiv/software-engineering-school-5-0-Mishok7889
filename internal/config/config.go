@@ -14,6 +14,7 @@ const (
 	maxPortNumber      = 65535
 
 	// Default service ports
+	defaultGatewayServicePort      = 8080
 	defaultWeatherServicePort      = 8081
 	defaultUserServicePort         = 8082
 	defaultSubscriptionServicePort = 8083
@@ -42,6 +43,7 @@ type ServerConfig struct {
 }
 
 type ServicesConfig struct {
+	Gateway      ServiceConfig `split_words:"true"`
 	Weather      ServiceConfig `split_words:"true"`
 	User         ServiceConfig `split_words:"true"`
 	Subscription ServiceConfig `split_words:"true"`
@@ -199,6 +201,9 @@ func LoadConfig() (*Config, error) {
 	}
 
 	// Set default service ports if not provided
+	if config.Services.Gateway.Port == 0 {
+		config.Services.Gateway.Port = defaultGatewayServicePort
+	}
 	if config.Services.Weather.Port == 0 {
 		config.Services.Weather.Port = defaultWeatherServicePort
 	}
@@ -214,6 +219,38 @@ func LoadConfig() (*Config, error) {
 
 	if err := config.Validate(); err != nil {
 		return nil, err
+	}
+
+	return &config, nil
+}
+
+// LoadGatewayConfig loads configuration for API Gateway (no weather API keys required)
+func LoadGatewayConfig() (*Config, error) {
+	var config Config
+	if err := envconfig.Process("", &config); err != nil {
+		return nil, fmt.Errorf("error processing config: %w", err)
+	}
+
+	// Set default service ports if not provided
+	if config.Services.Gateway.Port == 0 {
+		config.Services.Gateway.Port = defaultGatewayServicePort
+	}
+	if config.Services.Weather.Port == 0 {
+		config.Services.Weather.Port = defaultWeatherServicePort
+	}
+	if config.Services.User.Port == 0 {
+		config.Services.User.Port = defaultUserServicePort
+	}
+	if config.Services.Subscription.Port == 0 {
+		config.Services.Subscription.Port = defaultSubscriptionServicePort
+	}
+	if config.Services.Notification.Port == 0 {
+		config.Services.Notification.Port = defaultNotificationServicePort
+	}
+
+	// Only validate gateway-specific configuration
+	if err := config.Services.Gateway.Validate(); err != nil {
+		return nil, fmt.Errorf("gateway service config: %w", err)
 	}
 
 	return &config, nil
@@ -274,6 +311,9 @@ func (s *ServerConfig) Validate() error {
 }
 
 func (s *ServicesConfig) Validate() error {
+	if err := s.Gateway.Validate(); err != nil {
+		return fmt.Errorf("gateway service config: %w", err)
+	}
 	if err := s.Weather.Validate(); err != nil {
 		return fmt.Errorf("weather service config: %w", err)
 	}

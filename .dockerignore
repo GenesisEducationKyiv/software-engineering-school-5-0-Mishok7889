@@ -59,9 +59,6 @@ tests/
 *_test.go
 testdata/
 
-# Public assets (if not needed in container)
-public/
-
 # Package management
 pkg/mod/
 

@@ -118,6 +118,7 @@ services:
     depends_on:
       - subscription-db
       - user-service
+      - nats
     environment:
       - SUBSCRIPTION_SERVICE_PORT=8083
       - SUBSCRIPTION_SERVICE_HOST=0.0.0.0
@@ -164,6 +165,30 @@ services:
       - EMAIL_SMTP_PORT=1025
       - EMAIL_FROM_NAME=Weather API
       - EMAIL_FROM_ADDRESS=noreply@weatherapi.app
+    restart: unless-stopped
+    networks:
+      - microservices-network
+
+  # API Gateway (Main Entry Point)
+  api-gateway:
+    build:
+      context: .
+      dockerfile: cmd/api-gateway/Dockerfile
+    ports:
+      - "8080:8080"  # Main UI and API endpoint
+    depends_on:
+      - weather-service
+      - user-service
+      - subscription-service
+    environment:
+      - GATEWAY_SERVICE_PORT=8080
+      - GATEWAY_SERVICE_HOST=0.0.0.0
+      - WEATHER_SERVICE_HOST=weather-service
+      - WEATHER_SERVICE_PORT=8081
+      - USER_SERVICE_HOST=user-service
+      - USER_SERVICE_PORT=8082
+      - SUBSCRIPTION_SERVICE_HOST=subscription-service
+      - SUBSCRIPTION_SERVICE_PORT=8083
     restart: unless-stopped
     networks:
       - microservices-network
