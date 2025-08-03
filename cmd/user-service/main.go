@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log/slog"
 	"net"
 	"os"
 	"os/signal"
@@ -16,6 +15,7 @@ import (
 	authpb "weatherapi.app/api/proto/auth"
 	"weatherapi.app/internal/config"
 	"weatherapi.app/internal/services/user/app"
+	"weatherapi.app/pkg/logger"
 )
 
 const (
@@ -23,7 +23,6 @@ const (
 	tcpPortFormat          = ":%d"
 	exitCodeError          = 1
 
-	logNoEnvFile        = "No .env file found or error loading it"
 	logServiceFailed    = "User service failed"
 	logServiceStarting  = "Starting User Service"
 	logServiceShutdown  = "Shutting down User Service..."
@@ -42,12 +41,15 @@ const (
 )
 
 func main() {
-	if err := godotenv.Load(); err != nil {
-		slog.Info(logNoEnvFile)
-	}
+	_ = godotenv.Load() // Ignore error if .env file doesn't exist
 
 	if err := run(); err != nil {
-		slog.Error(logServiceFailed, "error", err)
+		log := logger.NewServiceLogger(
+			logger.UserServiceName,
+			getEnvironment(),
+			isProduction(),
+		)
+		log.LogCriticalError(logServiceFailed, "error", err)
 		os.Exit(exitCodeError)
 	}
 }
@@ -62,6 +64,20 @@ func run() error {
 		return fmt.Errorf(errInvalidConfig, err)
 	}
 
+	// Initialize service logger
+	log := logger.NewServiceLogger(
+		logger.UserServiceName,
+		getEnvironment(),
+		isProduction(),
+	).WithComponent("main")
+
+	log.Info("configuration loaded successfully",
+		"service", logger.UserServiceName,
+		"port", cfg.Services.User.Port,
+		"host", cfg.Services.User.Host,
+		"database", cfg.UserDB.Name,
+	)
+
 	userApp, err := app.NewUserApplication(cfg)
 	if err != nil {
 		return fmt.Errorf(errCreateApp, err)
@@ -70,9 +86,9 @@ func run() error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	setupGracefulShutdown(cancel, userApp)
+	setupGracefulShutdown(cancel, userApp, log)
 
-	slog.Info(logServiceStarting, "port", cfg.Services.User.Port)
+	log.Info(logServiceStarting, "port", cfg.Services.User.Port)
 
 	lis, err := net.Listen("tcp", fmt.Sprintf(tcpPortFormat, cfg.Services.User.Port))
 	if err != nil {
@@ -81,6 +97,10 @@ func run() error {
 
 	grpcServer := grpc.NewServer()
 	authpb.RegisterAuthServiceServer(grpcServer, userApp.GetGRPCHandler())
+
+	log.Info("gRPC server registered, starting to serve",
+		"address", lis.Addr().String(),
+	)
 
 	errChan := make(chan error, 1)
 	go func() {
@@ -91,12 +111,12 @@ func run() error {
 
 	select {
 	case <-ctx.Done():
-		slog.Info(logServiceShutdown)
+		log.Info(logServiceShutdown)
 		grpcServer.GracefulStop()
 		if err := userApp.Shutdown(ctx); err != nil {
-			slog.Error(logShutdownError, "error", err)
+			log.Error(logShutdownError, "error", err)
 		}
-		slog.Info(logShutdownComplete)
+		log.Info(logShutdownComplete)
 		return nil
 	case err := <-errChan:
 		return err
@@ -116,20 +136,38 @@ func validateConfig(cfg *config.Config) error {
 	return nil
 }
 
-func setupGracefulShutdown(cancel context.CancelFunc, app *app.UserApplication) {
+func setupGracefulShutdown(cancel context.CancelFunc, app *app.UserApplication, log *logger.Logger) {
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 
 	go func() {
 		<-c
-		slog.Info(logShutdownSignal)
+		log.Info(logShutdownSignal)
 		cancel()
 
 		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), shutdownTimeoutSeconds*time.Second)
 		defer shutdownCancel()
 
 		if err := app.Shutdown(shutdownCtx); err != nil {
-			slog.Error(logShutdownError, "error", err)
+			log.Error(logShutdownError, "error", err)
 		}
 	}()
+}
+
+// getEnvironment returns the current environment from env vars
+func getEnvironment() string {
+	env := os.Getenv("ENVIRONMENT")
+	if env == "" {
+		env = os.Getenv("ENV")
+	}
+	if env == "" {
+		return "development"
+	}
+	return env
+}
+
+// isProduction determines if we're running in production
+func isProduction() bool {
+	env := getEnvironment()
+	return env == "production" || env == "prod"
 }

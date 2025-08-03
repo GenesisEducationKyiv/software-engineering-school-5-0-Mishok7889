@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -14,6 +13,7 @@ import (
 	"github.com/joho/godotenv"
 	"weatherapi.app/internal/config"
 	"weatherapi.app/internal/services/subscription/app"
+	"weatherapi.app/pkg/logger"
 )
 
 const (
@@ -38,12 +38,15 @@ const (
 )
 
 func main() {
-	if err := godotenv.Load(); err != nil {
-		slog.Info(logNoEnvFile)
-	}
+	_ = godotenv.Load() // Ignore error if .env file doesn't exist
 
 	if err := run(); err != nil {
-		slog.Error(logServiceFailed, "error", err)
+		log := logger.NewServiceLogger(
+			logger.SubscriptionServiceName,
+			getEnvironment(),
+			isProduction(),
+		)
+		log.LogCriticalError(logServiceFailed, "error", err)
 		os.Exit(exitCodeError)
 	}
 }
@@ -58,6 +61,22 @@ func run() error {
 		return fmt.Errorf(errInvalidConfig, err)
 	}
 
+	// Initialize service logger
+	log := logger.NewServiceLogger(
+		logger.SubscriptionServiceName,
+		getEnvironment(),
+		isProduction(),
+	).WithComponent("main")
+
+	log.Info("configuration loaded successfully",
+		"service", logger.SubscriptionServiceName,
+		"port", cfg.Services.Subscription.Port,
+		"host", cfg.Services.Subscription.Host,
+		"database", cfg.SubscriptionDB.Name,
+		"user_service", fmt.Sprintf("%s:%d", cfg.Services.User.Host, cfg.Services.User.Port),
+		"notification_service", fmt.Sprintf("%s:%d", cfg.Services.Notification.Host, cfg.Services.Notification.Port),
+	)
+
 	subscriptionApp, err := app.NewSubscriptionApplication(cfg)
 	if err != nil {
 		return fmt.Errorf(errCreateApp, err)
@@ -66,9 +85,9 @@ func run() error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	setupGracefulShutdown(cancel, subscriptionApp)
+	setupGracefulShutdown(cancel, subscriptionApp, log)
 
-	slog.Info(logServiceStarting, "port", cfg.Services.Subscription.Port)
+	log.Info(logServiceStarting, "port", cfg.Services.Subscription.Port)
 
 	if err := subscriptionApp.Start(ctx); err != nil && err != http.ErrServerClosed {
 		return fmt.Errorf(errStartServer, err)
@@ -90,22 +109,40 @@ func validateConfig(cfg *config.Config) error {
 	return nil
 }
 
-func setupGracefulShutdown(cancel context.CancelFunc, app *app.SubscriptionApplication) {
+func setupGracefulShutdown(cancel context.CancelFunc, app *app.SubscriptionApplication, log *logger.Logger) {
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 
 	go func() {
 		<-c
-		slog.Info(logShutdownSignal)
+		log.Info(logShutdownSignal)
 		cancel()
 
 		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), shutdownTimeoutSeconds*time.Second)
 		defer shutdownCancel()
 
 		if err := app.Shutdown(shutdownCtx); err != nil {
-			slog.Error(logShutdownError, "error", err)
+			log.Error(logShutdownError, "error", err)
 		}
 
-		slog.Info(logShutdownComplete)
+		log.Info(logShutdownComplete)
 	}()
+}
+
+// getEnvironment returns the current environment from env vars
+func getEnvironment() string {
+	env := os.Getenv("ENVIRONMENT")
+	if env == "" {
+		env = os.Getenv("ENV")
+	}
+	if env == "" {
+		return "development"
+	}
+	return env
+}
+
+// isProduction determines if we're running in production
+func isProduction() bool {
+	env := getEnvironment()
+	return env == "production" || env == "prod"
 }

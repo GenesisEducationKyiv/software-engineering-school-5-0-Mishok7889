@@ -13,6 +13,7 @@ import (
 	weatherpb "weatherapi.app/api/proto/weather"
 	"weatherapi.app/internal/core/shared"
 	weathercore "weatherapi.app/internal/core/weather"
+	"weatherapi.app/pkg/logger"
 )
 
 const (
@@ -42,34 +43,70 @@ var (
 type WeatherServiceServer struct {
 	weatherpb.UnimplementedWeatherServiceServer
 	weatherUseCase weathercore.Service
+	contextLogger  *logger.ContextualLogger
+	useCaseHelper  *logger.UseCaseHelper
 }
 
-func NewWeatherServiceServer(weatherUC weathercore.Service) *WeatherServiceServer {
+func NewWeatherServiceServer(weatherUC weathercore.Service, baseLogger *logger.Logger) *WeatherServiceServer {
 	if weatherUC == nil {
 		panic(errUseCaseRequired)
 	}
+
+	// Create contextual logger for weather service gRPC handlers
+	loggerFactory := logger.NewServiceLoggerFactory(baseLogger)
+	contextLogger := loggerFactory.Weather("grpc-handler")
+
 	return &WeatherServiceServer{
 		weatherUseCase: weatherUC,
+		contextLogger:  contextLogger,
+		useCaseHelper:  logger.NewUseCaseHelper(contextLogger),
 	}
 }
 
 func (s *WeatherServiceServer) GetWeather(ctx context.Context, req *weatherpb.GetWeatherRequest) (*weatherpb.GetWeatherResponse, error) {
-	if err := validateGetWeatherRequest(req); err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
-	}
+	// Use contextual logging with correlation ID from gRPC interceptor
+	result, err := s.useCaseHelper.ExecuteWithResult(
+		ctx,
+		"get_weather_grpc",
+		func(ctx context.Context, log *logger.Logger) (interface{}, error) {
+			log.Debug("validating gRPC request", "city", req.GetCity())
 
-	weatherReq := weathercore.WeatherRequest{
-		City: strings.TrimSpace(req.City),
-	}
+			if err := validateGetWeatherRequest(req); err != nil {
+				log.Warn("invalid gRPC request", "error", err, "city", req.GetCity())
+				return nil, status.Error(codes.InvalidArgument, err.Error())
+			}
 
-	weatherData, err := s.weatherUseCase.GetWeather(ctx, weatherReq)
+			weatherReq := weathercore.WeatherRequest{
+				City: strings.TrimSpace(req.City),
+			}
+
+			log.Debug("calling weather use case", "city", weatherReq.City)
+
+			weatherData, err := s.weatherUseCase.GetWeather(ctx, weatherReq)
+			if err != nil {
+				log.Error("weather use case failed", "city", weatherReq.City, "error", err)
+				return nil, convertDomainError(err)
+			}
+
+			log.Info("weather data retrieved successfully",
+				"city", weatherData.City,
+				"temperature", weatherData.Temperature,
+				"source", "grpc",
+			)
+
+			return &weatherpb.GetWeatherResponse{
+				Weather: convertToProtobufWeatherData(weatherData),
+			}, nil
+		},
+		"city", req.GetCity(),
+		"method", "GetWeather",
+	)
+
 	if err != nil {
-		return nil, convertDomainError(err)
+		return nil, err
 	}
 
-	return &weatherpb.GetWeatherResponse{
-		Weather: convertToProtobufWeatherData(weatherData),
-	}, nil
+	return result.(*weatherpb.GetWeatherResponse), nil
 }
 
 func (s *WeatherServiceServer) GetWeatherBatch(ctx context.Context, req *weatherpb.GetWeatherBatchRequest) (*weatherpb.GetWeatherBatchResponse, error) {
@@ -103,20 +140,41 @@ func (s *WeatherServiceServer) GetWeatherBatch(ctx context.Context, req *weather
 }
 
 func (s *WeatherServiceServer) GetProviderInfo(ctx context.Context, req *weatherpb.GetProviderInfoRequest) (*weatherpb.GetProviderInfoResponse, error) {
-	if req == nil {
-		return nil, status.Error(codes.InvalidArgument, errRequestRequired)
+	result, err := s.useCaseHelper.ExecuteWithResult(
+		ctx,
+		"get_provider_info_grpc",
+		func(ctx context.Context, log *logger.Logger) (interface{}, error) {
+			if req == nil {
+				log.Warn("provider info request is nil")
+				return nil, status.Error(codes.InvalidArgument, errRequestRequired)
+			}
+
+			log.Debug("retrieving weather provider information")
+
+			providerInfo := s.weatherUseCase.GetProviderInfo(ctx)
+
+			log.Debug("provider info retrieved",
+				"total_providers", providerInfo.TotalProviders,
+				"chain_enabled", providerInfo.ChainEnabled,
+			)
+
+			return &weatherpb.GetProviderInfoResponse{
+				ProviderInfo: &weatherpb.ProviderInfo{
+					TotalProviders:  int32(providerInfo.TotalProviders),
+					ProviderOrder:   providerInfo.ProviderOrder,
+					ChainEnabled:    providerInfo.ChainEnabled,
+					FallbackEnabled: providerInfo.FallbackEnabled,
+				},
+			}, nil
+		},
+		"method", "GetProviderInfo",
+	)
+
+	if err != nil {
+		return nil, err
 	}
 
-	providerInfo := s.weatherUseCase.GetProviderInfo(ctx)
-
-	return &weatherpb.GetProviderInfoResponse{
-		ProviderInfo: &weatherpb.ProviderInfo{
-			TotalProviders:  int32(providerInfo.TotalProviders),
-			ProviderOrder:   providerInfo.ProviderOrder,
-			ChainEnabled:    providerInfo.ChainEnabled,
-			FallbackEnabled: providerInfo.FallbackEnabled,
-		},
-	}, nil
+	return result.(*weatherpb.GetProviderInfoResponse), nil
 }
 
 func (s *WeatherServiceServer) GetCacheMetrics(ctx context.Context, req *weatherpb.GetCacheMetricsRequest) (*weatherpb.GetCacheMetricsResponse, error) {

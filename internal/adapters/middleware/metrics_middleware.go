@@ -81,7 +81,16 @@ func extractEndpointFromPath(fullPath string) string {
 		return "debug"
 	case "/api/metrics":
 		return "metrics"
+	case "/metrics":
+		return "prometheus_metrics"
+	case "/":
+		return "home"
+	case "/favicon.ico":
+		return "favicon"
 	default:
-		return "unknown"
+		if fullPath == "" {
+			return "unknown"
+		}
+		return "other"
 	}
 }
