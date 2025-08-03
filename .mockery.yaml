@@ -19,6 +19,7 @@ packages:
       WeatherService:
       SubscriptionRepository:
       SubscriptionService:
+      NotificationService:
       TokenRepository:
       TokenService:
       EmailProvider:

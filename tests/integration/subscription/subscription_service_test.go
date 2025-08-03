@@ -302,7 +302,7 @@ func (s *SubscriptionServiceIntegrationSuite) TestConfirm_Success() {
 		Return(nil)
 
 	// Make request
-	resp, err := s.makeRequest("GET", fmt.Sprintf("/api/v1/subscriptions/confirm/%s", testToken), nil)
+	resp, err := s.makeRequest("GET", fmt.Sprintf("/api/v1/confirm/%s", testToken), nil)
 	s.Require().NoError(err)
 	defer func() { _ = resp.Body.Close() }()
 
@@ -353,7 +353,7 @@ func (s *SubscriptionServiceIntegrationSuite) TestUnsubscribe_Success() {
 		Return(nil)
 
 	// Make request
-	resp, err := s.makeRequest("GET", fmt.Sprintf("/api/v1/subscriptions/unsubscribe/%s", testToken), nil)
+	resp, err := s.makeRequest("GET", fmt.Sprintf("/api/v1/unsubscribe/%s", testToken), nil)
 	s.Require().NoError(err)
 	defer func() { _ = resp.Body.Close() }()
 
@@ -376,7 +376,7 @@ func (s *SubscriptionServiceIntegrationSuite) TestHealthCheck() {
 	var response map[string]interface{}
 	err = json.NewDecoder(resp.Body).Decode(&response)
 	s.Require().NoError(err)
-	s.Equal("ok", response["status"])
+	s.Equal("healthy", response["status"])
 }
 
 func (s *SubscriptionServiceIntegrationSuite) TestConcurrentSubscriptionRequests() {
