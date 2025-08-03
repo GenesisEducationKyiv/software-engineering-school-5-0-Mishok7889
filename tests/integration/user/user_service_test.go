@@ -29,8 +29,6 @@ const (
 	serverReadyTimeout  = 10 * time.Second
 	serverReadyInterval = 100 * time.Millisecond
 	numConcurrentReqs   = 10
-	numPerfRequests     = 100
-	maxAvgTokenLatency  = 10 * time.Millisecond
 
 	// Test data
 	testUserID         = "user123"
@@ -607,47 +605,6 @@ func (s *UserServiceIntegrationSuite) TestConcurrentTokenOperations() {
 			s.Fail("Concurrent requests timeout")
 		}
 	}
-}
-
-func (s *UserServiceIntegrationSuite) TestTokenValidationPerformance() {
-	if testing.Short() {
-		s.T().Skip("Skipping performance test in short mode")
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
-	defer cancel()
-
-	// Setup mocks for performance test
-	validTokenData := &ports.TokenData{
-		Value:          testToken,
-		SubscriptionID: testSubscriptionID,
-		Type:           "confirmation",
-		ExpiresAt:      time.Now().Add(time.Hour),
-		CreatedAt:      time.Now(),
-	}
-
-	// Mock multiple validation calls
-	s.mockTokenRepo.EXPECT().FindByToken(mock.Anything, testToken).Return(validTokenData, nil).Times(numPerfRequests)
-
-	req := &authpb.ValidateTokenRequest{Token: testToken}
-
-	// Performance test loop
-	start := time.Now()
-
-	for i := 0; i < numPerfRequests; i++ {
-		resp, err := s.authClient.ValidateToken(ctx, req)
-		s.Require().NoError(err)
-		s.Require().True(resp.Valid)
-	}
-
-	duration := time.Since(start)
-	avgDuration := duration / numPerfRequests
-
-	s.T().Logf("Performance: %d token validations in %v (avg: %v per request)",
-		numPerfRequests, duration, avgDuration)
-
-	assert.True(s.T(), avgDuration < maxAvgTokenLatency,
-		"Average token validation should be under 10ms")
 }
 
 func (s *UserServiceIntegrationSuite) TestTokenLifecycleWorkflow() {

@@ -64,7 +64,33 @@ func (s *SubscriptionServiceIntegrationSuite) SetupSuite() {
 }
 
 func (s *SubscriptionServiceIntegrationSuite) setupMocks() {
-	// Create mockery-generated mocks
+	// Clear any existing mock expectations first
+	if s.mockSubscriptionRepo != nil {
+		s.mockSubscriptionRepo.ExpectedCalls = nil
+		s.mockSubscriptionRepo.Calls = nil
+	}
+	if s.mockTokenRepo != nil {
+		s.mockTokenRepo.ExpectedCalls = nil
+		s.mockTokenRepo.Calls = nil
+	}
+	if s.mockTokenGenerator != nil {
+		s.mockTokenGenerator.ExpectedCalls = nil
+		s.mockTokenGenerator.Calls = nil
+	}
+	if s.mockNotificationService != nil {
+		s.mockNotificationService.ExpectedCalls = nil
+		s.mockNotificationService.Calls = nil
+	}
+	if s.mockConfig != nil {
+		s.mockConfig.ExpectedCalls = nil
+		s.mockConfig.Calls = nil
+	}
+	if s.mockLogger != nil {
+		s.mockLogger.ExpectedCalls = nil
+		s.mockLogger.Calls = nil
+	}
+
+	// Create fresh mockery-generated mocks
 	s.mockSubscriptionRepo = mocks.NewSubscriptionRepository(s.T())
 	s.mockTokenRepo = mocks.NewTokenRepository(s.T())
 	s.mockTokenGenerator = mocks.NewTokenGenerator(s.T())
@@ -125,6 +151,14 @@ func (s *SubscriptionServiceIntegrationSuite) setupHTTPClient() {
 	s.httpClient = &http.Client{
 		Timeout: testTimeout,
 	}
+}
+
+func (s *SubscriptionServiceIntegrationSuite) SetupTest() {
+	// Ensure fresh mock expectations for each test
+	s.setupMocks()
+
+	// Recreate the subscription application with fresh mocks
+	s.createSubscriptionApplication()
 }
 
 func (s *SubscriptionServiceIntegrationSuite) makeRequest(method, path string, body interface{}) (*http.Response, error) {
@@ -452,6 +486,29 @@ func (s *SubscriptionServiceIntegrationSuite) TestConcurrentSubscriptionRequests
 }
 
 func (s *SubscriptionServiceIntegrationSuite) TearDownTest() {
-	// Reset mock expectations between tests
-	s.setupMocks()
+	// Clear mock expectations between tests to prevent interference
+	if s.mockSubscriptionRepo != nil {
+		s.mockSubscriptionRepo.ExpectedCalls = nil
+		s.mockSubscriptionRepo.Calls = nil
+	}
+	if s.mockTokenRepo != nil {
+		s.mockTokenRepo.ExpectedCalls = nil
+		s.mockTokenRepo.Calls = nil
+	}
+	if s.mockTokenGenerator != nil {
+		s.mockTokenGenerator.ExpectedCalls = nil
+		s.mockTokenGenerator.Calls = nil
+	}
+	if s.mockNotificationService != nil {
+		s.mockNotificationService.ExpectedCalls = nil
+		s.mockNotificationService.Calls = nil
+	}
+	if s.mockConfig != nil {
+		s.mockConfig.ExpectedCalls = nil
+		s.mockConfig.Calls = nil
+	}
+	if s.mockLogger != nil {
+		s.mockLogger.ExpectedCalls = nil
+		s.mockLogger.Calls = nil
+	}
 }

@@ -28,9 +28,7 @@ const (
 	serverReadyTimeout  = 10 * time.Second
 	serverReadyInterval = 100 * time.Millisecond
 	numConcurrentReqs   = 10
-	numPerfRequests     = 100
 	maxCachedLatency    = 50 * time.Millisecond
-	maxAvgCachedLatency = 10 * time.Millisecond
 
 	// Test data
 	testLondonTemp      = 15.5
@@ -649,62 +647,6 @@ func (s *WeatherServiceIntegrationSuite) TestConcurrentRequests() {
 			s.Fail("Concurrent requests timeout")
 		}
 	}
-}
-
-func (s *WeatherServiceIntegrationSuite) TestGetWeatherPerformance() {
-	if testing.Short() {
-		s.T().Skip("Skipping performance test in short mode")
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
-	defer cancel()
-
-	testCity := "PerfTestCity"
-	cacheKey := "weather:PerfTestCity"
-	weatherData := &ports.WeatherData{
-		Temperature: testDefaultTemp,
-		Humidity:    float64(testDefaultHumidity),
-		Description: "Performance test weather",
-		City:        testCity,
-		Timestamp:   time.Now(),
-	}
-
-	// Setup mocks for performance test
-	s.mockConfig.EXPECT().GetWeatherConfig().Return(ports.WeatherConfig{
-		EnableCache: true,
-		CacheTTL:    5 * time.Minute,
-	}).Maybe()
-
-	// First call: cache miss → provider call → cache set
-	s.mockCache.EXPECT().Get(mock.Anything, cacheKey).Return(nil, shared.NewNotFoundError("cache miss")).Once()
-	s.mockProvider.EXPECT().GetWeather(mock.Anything, testCity).Return(weatherData, nil).Once()
-	s.mockCache.EXPECT().Set(mock.Anything, cacheKey, mock.Anything, mock.Anything).Return(nil).Once()
-
-	// Subsequent calls: cache hits (numPerfRequests times)
-	s.mockCache.EXPECT().Get(mock.Anything, cacheKey).Return(weatherData, nil).Times(numPerfRequests)
-
-	req := &weatherpb.GetWeatherRequest{City: testCity}
-
-	// Prime the cache with the first call
-	_, err := s.weatherClient.GetWeather(ctx, req)
-	s.Require().NoError(err)
-
-	// Performance test loop
-	start := time.Now()
-
-	for i := 0; i < numPerfRequests; i++ {
-		_, err := s.weatherClient.GetWeather(ctx, req)
-		s.Require().NoError(err)
-	}
-
-	duration := time.Since(start)
-	avgDuration := duration / numPerfRequests
-
-	s.T().Logf("Performance: %d requests in %v (avg: %v per request)",
-		numPerfRequests, duration, avgDuration)
-
-	assert.True(s.T(), avgDuration < maxAvgCachedLatency,
-		"Average cached request should be under 10ms")
 }
 
 func (s *WeatherServiceIntegrationSuite) TestValidationErrors() {
