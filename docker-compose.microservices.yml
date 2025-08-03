@@ -78,14 +78,21 @@ services:
       - WEATHER_SERVICE_HOST=0.0.0.0
       - WEATHER_API_KEY=${WEATHER_API_KEY}
       - WEATHER_API_BASE_URL=https://api.weatherapi.com/v1
+      - WEATHER_PROVIDER_ORDER=weatherapi,openweathermap,accuweather
+      - WEATHER_ENABLE_CACHE=true
+      - WEATHER_ENABLE_LOGGING=true
+      - WEATHER_CACHE_TTL_MINUTES=10
+      - WEATHER_LOG_FILE_PATH=logs/weather_providers.log
       - CACHE_TYPE=redis
       - REDIS_ADDR=redis:6379
       - REDIS_PASSWORD=
       - REDIS_DB=0
+      - REDIS_DIAL_TIMEOUT=5
+      - REDIS_READ_TIMEOUT=3
+      - REDIS_WRITE_TIMEOUT=3
     restart: unless-stopped
     networks:
       - microservices-network
-
   # User Service (gRPC)
   user-service:
     build:

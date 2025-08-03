@@ -16,20 +16,15 @@ func LoadWeatherServiceConfig() (*Config, error) {
 		return nil, err
 	}
 
-	// Set default port if not specified
-	if config.Services.Weather.Port == 0 {
-		config.Services.Weather.Port = defaultWeatherServicePort
-	}
-
 	// Validate only what Weather Service needs
 	if err := config.Services.Weather.Validate(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("weather service config: %w", err)
 	}
 	if err := config.Weather.Validate(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("weather provider config: %w", err)
 	}
 	if err := config.Cache.Validate(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("cache config: %w", err)
 	}
 
 	return config, nil
@@ -42,17 +37,12 @@ func LoadUserServiceConfig() (*Config, error) {
 		return nil, err
 	}
 
-	// Set default port if not specified
-	if config.Services.User.Port == 0 {
-		config.Services.User.Port = defaultUserServicePort
-	}
-
 	// Validate only what User Service needs
 	if err := config.Services.User.Validate(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("user service config: %w", err)
 	}
 	if err := config.UserDB.Validate(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("user database config: %w", err)
 	}
 
 	return config, nil
@@ -65,29 +55,21 @@ func LoadSubscriptionServiceConfig() (*Config, error) {
 		return nil, err
 	}
 
-	// Set default ports for all services subscription needs to connect to
-	if config.Services.Subscription.Port == 0 {
-		config.Services.Subscription.Port = defaultSubscriptionServicePort
-	}
-	if config.Services.User.Port == 0 {
-		config.Services.User.Port = defaultUserServicePort
-	}
-
 	// Validate only what Subscription Service needs
 	if err := config.Services.Subscription.Validate(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("subscription service config: %w", err)
 	}
 	if err := config.Services.User.Validate(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("user service client config: %w", err)
 	}
 	if err := config.SubscriptionDB.Validate(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("subscription database config: %w", err)
 	}
 	if err := config.Email.Validate(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("email config: %w", err)
 	}
 	if err := config.MessageBroker.Validate(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("message broker config: %w", err)
 	}
 
 	return config, nil
@@ -100,38 +82,30 @@ func LoadNotificationServiceConfig() (*Config, error) {
 		return nil, err
 	}
 
-	// Set default ports for all services notification needs to connect to
-	if config.Services.Notification.Port == 0 {
-		config.Services.Notification.Port = defaultNotificationServicePort
-	}
-	if config.Services.User.Port == 0 {
-		config.Services.User.Port = defaultUserServicePort
-	}
-	if config.Services.Weather.Port == 0 {
-		config.Services.Weather.Port = defaultWeatherServicePort
-	}
-	if config.Services.Subscription.Port == 0 {
-		config.Services.Subscription.Port = defaultSubscriptionServicePort
-	}
+	// Debug: print what was actually parsed for notification service
+	fmt.Printf("DEBUG: Notification config parsed - Port: %d, Host: %s\n", config.Services.Notification.Port, config.Services.Notification.Host)
+	fmt.Printf("DEBUG: Weather client config - Port: %d, Host: %s\n", config.Services.Weather.Port, config.Services.Weather.Host)
+	fmt.Printf("DEBUG: User client config - Port: %d, Host: %s\n", config.Services.User.Port, config.Services.User.Host)
+	fmt.Printf("DEBUG: Subscription client config - Port: %d, Host: %s\n", config.Services.Subscription.Port, config.Services.Subscription.Host)
 
 	// Validate only what Notification Service needs
 	if err := config.Services.Notification.Validate(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("notification service config: %w", err)
 	}
 	if err := config.Services.User.Validate(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("user service client config: %w", err)
 	}
 	if err := config.Services.Weather.Validate(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("weather service client config: %w", err)
 	}
 	if err := config.Services.Subscription.Validate(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("subscription service client config: %w", err)
 	}
 	if err := config.Email.Validate(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("email config: %w", err)
 	}
 	if err := config.MessageBroker.Validate(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("message broker config: %w", err)
 	}
 
 	return config, nil
@@ -141,7 +115,7 @@ func LoadNotificationServiceConfig() (*Config, error) {
 func loadBaseConfig() (*Config, error) {
 	var config Config
 	if err := envconfig.Process("", &config); err != nil {
-		return nil, fmt.Errorf("error processing config: %w", err)
+		return nil, fmt.Errorf("error processing environment variables: %w", err)
 	}
 	return &config, nil
 }

@@ -125,6 +125,7 @@ func (a *SubscriptionApplication) runMigrations(db *gorm.DB) error {
 
 	if err := db.AutoMigrate(
 		&database.SubscriptionModel{},
+		&database.TokenModel{},
 	); err != nil {
 		return fmt.Errorf(errAutoMigrate, err)
 	}

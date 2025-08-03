@@ -189,19 +189,19 @@ func (ec *EventCapture) Clear() {
 func CreateTestConfig(natsURL string) *config.Config {
 	return &config.Config{
 		Services: config.ServicesConfig{
-			Notification: config.ServiceConfig{
+			Notification: config.NotificationServiceConfig{
 				Host: "localhost",
 				Port: 0, // Will be assigned dynamically
 			},
-			User: config.ServiceConfig{
+			User: config.UserServiceConfig{
 				Host: "localhost",
 				Port: 8082,
 			},
-			Weather: config.ServiceConfig{
+			Weather: config.WeatherServiceConfig{
 				Host: "localhost",
 				Port: 8081,
 			},
-			Subscription: config.ServiceConfig{
+			Subscription: config.SubscriptionServiceConfig{
 				Host: "localhost",
 				Port: 8083,
 			},

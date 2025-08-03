@@ -12,21 +12,12 @@ const (
 	maxCacheTTLMinutes = 1440
 	maxDailyInterval   = 10080
 	maxPortNumber      = 65535
-
-	// Default service ports
-	defaultGatewayServicePort      = 8080
-	defaultWeatherServicePort      = 8081
-	defaultUserServicePort         = 8082
-	defaultSubscriptionServicePort = 8083
-	defaultNotificationServicePort = 8084
 )
-
-// Configuration structures matching the original config package
 
 // Config represents the application configuration structure
 type Config struct {
-	Server         ServerConfig               `split_words:"true"`
-	Services       ServicesConfig             `split_words:"true"`
+	Server         ServerConfig `split_words:"true"`
+	Services       ServicesConfig
 	Database       DatabaseConfig             `split_words:"true"`
 	UserDB         UserDatabaseConfig         `split_words:"true"`
 	SubscriptionDB SubscriptionDatabaseConfig `split_words:"true"`
@@ -35,33 +26,120 @@ type Config struct {
 	Scheduler      SchedulerConfig            `split_words:"true"`
 	Cache          CacheConfig                `split_words:"true"`
 	MessageBroker  MessageBrokerConfig        `split_words:"true"`
-	AppBaseURL     string                     `envconfig:"APP_URL" default:"http://localhost:8080"`
+	AppBaseURL     string                     `envconfig:"APP_URL"`
 }
 
 type ServerConfig struct {
-	Port int `envconfig:"SERVER_PORT" default:"8080"`
+	Port int `envconfig:"SERVER_PORT"`
 }
 
 type ServicesConfig struct {
-	Gateway      ServiceConfig `split_words:"true"`
-	Weather      ServiceConfig `split_words:"true"`
-	User         ServiceConfig `split_words:"true"`
-	Subscription ServiceConfig `split_words:"true"`
-	Notification ServiceConfig `split_words:"true"`
+	Gateway      GatewayServiceConfig
+	Weather      WeatherServiceConfig
+	User         UserServiceConfig
+	Subscription SubscriptionServiceConfig
+	Notification NotificationServiceConfig
 }
 
-type ServiceConfig struct {
-	Port int    `envconfig:"SERVICE_PORT"`
-	Host string `envconfig:"SERVICE_HOST" default:"localhost"`
+type GatewayServiceConfig struct {
+	Port int    `envconfig:"GATEWAY_SERVICE_PORT"`
+	Host string `envconfig:"GATEWAY_SERVICE_HOST"`
+}
+
+type WeatherServiceConfig struct {
+	Port int    `envconfig:"WEATHER_SERVICE_PORT"`
+	Host string `envconfig:"WEATHER_SERVICE_HOST"`
+}
+
+type UserServiceConfig struct {
+	Port int    `envconfig:"USER_SERVICE_PORT"`
+	Host string `envconfig:"USER_SERVICE_HOST"`
+}
+
+type SubscriptionServiceConfig struct {
+	Port int    `envconfig:"SUBSCRIPTION_SERVICE_PORT"`
+	Host string `envconfig:"SUBSCRIPTION_SERVICE_HOST"`
+}
+
+type NotificationServiceConfig struct {
+	Port int    `envconfig:"NOTIFICATION_SERVICE_PORT"`
+	Host string `envconfig:"NOTIFICATION_SERVICE_HOST"`
+}
+
+// ServiceConfig interface for compatibility with existing code
+type ServiceConfig interface {
+	GetPort() int
+	GetHost() string
+	Validate() error
+}
+
+func (g GatewayServiceConfig) GetPort() int    { return g.Port }
+func (g GatewayServiceConfig) GetHost() string { return g.Host }
+func (g GatewayServiceConfig) Validate() error {
+	if g.Port < 1 || g.Port > maxPortNumber {
+		return fmt.Errorf("port must be between 1 and 65535")
+	}
+	if g.Host == "" {
+		return fmt.Errorf("host cannot be empty")
+	}
+	return nil
+}
+
+func (w WeatherServiceConfig) GetPort() int    { return w.Port }
+func (w WeatherServiceConfig) GetHost() string { return w.Host }
+func (w WeatherServiceConfig) Validate() error {
+	if w.Port < 1 || w.Port > maxPortNumber {
+		return fmt.Errorf("port must be between 1 and 65535")
+	}
+	if w.Host == "" {
+		return fmt.Errorf("host cannot be empty")
+	}
+	return nil
+}
+
+func (u UserServiceConfig) GetPort() int    { return u.Port }
+func (u UserServiceConfig) GetHost() string { return u.Host }
+func (u UserServiceConfig) Validate() error {
+	if u.Port < 1 || u.Port > maxPortNumber {
+		return fmt.Errorf("port must be between 1 and 65535")
+	}
+	if u.Host == "" {
+		return fmt.Errorf("host cannot be empty")
+	}
+	return nil
+}
+
+func (s SubscriptionServiceConfig) GetPort() int    { return s.Port }
+func (s SubscriptionServiceConfig) GetHost() string { return s.Host }
+func (s SubscriptionServiceConfig) Validate() error {
+	if s.Port < 1 || s.Port > maxPortNumber {
+		return fmt.Errorf("port must be between 1 and 65535")
+	}
+	if s.Host == "" {
+		return fmt.Errorf("host cannot be empty")
+	}
+	return nil
+}
+
+func (n NotificationServiceConfig) GetPort() int    { return n.Port }
+func (n NotificationServiceConfig) GetHost() string { return n.Host }
+func (n NotificationServiceConfig) Validate() error {
+	if n.Port < 1 || n.Port > maxPortNumber {
+		return fmt.Errorf("port must be between 1 and 65535")
+	}
+	if n.Host == "" {
+		return fmt.Errorf("host cannot be empty")
+	}
+	return nil
 }
 
 type DatabaseConfig struct {
-	Host     string `envconfig:"DB_HOST" default:"localhost"`
-	Port     int    `envconfig:"DB_PORT" default:"5432"`
-	User     string `envconfig:"DB_USER" default:"postgres"`
-	Password string `envconfig:"DB_PASSWORD" default:"postgres"`
-	Name     string `envconfig:"DB_NAME" default:"weatherapi"`
-	SSLMode  string `envconfig:"DB_SSL_MODE" default:"disable"`
+	Host     string `envconfig:"DB_HOST"`
+	Port     int    `envconfig:"DB_PORT"`
+	User     string `envconfig:"DB_USER"`
+	Password string `envconfig:"DB_PASSWORD"`
+	Name     string `envconfig:"DB_NAME"`
+	SSLMode  string `envconfig:"DB_SSL_MODE"`
 }
 
 func (c DatabaseConfig) GetDSN() string {
@@ -70,12 +148,12 @@ func (c DatabaseConfig) GetDSN() string {
 }
 
 type UserDatabaseConfig struct {
-	Host     string `envconfig:"USER_DB_HOST" default:"localhost"`
-	Port     int    `envconfig:"USER_DB_PORT" default:"5433"`
-	User     string `envconfig:"USER_DB_USER" default:"postgres"`
-	Password string `envconfig:"USER_DB_PASSWORD" default:"postgres"`
-	Name     string `envconfig:"USER_DB_NAME" default:"userapi"`
-	SSLMode  string `envconfig:"USER_DB_SSL_MODE" default:"disable"`
+	Host     string `envconfig:"USER_DB_HOST"`
+	Port     int    `envconfig:"USER_DB_PORT"`
+	User     string `envconfig:"USER_DB_USER"`
+	Password string `envconfig:"USER_DB_PASSWORD"`
+	Name     string `envconfig:"USER_DB_NAME"`
+	SSLMode  string `envconfig:"USER_DB_SSL_MODE"`
 }
 
 func (c UserDatabaseConfig) GetDSN() string {
@@ -84,12 +162,12 @@ func (c UserDatabaseConfig) GetDSN() string {
 }
 
 type SubscriptionDatabaseConfig struct {
-	Host     string `envconfig:"SUBSCRIPTION_DB_HOST" default:"localhost"`
-	Port     int    `envconfig:"SUBSCRIPTION_DB_PORT" default:"5434"`
-	User     string `envconfig:"SUBSCRIPTION_DB_USER" default:"postgres"`
-	Password string `envconfig:"SUBSCRIPTION_DB_PASSWORD" default:"postgres"`
-	Name     string `envconfig:"SUBSCRIPTION_DB_NAME" default:"subscriptionapi"`
-	SSLMode  string `envconfig:"SUBSCRIPTION_DB_SSL_MODE" default:"disable"`
+	Host     string `envconfig:"SUBSCRIPTION_DB_HOST"`
+	Port     int    `envconfig:"SUBSCRIPTION_DB_PORT"`
+	User     string `envconfig:"SUBSCRIPTION_DB_USER"`
+	Password string `envconfig:"SUBSCRIPTION_DB_PASSWORD"`
+	Name     string `envconfig:"SUBSCRIPTION_DB_NAME"`
+	SSLMode  string `envconfig:"SUBSCRIPTION_DB_SSL_MODE"`
 }
 
 func (c SubscriptionDatabaseConfig) GetDSN() string {
@@ -99,16 +177,16 @@ func (c SubscriptionDatabaseConfig) GetDSN() string {
 
 type WeatherConfig struct {
 	APIKey                string   `envconfig:"WEATHER_API_KEY"`
-	BaseURL               string   `envconfig:"WEATHER_API_BASE_URL" default:"https://api.weatherapi.com/v1"`
+	BaseURL               string   `envconfig:"WEATHER_API_BASE_URL"`
 	OpenWeatherMapKey     string   `envconfig:"OPENWEATHERMAP_API_KEY"`
-	OpenWeatherMapBaseURL string   `envconfig:"OPENWEATHERMAP_API_BASE_URL" default:"https://api.openweathermap.org/data/2.5"`
+	OpenWeatherMapBaseURL string   `envconfig:"OPENWEATHERMAP_API_BASE_URL"`
 	AccuWeatherKey        string   `envconfig:"ACCUWEATHER_API_KEY"`
-	AccuWeatherBaseURL    string   `envconfig:"ACCUWEATHER_API_BASE_URL" default:"http://dataservice.accuweather.com/currentconditions/v1"`
-	ProviderOrder         []string `envconfig:"WEATHER_PROVIDER_ORDER" default:"weatherapi,openweathermap,accuweather"`
-	EnableCache           bool     `envconfig:"WEATHER_ENABLE_CACHE" default:"true"`
-	EnableLogging         bool     `envconfig:"WEATHER_ENABLE_LOGGING" default:"true"`
-	CacheTTLMinutes       int      `envconfig:"WEATHER_CACHE_TTL_MINUTES" default:"10"`
-	LogFilePath           string   `envconfig:"WEATHER_LOG_FILE_PATH" default:"logs/weather_providers.log"`
+	AccuWeatherBaseURL    string   `envconfig:"ACCUWEATHER_API_BASE_URL"`
+	ProviderOrder         []string `envconfig:"WEATHER_PROVIDER_ORDER"`
+	EnableCache           bool     `envconfig:"WEATHER_ENABLE_CACHE"`
+	EnableLogging         bool     `envconfig:"WEATHER_ENABLE_LOGGING"`
+	CacheTTLMinutes       int      `envconfig:"WEATHER_CACHE_TTL_MINUTES"`
+	LogFilePath           string   `envconfig:"WEATHER_LOG_FILE_PATH"`
 }
 
 // CacheType represents the type of cache to use
@@ -161,35 +239,35 @@ func (c CacheType) MarshalText() ([]byte, error) {
 }
 
 type CacheConfig struct {
-	Type  CacheType   `envconfig:"CACHE_TYPE" default:"memory"`
+	Type  CacheType   `envconfig:"CACHE_TYPE"`
 	Redis RedisConfig `split_words:"true"`
 }
 
 type RedisConfig struct {
-	Addr         string `envconfig:"REDIS_ADDR" default:"localhost:6379"`
-	Password     string `envconfig:"REDIS_PASSWORD" default:""`
-	DB           int    `envconfig:"REDIS_DB" default:"0"`
-	DialTimeout  int    `envconfig:"REDIS_DIAL_TIMEOUT" default:"5"`
-	ReadTimeout  int    `envconfig:"REDIS_READ_TIMEOUT" default:"3"`
-	WriteTimeout int    `envconfig:"REDIS_WRITE_TIMEOUT" default:"3"`
+	Addr         string `envconfig:"REDIS_ADDR"`
+	Password     string `envconfig:"REDIS_PASSWORD"`
+	DB           int    `envconfig:"REDIS_DB"`
+	DialTimeout  int    `envconfig:"REDIS_DIAL_TIMEOUT"`
+	ReadTimeout  int    `envconfig:"REDIS_READ_TIMEOUT"`
+	WriteTimeout int    `envconfig:"REDIS_WRITE_TIMEOUT"`
 }
 
 type EmailConfig struct {
-	SMTPHost     string `envconfig:"EMAIL_SMTP_HOST" default:"smtp.gmail.com"`
-	SMTPPort     int    `envconfig:"EMAIL_SMTP_PORT" default:"587"`
+	SMTPHost     string `envconfig:"EMAIL_SMTP_HOST"`
+	SMTPPort     int    `envconfig:"EMAIL_SMTP_PORT"`
 	SMTPUsername string `envconfig:"EMAIL_SMTP_USERNAME"`
 	SMTPPassword string `envconfig:"EMAIL_SMTP_PASSWORD"`
-	FromName     string `envconfig:"EMAIL_FROM_NAME" default:"Weather API"`
-	FromAddress  string `envconfig:"EMAIL_FROM_ADDRESS" default:"no-reply@weatherapi.app"`
+	FromName     string `envconfig:"EMAIL_FROM_NAME"`
+	FromAddress  string `envconfig:"EMAIL_FROM_ADDRESS"`
 }
 
 type SchedulerConfig struct {
-	HourlyInterval int `envconfig:"HOURLY_INTERVAL" default:"60"`
-	DailyInterval  int `envconfig:"DAILY_INTERVAL" default:"1440"`
+	HourlyInterval int `envconfig:"HOURLY_INTERVAL"`
+	DailyInterval  int `envconfig:"DAILY_INTERVAL"`
 }
 
 type MessageBrokerConfig struct {
-	URL      string `envconfig:"MESSAGE_BROKER_URL" default:"nats://localhost:4222"`
+	URL      string `envconfig:"MESSAGE_BROKER_URL"`
 	Username string `envconfig:"MESSAGE_BROKER_USERNAME"`
 	Password string `envconfig:"MESSAGE_BROKER_PASSWORD"`
 }
@@ -198,23 +276,6 @@ func LoadConfig() (*Config, error) {
 	var config Config
 	if err := envconfig.Process("", &config); err != nil {
 		return nil, fmt.Errorf("error processing config: %w", err)
-	}
-
-	// Set default service ports if not provided
-	if config.Services.Gateway.Port == 0 {
-		config.Services.Gateway.Port = defaultGatewayServicePort
-	}
-	if config.Services.Weather.Port == 0 {
-		config.Services.Weather.Port = defaultWeatherServicePort
-	}
-	if config.Services.User.Port == 0 {
-		config.Services.User.Port = defaultUserServicePort
-	}
-	if config.Services.Subscription.Port == 0 {
-		config.Services.Subscription.Port = defaultSubscriptionServicePort
-	}
-	if config.Services.Notification.Port == 0 {
-		config.Services.Notification.Port = defaultNotificationServicePort
 	}
 
 	if err := config.Validate(); err != nil {
@@ -231,22 +292,11 @@ func LoadGatewayConfig() (*Config, error) {
 		return nil, fmt.Errorf("error processing config: %w", err)
 	}
 
-	// Set default service ports if not provided
-	if config.Services.Gateway.Port == 0 {
-		config.Services.Gateway.Port = defaultGatewayServicePort
-	}
-	if config.Services.Weather.Port == 0 {
-		config.Services.Weather.Port = defaultWeatherServicePort
-	}
-	if config.Services.User.Port == 0 {
-		config.Services.User.Port = defaultUserServicePort
-	}
-	if config.Services.Subscription.Port == 0 {
-		config.Services.Subscription.Port = defaultSubscriptionServicePort
-	}
-	if config.Services.Notification.Port == 0 {
-		config.Services.Notification.Port = defaultNotificationServicePort
-	}
+	// Debug: print what was actually parsed
+	fmt.Printf("DEBUG: Gateway config parsed - Port: %d, Host: %s\n", config.Services.Gateway.Port, config.Services.Gateway.Host)
+	fmt.Printf("DEBUG: Weather config - Port: %d, Host: %s\n", config.Services.Weather.Port, config.Services.Weather.Host)
+	fmt.Printf("DEBUG: User config - Port: %d, Host: %s\n", config.Services.User.Port, config.Services.User.Host)
+	fmt.Printf("DEBUG: Subscription config - Port: %d, Host: %s\n", config.Services.Subscription.Port, config.Services.Subscription.Host)
 
 	// Only validate gateway-specific configuration
 	if err := config.Services.Gateway.Validate(); err != nil {
@@ -325,16 +375,6 @@ func (s *ServicesConfig) Validate() error {
 	}
 	if err := s.Notification.Validate(); err != nil {
 		return fmt.Errorf("notification service config: %w", err)
-	}
-	return nil
-}
-
-func (s *ServiceConfig) Validate() error {
-	if s.Port < 1 || s.Port > maxPortNumber {
-		return fmt.Errorf("port must be between 1 and 65535")
-	}
-	if s.Host == "" {
-		return fmt.Errorf("host cannot be empty")
 	}
 	return nil
 }

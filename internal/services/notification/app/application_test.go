@@ -41,7 +41,7 @@ func setupMocks(t *testing.T) (*mockPorts.MessageBroker, *mockPorts.Subscription
 func TestNotificationApplication_ValidateConfig_Success(t *testing.T) {
 	cfg := &config.Config{
 		Services: config.ServicesConfig{
-			Notification: config.ServiceConfig{
+			Notification: config.NotificationServiceConfig{
 				Host: "localhost",
 				Port: 8084,
 			},
@@ -68,7 +68,7 @@ func TestNotificationApplication_ValidateConfig_InvalidConfig(t *testing.T) {
 			name: "empty notification service host",
 			config: &config.Config{
 				Services: config.ServicesConfig{
-					Notification: config.ServiceConfig{
+					Notification: config.NotificationServiceConfig{
 						Host: "",
 						Port: 8084,
 					},
@@ -82,7 +82,7 @@ func TestNotificationApplication_ValidateConfig_InvalidConfig(t *testing.T) {
 			name: "invalid notification service port",
 			config: &config.Config{
 				Services: config.ServicesConfig{
-					Notification: config.ServiceConfig{
+					Notification: config.NotificationServiceConfig{
 						Host: "localhost",
 						Port: 0,
 					},
@@ -96,7 +96,7 @@ func TestNotificationApplication_ValidateConfig_InvalidConfig(t *testing.T) {
 			name: "empty message broker URL",
 			config: &config.Config{
 				Services: config.ServicesConfig{
-					Notification: config.ServiceConfig{
+					Notification: config.NotificationServiceConfig{
 						Host: "localhost",
 						Port: 8084,
 					},
