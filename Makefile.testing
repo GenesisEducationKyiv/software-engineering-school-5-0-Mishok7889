@@ -149,19 +149,19 @@ test-all: test-unit test-architecture test-integration
 microservices-up: _check-docker
 	@echo "$(GREEN)Starting microservices stack...$(NC)"
 	@echo "$(YELLOW)Note: This is mainly for E2E testing. Integration tests use service isolation.$(NC)"
-	@docker-compose -f $(MICROSERVICES_COMPOSE_FILE) up -d --build
+	@docker compose -f $(MICROSERVICES_COMPOSE_FILE) up -d --build
 	@echo "$(YELLOW)Microservices started. Waiting for startup...$(NC)"
 	@sleep 10
 	@echo "$(GREEN)Microservices should be ready for E2E testing$(NC)"
 
 microservices-down:
 	@echo "$(GREEN)Stopping microservices stack...$(NC)"
-	@docker-compose -f $(MICROSERVICES_COMPOSE_FILE) down --volumes
+	@docker compose -f $(MICROSERVICES_COMPOSE_FILE) down --volumes
 	@echo "$(GREEN)Microservices stopped$(NC)"
 
 microservices-logs:
 	@echo "$(GREEN)Showing microservices logs...$(NC)"
-	@docker-compose -f $(MICROSERVICES_COMPOSE_FILE) logs -f
+	@docker compose -f $(MICROSERVICES_COMPOSE_FILE) logs -f
 
 # Linting
 lint:
@@ -201,8 +201,8 @@ _check-docker:
 		echo "$(RED)Error: Docker daemon is not running$(NC)"; \
 		exit 1; \
 	fi
-	@if ! command -v docker-compose >/dev/null 2>&1; then \
-		echo "$(RED)Error: docker-compose is required but not installed$(NC)"; \
+	@if ! docker compose version >/dev/null 2>&1; then \
+		echo "$(RED)Error: docker compose is required but not installed$(NC)"; \
 		exit 1; \
 	fi
 
@@ -221,9 +221,9 @@ _check-node:
 _e2e-setup:
 	@echo "$(YELLOW)Setting up E2E test environment...$(NC)"
 	@if [ -f "$(E2E_COMPOSE_FILE)" ]; then \
-		docker-compose -f $(E2E_COMPOSE_FILE) -p $(E2E_PROJECT) down --volumes >/dev/null 2>&1 || true; \
-		docker-compose -f $(E2E_COMPOSE_FILE) -p $(E2E_PROJECT) build --quiet; \
-		docker-compose -f $(E2E_COMPOSE_FILE) -p $(E2E_PROJECT) up -d; \
+		docker compose -f $(E2E_COMPOSE_FILE) -p $(E2E_PROJECT) down --volumes >/dev/null 2>&1 || true; \
+		docker compose -f $(E2E_COMPOSE_FILE) -p $(E2E_PROJECT) build --quiet; \
+		docker compose -f $(E2E_COMPOSE_FILE) -p $(E2E_PROJECT) up -d; \
 		echo "$(YELLOW)Waiting for E2E services...$(NC)"; \
 		sleep 20; \
 		echo "$(GREEN)E2E services should be ready$(NC)"; \
@@ -242,7 +242,7 @@ _e2e-cleanup:
 	fi
 	@rm -f weatherapi
 	@if [ -f "$(E2E_COMPOSE_FILE)" ]; then \
-		docker-compose -f $(E2E_COMPOSE_FILE) -p $(E2E_PROJECT) down --volumes >/dev/null 2>&1 || true; \
+		docker compose -f $(E2E_COMPOSE_FILE) -p $(E2E_PROJECT) down --volumes >/dev/null 2>&1 || true; \
 	fi
 
 # Development helpers (for debugging microservices)

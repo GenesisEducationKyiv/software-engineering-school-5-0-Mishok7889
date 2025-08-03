@@ -11,6 +11,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -166,22 +167,13 @@ func (s *WeatherServiceIntegrationSuite) setupGRPCClient() {
 }
 
 func (s *WeatherServiceIntegrationSuite) waitForServerReady() {
-	ctx, cancel := context.WithTimeout(context.Background(), serverReadyTimeout)
-	defer cancel()
+	require.Eventually(s.T(), func() bool {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
 
-	for {
-		select {
-		case <-ctx.Done():
-			s.Fail("Server failed to start within timeout")
-			return
-		default:
-			_, err := s.weatherClient.GetProviderInfo(ctx, &weatherpb.GetProviderInfoRequest{})
-			if err == nil {
-				return
-			}
-			time.Sleep(serverReadyInterval)
-		}
-	}
+		_, err := s.weatherClient.GetProviderInfo(ctx, &weatherpb.GetProviderInfoRequest{})
+		return err == nil
+	}, serverReadyTimeout, serverReadyInterval, "Server failed to start within timeout")
 }
 
 func (s *WeatherServiceIntegrationSuite) TestGetWeather() {

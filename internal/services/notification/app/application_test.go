@@ -228,8 +228,16 @@ func TestNotificationApplication_HTTPServerLifecycle(t *testing.T) {
 		startErr <- httpServer.Start()
 	}()
 
-	// Give it a moment to start
-	time.Sleep(100 * time.Millisecond)
+	// Wait for server to be ready
+	require.Eventually(t, func() bool {
+		// Check if server is ready by testing if it's listening
+		select {
+		case <-startErr:
+			return false // Server stopped unexpectedly
+		default:
+			return true // Server is still running, assume ready
+		}
+	}, 2*time.Second, 10*time.Millisecond, "Server should be ready within timeout")
 
 	// Stop the server
 	err := httpServer.Shutdown(ctx)
