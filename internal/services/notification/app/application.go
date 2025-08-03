@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"net/http"
 
+	"weatherapi.app/internal/adapters/email"
+	"weatherapi.app/internal/adapters/external"
 	"weatherapi.app/internal/adapters/infrastructure"
 	"weatherapi.app/internal/config"
 	"weatherapi.app/internal/ports"
@@ -43,6 +45,7 @@ type NotificationApplication struct {
 	subscriptionService ports.SubscriptionService
 	weatherService      ports.WeatherService
 	emailProvider       ports.EmailProvider
+	emailBuilder        ports.EmailBuilder
 	broker              messaging.MessageBroker
 	publisher           messaging.Publisher
 	consumerManager     *consumers.ConsumerManager
@@ -84,10 +87,10 @@ func validateApplicationConfig(cfg *config.Config) error {
 	if cfg == nil {
 		return errors.New(errConfigNil)
 	}
-	if cfg.Services.Notification.Host == "" {
+	if cfg.Services.Notification.GetHost() == "" {
 		return errors.New(errNotificationHostEmpty)
 	}
-	if cfg.Services.Notification.Port <= 0 {
+	if cfg.Services.Notification.GetPort() <= 0 {
 		return errors.New(errNotificationPortInvalid)
 	}
 	if cfg.MessageBroker.URL == "" {
@@ -123,36 +126,44 @@ func (a *NotificationApplication) initializeServices() error {
 	a.logger.Info("Initializing external services")
 
 	subscriptionClient, err := notificationgrpc.NewSubscriptionServiceClient(notificationgrpc.SubscriptionServiceConfig{
-		Host: a.config.Services.Subscription.Host,
-		Port: a.config.Services.Subscription.Port,
+		Host: a.config.Services.Subscription.GetHost(),
+		Port: a.config.Services.Subscription.GetPort(),
 	})
 	if err != nil {
 		return fmt.Errorf("create subscription service client: %w", err)
 	}
 
 	weatherClient, err := notificationgrpc.NewWeatherServiceClient(notificationgrpc.WeatherServiceConfig{
-		Host: a.config.Services.Weather.Host,
-		Port: a.config.Services.Weather.Port,
+		Host: a.config.Services.Weather.GetHost(),
+		Port: a.config.Services.Weather.GetPort(),
 	})
 	if err != nil {
 		return fmt.Errorf("create weather service client: %w", err)
 	}
 
-	emailProvider, err := messagingadapter.NewEmailProviderAdapter(messagingadapter.EmailProviderConfig{
-		SMTPHost:     a.config.Email.SMTPHost,
-		SMTPPort:     a.config.Email.SMTPPort,
-		SMTPUsername: a.config.Email.SMTPUsername,
-		SMTPPassword: a.config.Email.SMTPPassword,
-		FromName:     a.config.Email.FromName,
-		FromAddress:  a.config.Email.FromAddress,
+	// Create Gmail SMTP email provider
+	emailProvider := external.NewSMTPEmailProviderAdapter(external.EmailProviderConfig{
+		Host:     a.config.Email.SMTPHost,
+		Port:     a.config.Email.SMTPPort,
+		Username: a.config.Email.SMTPUsername,
+		Password: a.config.Email.SMTPPassword,
+		FromName: a.config.Email.FromName,
+		FromAddr: a.config.Email.FromAddress,
 	})
+
+	// Create config provider for email builder
+	configProvider := infrastructure.NewConfigProviderAdapter(a.config)
+
+	// Create email builder
+	emailBuilder, err := email.NewBuilder(configProvider)
 	if err != nil {
-		return fmt.Errorf("create email provider adapter: %w", err)
+		return fmt.Errorf("create email builder: %w", err)
 	}
 
 	a.subscriptionService = subscriptionClient
 	a.weatherService = weatherClient
 	a.emailProvider = emailProvider
+	a.emailBuilder = emailBuilder
 
 	a.logger.Info("External services initialized successfully")
 	return nil
@@ -180,9 +191,11 @@ func (a *NotificationApplication) initializeHTTPServer() error {
 
 	httpServer := notificationapi.NewHTTPServer(
 		notificationapi.ServerConfig{
-			Port: a.config.Services.Notification.Port,
+			Port: a.config.Services.Notification.GetPort(),
 		},
 		a.publisher,
+		a.emailProvider,
+		a.emailBuilder,
 		a.logger,
 	)
 
@@ -193,7 +206,7 @@ func (a *NotificationApplication) initializeHTTPServer() error {
 }
 
 func (a *NotificationApplication) Start(ctx context.Context) error {
-	a.logger.Info(logServiceStarting, ports.F("port", a.config.Services.Notification.Port))
+	a.logger.Info(logServiceStarting, ports.F("port", a.config.Services.Notification.GetPort()))
 
 	if err := a.consumerManager.Start(ctx); err != nil {
 		return fmt.Errorf(errStartConsumers, err)

@@ -72,6 +72,7 @@ type ConfigProvider interface {
 	GetEmailConfig() EmailConfig
 	GetCacheConfig() CacheConfig
 	GetSchedulerConfig() SchedulerConfig
+	GetAppBaseURL() string
 }
 
 // Logger defines the contract for structured logging

@@ -55,18 +55,18 @@ func LoadSubscriptionServiceConfig() (*Config, error) {
 		return nil, err
 	}
 
-	// Validate only what Subscription Service needs
+	// Validate only what Subscription Service needs (NO EMAIL CONFIG - uses Notification Service)
 	if err := config.Services.Subscription.Validate(); err != nil {
 		return nil, fmt.Errorf("subscription service config: %w", err)
 	}
 	if err := config.Services.User.Validate(); err != nil {
 		return nil, fmt.Errorf("user service client config: %w", err)
 	}
+	if err := config.Services.Notification.Validate(); err != nil {
+		return nil, fmt.Errorf("notification service client config: %w", err)
+	}
 	if err := config.SubscriptionDB.Validate(); err != nil {
 		return nil, fmt.Errorf("subscription database config: %w", err)
-	}
-	if err := config.Email.Validate(); err != nil {
-		return nil, fmt.Errorf("email config: %w", err)
 	}
 	if err := config.MessageBroker.Validate(); err != nil {
 		return nil, fmt.Errorf("message broker config: %w", err)

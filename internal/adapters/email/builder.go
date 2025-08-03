@@ -67,12 +67,11 @@ func (b *Builder) loadTemplates() error {
 }
 
 // BuildConfirmationEmail creates a confirmation email
-func (b *Builder) BuildConfirmationEmail(city, token string) (ports.EmailParams, error) {
-	baseURL := b.config.GetAppConfig().BaseURL
+func (b *Builder) BuildConfirmationEmail(city, confirmationURL string) (ports.EmailParams, error) {
 	data := EmailData{
 		City:       city,
-		ConfirmURL: fmt.Sprintf("%s"+subscription.APIPathConfirm, baseURL, token),
-		BaseURL:    baseURL,
+		ConfirmURL: confirmationURL,
+		BaseURL:    b.config.GetAppConfig().BaseURL,
 	}
 
 	body, err := b.executeTemplate(templateNameConfirmation, data)
@@ -88,13 +87,12 @@ func (b *Builder) BuildConfirmationEmail(city, token string) (ports.EmailParams,
 }
 
 // BuildWelcomeEmail creates a welcome email
-func (b *Builder) BuildWelcomeEmail(city, frequency, unsubscribeToken string) (ports.EmailParams, error) {
-	baseURL := b.config.GetAppConfig().BaseURL
+func (b *Builder) BuildWelcomeEmail(city, frequency, unsubscribeURL string) (ports.EmailParams, error) {
 	data := EmailData{
 		City:           city,
 		Frequency:      frequency,
-		UnsubscribeURL: fmt.Sprintf("%s"+subscription.APIPathUnsubscribe, baseURL, unsubscribeToken),
-		BaseURL:        baseURL,
+		UnsubscribeURL: unsubscribeURL,
+		BaseURL:        b.config.GetAppConfig().BaseURL,
 	}
 
 	body, err := b.executeTemplate(templateNameWelcome, data)

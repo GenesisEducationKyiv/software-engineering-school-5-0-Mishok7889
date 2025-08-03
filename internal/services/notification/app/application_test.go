@@ -207,9 +207,15 @@ func TestNotificationApplication_HTTPServerLifecycle(t *testing.T) {
 	mockPublisher.EXPECT().PublishCommand(mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockPublisher.EXPECT().PublishEvent(mock.Anything, mock.Anything).Return(nil).Maybe()
 
+	// Create mock email provider and builder
+	mockEmailProvider := mockPorts.NewEmailProvider(t)
+	mockEmailBuilder := mockPorts.NewEmailBuilder(t)
+
 	httpServer := notificationapi.NewHTTPServer(
 		notificationapi.ServerConfig{Port: 0}, // Port 0 will assign a random available port
 		mockPublisher,
+		mockEmailProvider,
+		mockEmailBuilder,
 		mockLogger,
 	)
 

@@ -125,6 +125,7 @@ services:
     depends_on:
       - subscription-db
       - user-service
+      - notification-service
       - nats
     environment:
       - SUBSCRIPTION_SERVICE_PORT=8083
@@ -137,11 +138,11 @@ services:
       - SUBSCRIPTION_DB_SSL_MODE=disable
       - USER_SERVICE_HOST=user-service
       - USER_SERVICE_PORT=8082
-      - EMAIL_SMTP_HOST=mailhog
-      - EMAIL_SMTP_PORT=1025
-      - EMAIL_FROM_NAME=Weather API
-      - EMAIL_FROM_ADDRESS=noreply@weatherapi.app
+      - NOTIFICATION_SERVICE_HOST=notification-service
+      - NOTIFICATION_SERVICE_PORT=8084
       - MESSAGE_BROKER_URL=nats://nats:4222
+      # App URL for email links
+      - APP_URL=${APP_URL:-http://localhost:8080}
     restart: unless-stopped
     networks:
       - microservices-network
@@ -155,7 +156,6 @@ services:
       - "8084:8084"
     depends_on:
       - nats
-      - subscription-service
       - weather-service
       - user-service
     environment:
@@ -168,10 +168,15 @@ services:
       - WEATHER_SERVICE_PORT=8081
       - USER_SERVICE_HOST=user-service
       - USER_SERVICE_PORT=8082
-      - EMAIL_SMTP_HOST=mailhog
-      - EMAIL_SMTP_PORT=1025
+      # Gmail SMTP Configuration
+      - EMAIL_SMTP_HOST=smtp.gmail.com
+      - EMAIL_SMTP_PORT=587
+      - EMAIL_SMTP_USERNAME=${EMAIL_SMTP_USERNAME}
+      - EMAIL_SMTP_PASSWORD=${EMAIL_SMTP_PASSWORD}
       - EMAIL_FROM_NAME=Weather API
-      - EMAIL_FROM_ADDRESS=noreply@weatherapi.app
+      - EMAIL_FROM_ADDRESS=${EMAIL_SMTP_USERNAME}
+      # App URL for email links
+      - APP_URL=${APP_URL:-http://localhost:8080}
     restart: unless-stopped
     networks:
       - microservices-network
@@ -196,16 +201,6 @@ services:
       - USER_SERVICE_PORT=8082
       - SUBSCRIPTION_SERVICE_HOST=subscription-service
       - SUBSCRIPTION_SERVICE_PORT=8083
-    restart: unless-stopped
-    networks:
-      - microservices-network
-
-  # Email Testing (MailHog)
-  mailhog:
-    image: mailhog/mailhog:latest
-    ports:
-      - "1025:1025"  # SMTP
-      - "8025:8025"  # Web UI
     restart: unless-stopped
     networks:
       - microservices-network

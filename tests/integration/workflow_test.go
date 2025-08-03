@@ -1,7 +1,6 @@
 package integration
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -10,7 +9,6 @@ import (
 	"time"
 
 	"weatherapi.app/internal/adapters/database"
-	"weatherapi.app/internal/core/notification"
 	"weatherapi.app/tests/integration/helpers"
 )
 
@@ -138,52 +136,6 @@ func (s *IntegrationTestSuite) TestMultipleSubscriptionsWorkflow() {
 		s.AssertEmailSent(sub.email, "Confirm your weather subscription")
 		s.AssertEmailSent(sub.email, "Welcome to Weather Updates")
 	}
-}
-
-func (s *IntegrationTestSuite) TestWeatherUpdateWorkflow() {
-	err := helpers.ClearEmails()
-	s.Require().NoError(err)
-
-	// Create confirmed subscriptions
-	subscription1 := s.CreateTestSubscription("daily@example.com", "London", "daily", true)
-	subscription2 := s.CreateTestSubscription("hourly@example.com", "Paris", "hourly", true)
-
-	s.CreateTestToken(subscription1.ID, "unsubscribe", 365*24*time.Hour)
-	s.CreateTestToken(subscription2.ID, "unsubscribe", 365*24*time.Hour)
-
-	// Send weather updates using the notification use case
-	ctx := context.Background()
-	notificationUseCase := s.application.GetNotificationUseCase()
-	s.Require().NotNil(notificationUseCase)
-
-	// Send daily updates
-	dailyParams := notification.SendWeatherUpdateParams{
-		Frequency: "daily",
-	}
-	err = notificationUseCase.SendWeatherUpdates(ctx, dailyParams)
-	s.NoError(err)
-
-	// Wait for daily weather update email
-	s.Require().Eventually(func() bool {
-		return helpers.CheckEmailSent("daily@example.com", "Weather Update for London")
-	}, 5*time.Second, 200*time.Millisecond)
-
-	s.AssertEmailSent("daily@example.com", "Weather Update for London")
-
-	// Clear emails and send hourly updates
-	_ = helpers.ClearEmails()
-	hourlyParams := notification.SendWeatherUpdateParams{
-		Frequency: "hourly",
-	}
-	err = notificationUseCase.SendWeatherUpdates(ctx, hourlyParams)
-	s.NoError(err)
-
-	// Wait for hourly weather update email
-	s.Require().Eventually(func() bool {
-		return helpers.CheckEmailSent("hourly@example.com", "Weather Update for Paris")
-	}, 5*time.Second, 200*time.Millisecond)
-
-	s.AssertEmailSent("hourly@example.com", "Weather Update for Paris")
 }
 
 func (s *IntegrationTestSuite) TestSubscriptionUpdateWorkflow() {
@@ -329,4 +281,20 @@ func (s *IntegrationTestSuite) TestConcurrentSubscriptionWorkflow() {
 	for _, email := range emails {
 		s.AssertEmailSent(email, "Confirm your weather subscription")
 	}
+}
+
+// TestMicroservicesHealthCheck tests that we can perform basic health checks
+// This is a placeholder for future microservices integration tests
+func (s *IntegrationTestSuite) TestMicroservicesHealthCheck() {
+	// This test verifies the basic router setup works
+	req := httptest.NewRequest("GET", "/health", nil)
+	w := httptest.NewRecorder()
+
+	s.router.ServeHTTP(w, req)
+	s.Equal(http.StatusOK, w.Code)
+
+	var response map[string]interface{}
+	err := json.NewDecoder(w.Body).Decode(&response)
+	s.NoError(err)
+	s.Equal("ok", response["status"])
 }

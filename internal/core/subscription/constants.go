@@ -29,6 +29,19 @@ const (
 	ErrSubscriptionIDZero    = "subscription ID cannot be zero"
 )
 
+// Frequency string constants
+const (
+	FrequencyStringHourly  = "hourly"
+	FrequencyStringDaily   = "daily"
+	FrequencyStringUnknown = "unknown"
+)
+
+// API paths
+const (
+	APIPathConfirm     = "/api/confirm/%s"
+	APIPathUnsubscribe = "/api/unsubscribe/%s"
+)
+
 // Email templates
 const (
 	EmailSubjectConfirmation = "Confirm your weather subscription"
@@ -63,26 +76,12 @@ const (
 	`
 )
 
-// Frequency string constants
-const (
-	FrequencyStringHourly  = "hourly"
-	FrequencyStringDaily   = "daily"
-	FrequencyStringUnknown = "unknown"
-)
-
-// API paths
-const (
-	APIPathConfirm     = "/api/confirm/%s"
-	APIPathUnsubscribe = "/api/unsubscribe/%s"
-)
-
 // Dependency error messages
 const (
-	ErrRepoRequired          = "subscription repository is required"
-	ErrTokenRepoRequired     = "token repository is required"
-	ErrGeneratorRequired     = "token generator is required"
-	ErrEmailProviderRequired = "email provider is required"
-	ErrEmailBuilderRequired  = "email builder is required"
-	ErrConfigRequired        = "config is required"
-	ErrLoggerRequired        = "logger is required"
+	ErrRepoRequired                = "subscription repository is required"
+	ErrTokenRepoRequired           = "token repository is required"
+	ErrGeneratorRequired           = "token generator is required"
+	ErrNotificationServiceRequired = "notification service is required"
+	ErrConfigRequired              = "config is required"
+	ErrLoggerRequired              = "logger is required"
 )
