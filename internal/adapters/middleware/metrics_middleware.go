@@ -88,9 +88,6 @@ func extractEndpointFromPath(fullPath string) string {
 	case "/favicon.ico":
 		return "favicon"
 	default:
-		if fullPath == "" {
-			return "unknown"
-		}
-		return "other"
+		return "unknown"
 	}
 }
