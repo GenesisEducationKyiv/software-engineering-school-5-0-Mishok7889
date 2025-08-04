@@ -15,6 +15,7 @@ import (
 	"weatherapi.app/internal/ports"
 	subscriptionapi "weatherapi.app/internal/services/subscription/adapters/api"
 	subscriptiongrpc "weatherapi.app/internal/services/subscription/adapters/grpc"
+	"weatherapi.app/pkg/logger"
 )
 
 const (
@@ -57,15 +58,27 @@ type SubscriptionApplication struct {
 	userClient         *subscriptiongrpc.UserServiceClient
 	notificationClient *subscriptiongrpc.NotificationServiceClient
 	db                 *gorm.DB
+	logger             ports.Logger
 }
 
 func NewSubscriptionApplication(cfg *config.Config) (*SubscriptionApplication, error) {
+	return NewSubscriptionApplicationWithLogger(cfg, nil)
+}
+
+// NewSubscriptionApplicationWithLogger creates a subscription application with logger
+func NewSubscriptionApplicationWithLogger(cfg *config.Config, log *logger.Logger) (*SubscriptionApplication, error) {
 	if err := validateApplicationConfig(cfg); err != nil {
 		return nil, fmt.Errorf(errInvalidConfig, err)
 	}
 
 	app := &SubscriptionApplication{
 		config: cfg,
+		logger: &infrastructure.SlogLoggerAdapter{},
+	}
+
+	// Use provided logger if available
+	if log != nil {
+		app.logger = &infrastructure.LoggerAdapter{Logger: log}
 	}
 
 	if err := app.initializeDatabase(); err != nil {

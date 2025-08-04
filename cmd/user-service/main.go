@@ -13,6 +13,8 @@ import (
 	"github.com/joho/godotenv"
 	"google.golang.org/grpc"
 	authpb "weatherapi.app/api/proto/auth"
+	"weatherapi.app/internal/adapters/infrastructure"
+	"weatherapi.app/internal/adapters/middleware"
 	"weatherapi.app/internal/config"
 	"weatherapi.app/internal/services/user/app"
 	"weatherapi.app/pkg/logger"
@@ -78,13 +80,46 @@ func run() error {
 		"database", cfg.UserDB.Name,
 	)
 
-	userApp, err := app.NewUserApplication(cfg)
+	userApp, err := app.NewUserApplicationWithLogger(cfg, log)
 	if err != nil {
 		return fmt.Errorf(errCreateApp, err)
 	}
 
+	// Add Prometheus metrics server in background
+	go func() {
+		metricsFactory := infrastructure.NewMetricsFactory(
+			logger.UserServiceName,
+			getServiceVersion(),
+			log.WithComponent("metrics"),
+		)
+
+		prometheusAdapter := metricsFactory.CreatePrometheusAdapter(nil)
+
+		metricsServer := metricsFactory.CreateDedicatedMetricsServer(
+			infrastructure.MetricsServerConfig{
+				Port: 9082, // Dedicated metrics port
+				Host: "0.0.0.0",
+			},
+			prometheusAdapter,
+		)
+
+		log.Info("starting user service metrics server",
+			"metrics_port", 9082,
+			"metrics_endpoint", "http://localhost:9082/metrics",
+		)
+
+		if err := metricsServer.ListenAndServe(); err != nil {
+			log.Error("metrics server failed", "error", err)
+		}
+	}()
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
+	// Create correlation interceptor for gRPC
+	correlationInterceptor := middleware.NewGRPCCorrelationInterceptor(
+		log.WithComponent("grpc-interceptor"),
+	)
 
 	setupGracefulShutdown(cancel, userApp, log)
 
@@ -95,11 +130,14 @@ func run() error {
 		return fmt.Errorf(errFailedListen, err)
 	}
 
-	grpcServer := grpc.NewServer()
+	grpcServer := grpc.NewServer(
+		correlationInterceptor.GRPCServerOptions()...,
+	)
 	authpb.RegisterAuthServiceServer(grpcServer, userApp.GetGRPCHandler())
 
-	log.Info("gRPC server registered, starting to serve",
+	log.Info("gRPC server registered with correlation support",
 		"address", lis.Addr().String(),
+		"correlation_enabled", true,
 	)
 
 	errChan := make(chan error, 1)
@@ -170,4 +208,12 @@ func getEnvironment() string {
 func isProduction() bool {
 	env := getEnvironment()
 	return env == "production" || env == "prod"
+}
+
+// getServiceVersion returns the service version from env vars
+func getServiceVersion() string {
+	if version := os.Getenv("SERVICE_VERSION"); version != "" {
+		return version
+	}
+	return "dev"
 }

@@ -14,6 +14,7 @@ import (
 	"weatherapi.app/internal/core/token"
 	"weatherapi.app/internal/ports"
 	usergrpc "weatherapi.app/internal/services/user/adapters/grpc"
+	"weatherapi.app/pkg/logger"
 )
 
 const (
@@ -52,6 +53,11 @@ type UserApplication struct {
 }
 
 func NewUserApplication(cfg *config.Config) (*UserApplication, error) {
+	return NewUserApplicationWithLogger(cfg, nil)
+}
+
+// NewUserApplicationWithLogger creates a user application with logger
+func NewUserApplicationWithLogger(cfg *config.Config, log *logger.Logger) (*UserApplication, error) {
 	if err := validateApplicationConfig(cfg); err != nil {
 		return nil, fmt.Errorf(errInvalidConfig, err)
 	}
@@ -59,6 +65,11 @@ func NewUserApplication(cfg *config.Config) (*UserApplication, error) {
 	app := &UserApplication{
 		config: cfg,
 		logger: &infrastructure.SlogLoggerAdapter{},
+	}
+
+	// Use provided logger if available
+	if log != nil {
+		app.logger = &infrastructure.LoggerAdapter{Logger: log}
 	}
 
 	if err := app.initializeDatabase(); err != nil {

@@ -16,6 +16,7 @@ import (
 	notificationgrpc "weatherapi.app/internal/services/notification/adapters/grpc"
 	messagingadapter "weatherapi.app/internal/services/notification/adapters/messaging"
 	"weatherapi.app/internal/services/notification/adapters/messaging/consumers"
+	"weatherapi.app/pkg/logger"
 )
 
 const (
@@ -55,6 +56,11 @@ type NotificationApplication struct {
 }
 
 func NewNotificationApplication(cfg *config.Config) (*NotificationApplication, error) {
+	return NewNotificationApplicationWithLogger(cfg, nil)
+}
+
+// NewNotificationApplicationWithLogger creates a notification application with logger
+func NewNotificationApplicationWithLogger(cfg *config.Config, log *logger.Logger) (*NotificationApplication, error) {
 	if err := validateApplicationConfig(cfg); err != nil {
 		return nil, fmt.Errorf(errInvalidConfig, err)
 	}
@@ -62,6 +68,11 @@ func NewNotificationApplication(cfg *config.Config) (*NotificationApplication, e
 	app := &NotificationApplication{
 		config: cfg,
 		logger: &infrastructure.SlogLoggerAdapter{},
+	}
+
+	// Use provided logger if available
+	if log != nil {
+		app.logger = &infrastructure.LoggerAdapter{Logger: log}
 	}
 
 	if err := app.initializeMessageBroker(); err != nil {

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/joho/godotenv"
+	"weatherapi.app/internal/adapters/infrastructure"
 	"weatherapi.app/internal/config"
 	"weatherapi.app/internal/services/subscription/app"
 	"weatherapi.app/pkg/logger"
@@ -77,10 +78,38 @@ func run() error {
 		"notification_service", fmt.Sprintf("%s:%d", cfg.Services.Notification.Host, cfg.Services.Notification.Port),
 	)
 
-	subscriptionApp, err := app.NewSubscriptionApplication(cfg)
+	subscriptionApp, err := app.NewSubscriptionApplicationWithLogger(cfg, log)
 	if err != nil {
 		return fmt.Errorf(errCreateApp, err)
 	}
+
+	// Add Prometheus metrics server in background
+	go func() {
+		metricsFactory := infrastructure.NewMetricsFactory(
+			logger.SubscriptionServiceName,
+			getServiceVersion(),
+			log.WithComponent("metrics"),
+		)
+
+		prometheusAdapter := metricsFactory.CreatePrometheusAdapter(nil)
+
+		metricsServer := metricsFactory.CreateDedicatedMetricsServer(
+			infrastructure.MetricsServerConfig{
+				Port: 9083, // Dedicated metrics port
+				Host: "0.0.0.0",
+			},
+			prometheusAdapter,
+		)
+
+		log.Info("starting subscription service metrics server",
+			"metrics_port", 9083,
+			"metrics_endpoint", "http://localhost:9083/metrics",
+		)
+
+		if err := metricsServer.ListenAndServe(); err != nil {
+			log.Error("metrics server failed", "error", err)
+		}
+	}()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -145,4 +174,12 @@ func getEnvironment() string {
 func isProduction() bool {
 	env := getEnvironment()
 	return env == "production" || env == "prod"
+}
+
+// getServiceVersion returns the service version from env vars
+func getServiceVersion() string {
+	if version := os.Getenv("SERVICE_VERSION"); version != "" {
+		return version
+	}
+	return "dev"
 }
