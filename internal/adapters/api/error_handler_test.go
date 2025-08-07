@@ -186,7 +186,7 @@ func TestHTTPServerAdapter_HandleError_ResponseStructure(t *testing.T) {
 
 	assert.Equal(t, "application/json; charset=utf-8", w.Header().Get("Content-Type"))
 
-	var response map[string]interface{}
+	var response map[string]any
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	assert.NoError(t, err)
 

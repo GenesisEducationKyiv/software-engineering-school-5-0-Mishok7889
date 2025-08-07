@@ -270,7 +270,7 @@ func TestWeatherCacheAdapter_Serialization(t *testing.T) {
 	rawData, err := genericCache.Get(ctx, "complex-weather")
 	require.NoError(t, err)
 
-	var jsonData map[string]interface{}
+	var jsonData map[string]any
 	err = json.Unmarshal(rawData, &jsonData)
 	require.NoError(t, err)
 

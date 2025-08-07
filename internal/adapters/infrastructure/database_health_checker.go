@@ -22,7 +22,7 @@ func NewDatabaseHealthChecker(db *gorm.DB) *DatabaseHealthChecker {
 func (d *DatabaseHealthChecker) Check(ctx context.Context) ports.HealthStatus {
 	status := ports.HealthStatus{
 		Component: "database",
-		Details:   make(map[string]interface{}),
+		Details:   make(map[string]any),
 	}
 
 	if d.db == nil {
