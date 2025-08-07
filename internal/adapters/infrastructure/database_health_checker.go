@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"gorm.io/gorm"
+	"weatherapi.app/internal/adapters/api"
 	"weatherapi.app/internal/ports"
 )
 
@@ -43,7 +44,7 @@ func (d *DatabaseHealthChecker) Check(ctx context.Context) ports.HealthStatus {
 		return status
 	}
 
-	status.Status = "healthy"
+	status.Status = api.HealthyStatus
 	status.Details["connected"] = true
 	return status
 }
@@ -51,5 +52,5 @@ func (d *DatabaseHealthChecker) Check(ctx context.Context) ports.HealthStatus {
 // IsHealthy implements the HealthChecker interface
 func (d *DatabaseHealthChecker) IsHealthy(ctx context.Context) bool {
 	status := d.Check(ctx)
-	return status.Status == "healthy"
+	return status.Status == api.HealthyStatus
 }

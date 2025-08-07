@@ -3,6 +3,7 @@ package infrastructure
 import (
 	"context"
 
+	"weatherapi.app/internal/adapters/api"
 	"weatherapi.app/internal/ports"
 )
 
@@ -53,7 +54,7 @@ func (s *SystemHealthChecker) CheckAll(ctx context.Context) map[string]ports.Hea
 		appConfig := s.configProvider.GetAppConfig()
 		results["config"] = ports.HealthStatus{
 			Component: "config",
-			Status:    "healthy",
+			Status:    api.HealthyStatus,
 			Details: map[string]interface{}{
 				"appBaseURL": appConfig.BaseURL,
 			},
@@ -67,9 +68,9 @@ func (s *SystemHealthChecker) CheckAll(ctx context.Context) map[string]ports.Hea
 func (s *SystemHealthChecker) Check(ctx context.Context) ports.HealthStatus {
 	results := s.CheckAll(ctx)
 
-	overallStatus := "healthy"
+	overallStatus := api.HealthyStatus
 	for _, status := range results {
-		if status.Status != "healthy" {
+		if status.Status != api.HealthyStatus {
 			overallStatus = "unhealthy"
 			break
 		}
@@ -85,5 +86,5 @@ func (s *SystemHealthChecker) Check(ctx context.Context) ports.HealthStatus {
 // IsHealthy implements the HealthChecker interface
 func (s *SystemHealthChecker) IsHealthy(ctx context.Context) bool {
 	status := s.Check(ctx)
-	return status.Status == "healthy"
+	return status.Status == api.HealthyStatus
 }
