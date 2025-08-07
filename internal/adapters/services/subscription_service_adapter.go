@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 
@@ -33,7 +34,7 @@ func (a *SubscriptionServiceAdapter) GetConfirmedSubscriptions(ctx context.Conte
 
 	subscriptions, err := a.subscriptionRepo.Find(ctx, filter)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("find confirmed subscriptions: %w", err)
 	}
 
 	return a.convertToServiceData(ctx, subscriptions)
@@ -49,7 +50,7 @@ func (a *SubscriptionServiceAdapter) GetActiveSubscriptionsByCity(ctx context.Co
 
 	subscriptions, err := a.subscriptionRepo.Find(ctx, filter)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("find subscriptions by city: %w", err)
 	}
 
 	return a.convertToSharedSubscriptions(subscriptions), nil
@@ -66,7 +67,7 @@ func (a *SubscriptionServiceAdapter) GetActiveSubscriptionsByFrequency(ctx conte
 
 	subscriptions, err := a.subscriptionRepo.Find(ctx, filter)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("find subscriptions by frequency: %w", err)
 	}
 
 	return a.convertToSharedSubscriptions(subscriptions), nil
@@ -76,13 +77,13 @@ func (a *SubscriptionServiceAdapter) GetActiveSubscriptionsByFrequency(ctx conte
 func (a *SubscriptionServiceAdapter) FindByID(ctx context.Context, id uint) (*ports.SubscriptionServiceData, error) {
 	sub, err := a.subscriptionRepo.FindByID(ctx, id)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("find subscription by ID: %w", err)
 	}
 
 	// Get unsubscribe token
 	token, err := a.tokenRepo.FindBySubscriptionID(ctx, sub.ID, "unsubscribe")
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("find unsubscribe token: %w", err)
 	}
 
 	return &ports.SubscriptionServiceData{
@@ -142,15 +143,15 @@ func (a *SubscriptionServiceAdapter) convertToSharedSubscriptions(subscriptions 
 
 // Subscribe creates a new subscription (for API Gateway compatibility)
 func (a *SubscriptionServiceAdapter) Subscribe(ctx context.Context, email, city, frequency string) error {
-	return fmt.Errorf("subscribe operation should be handled by subscription service")
+	return errors.New("subscribe operation should be handled by subscription service")
 }
 
 // ConfirmSubscription confirms a subscription using a token (for API Gateway compatibility)
 func (a *SubscriptionServiceAdapter) ConfirmSubscription(ctx context.Context, token string) error {
-	return fmt.Errorf("confirm subscription operation should be handled by subscription service")
+	return errors.New("confirm subscription operation should be handled by subscription service")
 }
 
 // Unsubscribe removes a subscription using a token (for API Gateway compatibility)
 func (a *SubscriptionServiceAdapter) Unsubscribe(ctx context.Context, token string) error {
-	return fmt.Errorf("unsubscribe operation should be handled by subscription service")
+	return errors.New("unsubscribe operation should be handled by subscription service")
 }

@@ -13,7 +13,7 @@ import (
 func LoadWeatherServiceConfig() (*Config, error) {
 	config, err := loadBaseConfig()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("load weather service config: %w", err)
 	}
 
 	// Validate only what Weather Service needs
@@ -34,7 +34,7 @@ func LoadWeatherServiceConfig() (*Config, error) {
 func LoadUserServiceConfig() (*Config, error) {
 	config, err := loadBaseConfig()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("load user service config: %w", err)
 	}
 
 	// Validate only what User Service needs
@@ -52,7 +52,7 @@ func LoadUserServiceConfig() (*Config, error) {
 func LoadSubscriptionServiceConfig() (*Config, error) {
 	config, err := loadBaseConfig()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("load subscription service config: %w", err)
 	}
 
 	// Validate only what Subscription Service needs (NO EMAIL CONFIG - uses Notification Service)
@@ -79,7 +79,7 @@ func LoadSubscriptionServiceConfig() (*Config, error) {
 func LoadNotificationServiceConfig() (*Config, error) {
 	config, err := loadBaseConfig()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("load notification service config: %w", err)
 	}
 
 	// Debug: print what was actually parsed for notification service
