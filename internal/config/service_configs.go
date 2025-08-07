@@ -82,12 +82,6 @@ func LoadNotificationServiceConfig() (*Config, error) {
 		return nil, fmt.Errorf("load notification service config: %w", err)
 	}
 
-	// Debug: print what was actually parsed for notification service
-	fmt.Printf("DEBUG: Notification config parsed - Port: %d, Host: %s\n", config.Services.Notification.Port, config.Services.Notification.Host)
-	fmt.Printf("DEBUG: Weather client config - Port: %d, Host: %s\n", config.Services.Weather.Port, config.Services.Weather.Host)
-	fmt.Printf("DEBUG: User client config - Port: %d, Host: %s\n", config.Services.User.Port, config.Services.User.Host)
-	fmt.Printf("DEBUG: Subscription client config - Port: %d, Host: %s\n", config.Services.Subscription.Port, config.Services.Subscription.Host)
-
 	// Validate only what Notification Service needs
 	if err := config.Services.Notification.Validate(); err != nil {
 		return nil, fmt.Errorf("notification service config: %w", err)
