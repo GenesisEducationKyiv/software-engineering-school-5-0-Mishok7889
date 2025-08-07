@@ -5,7 +5,6 @@ import (
 	"text/template"
 
 	"github.com/stretchr/testify/assert"
-	"weatherapi.app/internal/core/subscription"
 	"weatherapi.app/internal/mocks"
 	"weatherapi.app/internal/ports"
 )
@@ -42,7 +41,7 @@ func TestBuilder_BuildConfirmationEmail(t *testing.T) {
 	email, err := builder.BuildConfirmationEmail("New York", fullConfirmationURL)
 
 	assert.NoError(t, err)
-	assert.Equal(t, subscription.EmailSubjectConfirmation, email.Subject)
+	assert.Equal(t, EmailSubjectConfirmation, email.Subject)
 	assert.Equal(t, ports.FormatHTML, email.Format)
 	assert.Contains(t, email.Body, "New York")
 	assert.Contains(t, email.Body, fullConfirmationURL)
@@ -63,7 +62,7 @@ func TestBuilder_BuildWelcomeEmail(t *testing.T) {
 	email, err := builder.BuildWelcomeEmail("London", "daily", fullUnsubscribeURL)
 
 	assert.NoError(t, err)
-	assert.Equal(t, subscription.EmailSubjectWelcome, email.Subject)
+	assert.Equal(t, EmailSubjectWelcome, email.Subject)
 	assert.Equal(t, ports.FormatHTML, email.Format)
 	assert.Contains(t, email.Body, "London")
 	assert.Contains(t, email.Body, "daily")
@@ -83,7 +82,7 @@ func TestBuilder_BuildUnsubscribeEmail(t *testing.T) {
 	email, err := builder.BuildUnsubscribeEmail("Paris")
 
 	assert.NoError(t, err)
-	assert.Equal(t, subscription.EmailSubjectUnsubscribe, email.Subject)
+	assert.Equal(t, EmailSubjectUnsubscribe, email.Subject)
 	assert.Equal(t, ports.FormatHTML, email.Format)
 	assert.Contains(t, email.Body, "Paris")
 	assert.Contains(t, email.Body, "Unsubscribed Successfully")

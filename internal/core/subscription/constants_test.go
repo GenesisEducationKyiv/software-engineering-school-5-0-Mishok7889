@@ -45,22 +45,6 @@ func TestConstants(t *testing.T) {
 		}
 	}
 
-	// Test email template constants are not empty
-	emailConstants := []string{
-		EmailSubjectConfirmation,
-		EmailSubjectWelcome,
-		EmailSubjectUnsubscribe,
-		EmailBodyConfirmation,
-		EmailBodyWelcome,
-		EmailBodyUnsubscribe,
-	}
-
-	for _, template := range emailConstants {
-		if template == "" {
-			t.Errorf("Email template constant should not be empty")
-		}
-	}
-
 	// Test API path constants
 	if APIPathConfirm != "/api/confirm/%s" {
 		t.Errorf("APIPathConfirm = %v, want %v", APIPathConfirm, "/api/confirm/%s")

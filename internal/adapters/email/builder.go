@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"text/template"
 
-	"weatherapi.app/internal/core/subscription"
 	"weatherapi.app/internal/ports"
 )
 
@@ -13,6 +12,36 @@ const (
 	templateNameConfirmation = "confirmation"
 	templateNameWelcome      = "welcome"
 	templateNameUnsubscribe  = "unsubscribe"
+
+	// Email subjects
+	EmailSubjectConfirmation = "Confirm your weather subscription"
+	EmailSubjectWelcome      = "Welcome to Weather Updates!"
+	EmailSubjectUnsubscribe  = "You have been unsubscribed from weather updates"
+
+	// Email body templates
+	EmailBodyConfirmation = `
+		<h2>Confirm Your Weather Subscription</h2>
+		<p>Hello!</p>
+		<p>Thank you for subscribing to weather updates for <strong>{{.City}}</strong>.</p>
+		<p>Please click the link below to confirm your subscription:</p>
+		<p><a href="{{.ConfirmURL}}">Confirm Subscription</a></p>
+		<p>If you didn't request this subscription, you can safely ignore this email.</p>
+	`
+
+	EmailBodyWelcome = `
+		<h2>Welcome to Weather Updates!</h2>
+		<p>Hello!</p>
+		<p>Your subscription for <strong>{{.City}}</strong> weather updates has been confirmed.</p>
+		<p>You will receive <strong>{{.Frequency}}</strong> weather updates.</p>
+		<p>If you wish to unsubscribe, click <a href="{{.UnsubscribeURL}}">here</a>.</p>
+	`
+
+	EmailBodyUnsubscribe = `
+		<h2>Unsubscribed Successfully</h2>
+		<p>Hello!</p>
+		<p>You have been successfully unsubscribed from weather updates for <strong>{{.City}}</strong>.</p>
+		<p>We're sorry to see you go!</p>
+	`
 )
 
 // Builder handles email content generation using templates
@@ -50,9 +79,9 @@ func NewBuilder(config ports.ConfigProvider) (*Builder, error) {
 // loadTemplates initializes all email templates
 func (b *Builder) loadTemplates() error {
 	templates := map[string]string{
-		templateNameConfirmation: subscription.EmailBodyConfirmation,
-		templateNameWelcome:      subscription.EmailBodyWelcome,
-		templateNameUnsubscribe:  subscription.EmailBodyUnsubscribe,
+		templateNameConfirmation: EmailBodyConfirmation,
+		templateNameWelcome:      EmailBodyWelcome,
+		templateNameUnsubscribe:  EmailBodyUnsubscribe,
 	}
 
 	for name, content := range templates {
@@ -80,7 +109,7 @@ func (b *Builder) BuildConfirmationEmail(city, confirmationURL string) (ports.Em
 	}
 
 	return ports.EmailParams{
-		Subject: subscription.EmailSubjectConfirmation,
+		Subject: EmailSubjectConfirmation,
 		Body:    body,
 		Format:  ports.FormatHTML,
 	}, nil
@@ -101,7 +130,7 @@ func (b *Builder) BuildWelcomeEmail(city, frequency, unsubscribeURL string) (por
 	}
 
 	return ports.EmailParams{
-		Subject: subscription.EmailSubjectWelcome,
+		Subject: EmailSubjectWelcome,
 		Body:    body,
 		Format:  ports.FormatHTML,
 	}, nil
@@ -120,7 +149,7 @@ func (b *Builder) BuildUnsubscribeEmail(city string) (ports.EmailParams, error) 
 	}
 
 	return ports.EmailParams{
-		Subject: subscription.EmailSubjectUnsubscribe,
+		Subject: EmailSubjectUnsubscribe,
 		Body:    body,
 		Format:  ports.FormatHTML,
 	}, nil

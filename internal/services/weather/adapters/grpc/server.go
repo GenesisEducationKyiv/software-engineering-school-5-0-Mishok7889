@@ -115,7 +115,7 @@ func (s *WeatherServiceServer) GetWeatherBatch(ctx context.Context, req *weather
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 
-	var weatherDataList []weatherpb.WeatherData
+	var weatherDataList []*weatherpb.WeatherData
 
 	for _, city := range req.Cities {
 		cityName := strings.TrimSpace(city)
@@ -132,7 +132,8 @@ func (s *WeatherServiceServer) GetWeatherBatch(ctx context.Context, req *weather
 			continue
 		}
 
-		weatherDataList = append(weatherDataList, convertToProtobufWeatherData(weatherData))
+		weatherProtoData := convertToProtobufWeatherData(weatherData)
+		weatherDataList = append(weatherDataList, &weatherProtoData)
 	}
 
 	return &weatherpb.GetWeatherBatchResponse{
