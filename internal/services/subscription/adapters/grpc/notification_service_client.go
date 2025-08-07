@@ -63,7 +63,7 @@ func (c *NotificationServiceClient) SendConfirmationEmail(ctx context.Context, e
 		}
 	}()
 
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+	if resp.StatusCode < 200 || resp.StatusCode >= 400 {
 		return fmt.Errorf("notification service returned status %d", resp.StatusCode)
 	}
 
@@ -101,7 +101,7 @@ func (c *NotificationServiceClient) SendWelcomeEmail(ctx context.Context, email,
 		}
 	}()
 
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+	if resp.StatusCode < 200 || resp.StatusCode >= 400 {
 		return fmt.Errorf("notification service returned status %d", resp.StatusCode)
 	}
 
@@ -137,7 +137,7 @@ func (c *NotificationServiceClient) SendUnsubscribeConfirmationEmail(ctx context
 		}
 	}()
 
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+	if resp.StatusCode < 200 || resp.StatusCode >= 400 {
 		return fmt.Errorf("notification service returned status %d", resp.StatusCode)
 	}
 

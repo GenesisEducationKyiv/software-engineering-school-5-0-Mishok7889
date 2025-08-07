@@ -64,7 +64,7 @@ func (c *SubscriptionServiceHTTPClient) Subscribe(ctx context.Context, email, ci
 		}
 	}()
 
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+	if resp.StatusCode < 200 || resp.StatusCode >= 400 {
 		return fmt.Errorf("subscription service returned status %d", resp.StatusCode)
 	}
 
@@ -104,7 +104,7 @@ func (c *SubscriptionServiceHTTPClient) ConfirmSubscription(ctx context.Context,
 		}
 	}()
 
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+	if resp.StatusCode < 200 || resp.StatusCode >= 400 {
 		return fmt.Errorf("subscription service returned status %d", resp.StatusCode)
 	}
 
@@ -128,7 +128,7 @@ func (c *SubscriptionServiceHTTPClient) Unsubscribe(ctx context.Context, token s
 		}
 	}()
 
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+	if resp.StatusCode < 200 || resp.StatusCode >= 400 {
 		return fmt.Errorf("subscription service returned status %d", resp.StatusCode)
 	}
 
