@@ -14,6 +14,13 @@ type ServerConfig struct {
 	Port int
 }
 
+// Request types for HTTP endpoints
+type SubscribeRequest struct {
+	Email     string `form:"email" json:"email" binding:"required,email"`
+	City      string `form:"city" json:"city" binding:"required"`
+	Frequency string `form:"frequency" json:"frequency" binding:"required,oneof=hourly daily"`
+}
+
 type HTTPServer struct {
 	router              *gin.Engine
 	server              *http.Server
@@ -110,11 +117,7 @@ func (s *HTTPServer) getWeather(c *gin.Context) {
 }
 
 func (s *HTTPServer) subscribe(c *gin.Context) {
-	var req struct {
-		Email     string `form:"email" json:"email" binding:"required,email"`
-		City      string `form:"city" json:"city" binding:"required"`
-		Frequency string `form:"frequency" json:"frequency" binding:"required,oneof=hourly daily"`
-	}
+	var req SubscribeRequest
 
 	if err := c.ShouldBind(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})

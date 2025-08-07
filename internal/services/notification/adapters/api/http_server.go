@@ -25,6 +25,35 @@ type ServerConfig struct {
 	Port int
 }
 
+// Request types for HTTP endpoints
+type WeatherUpdatesRequest struct {
+	Frequency string `json:"frequency" binding:"required,oneof=hourly daily"`
+}
+
+type ConfirmationEmailRequest struct {
+	Email           string `json:"email" binding:"required,email"`
+	ConfirmationURL string `json:"confirmation_url" binding:"required"`
+	City            string `json:"city" binding:"required"`
+}
+
+type WelcomeEmailRequest struct {
+	Email          string `json:"email" binding:"required,email"`
+	City           string `json:"city" binding:"required"`
+	Frequency      string `json:"frequency" binding:"required"`
+	UnsubscribeURL string `json:"unsubscribe_url" binding:"required"`
+}
+
+type UnsubscribeEmailRequest struct {
+	Email string `json:"email" binding:"required,email"`
+	City  string `json:"city" binding:"required"`
+}
+
+type GenericEmailRequest struct {
+	To      string `json:"to" binding:"required,email"`
+	Subject string `json:"subject" binding:"required"`
+	Body    string `json:"body" binding:"required"`
+}
+
 func NewHTTPServer(
 	config ServerConfig,
 	publisher messaging.Publisher,
@@ -82,9 +111,7 @@ func (s *HTTPServer) healthCheck(c *gin.Context) {
 }
 
 func (s *HTTPServer) triggerWeatherUpdates(c *gin.Context) {
-	var req struct {
-		Frequency string `json:"frequency" binding:"required,oneof=hourly daily"`
-	}
+	var req WeatherUpdatesRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
 		s.logger.Error("Invalid request payload", ports.F("error", err))
@@ -115,11 +142,7 @@ func (s *HTTPServer) triggerWeatherUpdates(c *gin.Context) {
 
 // Email endpoints
 func (s *HTTPServer) sendConfirmationEmail(c *gin.Context) {
-	var req struct {
-		Email           string `json:"email" binding:"required,email"`
-		ConfirmationURL string `json:"confirmation_url" binding:"required"`
-		City            string `json:"city" binding:"required"`
-	}
+	var req ConfirmationEmailRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
 		s.logger.Error("Invalid confirmation email request", ports.F("error", err))
@@ -150,12 +173,7 @@ func (s *HTTPServer) sendConfirmationEmail(c *gin.Context) {
 }
 
 func (s *HTTPServer) sendWelcomeEmail(c *gin.Context) {
-	var req struct {
-		Email          string `json:"email" binding:"required,email"`
-		City           string `json:"city" binding:"required"`
-		Frequency      string `json:"frequency" binding:"required"`
-		UnsubscribeURL string `json:"unsubscribe_url" binding:"required"`
-	}
+	var req WelcomeEmailRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
 		s.logger.Error("Invalid welcome email request", ports.F("error", err))
@@ -186,10 +204,7 @@ func (s *HTTPServer) sendWelcomeEmail(c *gin.Context) {
 }
 
 func (s *HTTPServer) sendUnsubscribeEmail(c *gin.Context) {
-	var req struct {
-		Email string `json:"email" binding:"required,email"`
-		City  string `json:"city" binding:"required"`
-	}
+	var req UnsubscribeEmailRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
 		s.logger.Error("Invalid unsubscribe email request", ports.F("error", err))
@@ -220,11 +235,7 @@ func (s *HTTPServer) sendUnsubscribeEmail(c *gin.Context) {
 }
 
 func (s *HTTPServer) sendGenericEmail(c *gin.Context) {
-	var req struct {
-		To      string `json:"to" binding:"required,email"`
-		Subject string `json:"subject" binding:"required"`
-		Body    string `json:"body" binding:"required"`
-	}
+	var req GenericEmailRequest
 
 	if err := c.ShouldBindJSON(&req); err != nil {
 		s.logger.Error("Invalid generic email request", ports.F("error", err))
