@@ -10,6 +10,7 @@ import (
 	"weatherapi.app/internal/ports"
 	gatewayapi "weatherapi.app/internal/services/gateway/adapters/api"
 	gatewaygrpc "weatherapi.app/internal/services/gateway/adapters/grpc"
+	"weatherapi.app/pkg/logger"
 )
 
 const (
@@ -36,9 +37,19 @@ type GatewayApplication struct {
 }
 
 func NewGatewayApplication(cfg *config.Config) (*GatewayApplication, error) {
+	return NewGatewayApplicationWithLogger(cfg, nil)
+}
+
+// NewGatewayApplicationWithLogger creates a gateway application with logger
+func NewGatewayApplicationWithLogger(cfg *config.Config, log *logger.Logger) (*GatewayApplication, error) {
 	app := &GatewayApplication{
 		config: cfg,
 		logger: &infrastructure.SlogLoggerAdapter{},
+	}
+
+	// Use provided logger if available
+	if log != nil {
+		app.logger = &infrastructure.LoggerAdapter{Logger: log}
 	}
 
 	if err := app.initializeServices(); err != nil {

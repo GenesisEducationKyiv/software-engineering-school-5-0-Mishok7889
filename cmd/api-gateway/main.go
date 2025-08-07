@@ -4,22 +4,22 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
 	"github.com/joho/godotenv"
+	"weatherapi.app/internal/adapters/infrastructure"
 	"weatherapi.app/internal/config"
 	"weatherapi.app/internal/services/gateway/app"
+	"weatherapi.app/pkg/logger"
 )
 
 const (
 	shutdownTimeoutSeconds = 30
 	exitCodeError          = 1
 
-	logNoEnvFile        = "No .env file found or error loading it"
 	logServiceFailed    = "API Gateway failed"
 	logServiceStarting  = "Starting API Gateway"
 	logServiceShutdown  = "Shutting down API Gateway..."
@@ -37,12 +37,15 @@ const (
 )
 
 func main() {
-	if err := godotenv.Load(); err != nil {
-		slog.Info(logNoEnvFile)
-	}
+	_ = godotenv.Load() // Ignore error if .env file doesn't exist
 
 	if err := run(); err != nil {
-		slog.Error(logServiceFailed, "error", err)
+		log := logger.NewServiceLogger(
+			logger.APIGatewayServiceName,
+			getEnvironment(),
+			isProduction(),
+		)
+		log.LogCriticalError(logServiceFailed, "error", err)
 		os.Exit(exitCodeError)
 	}
 }
@@ -57,34 +60,78 @@ func run() error {
 		return fmt.Errorf(errInvalidConfig, err)
 	}
 
-	gatewayApp, err := app.NewGatewayApplication(cfg)
+	// Initialize service logger
+	log := logger.NewServiceLogger(
+		logger.APIGatewayServiceName,
+		getEnvironment(),
+		isProduction(),
+	).WithComponent("main")
+
+	log.Info("configuration loaded successfully",
+		"service", logger.APIGatewayServiceName,
+		"port", cfg.Services.Gateway.Port,
+		"host", cfg.Services.Gateway.Host,
+		"weather_service", fmt.Sprintf("%s:%d", cfg.Services.Weather.Host, cfg.Services.Weather.Port),
+		"user_service", fmt.Sprintf("%s:%d", cfg.Services.User.Host, cfg.Services.User.Port),
+		"subscription_service", fmt.Sprintf("%s:%d", cfg.Services.Subscription.Host, cfg.Services.Subscription.Port),
+	)
+
+	gatewayApp, err := app.NewGatewayApplicationWithLogger(cfg, log)
 	if err != nil {
 		return fmt.Errorf(errCreateApp, err)
 	}
 
+	// Add Prometheus metrics server in background
+	go func() {
+		metricsFactory := infrastructure.NewMetricsFactory(
+			logger.APIGatewayServiceName,
+			getServiceVersion(),
+			log.WithComponent("metrics"),
+		)
+
+		prometheusAdapter := metricsFactory.CreatePrometheusAdapter(nil)
+
+		metricsServer := metricsFactory.CreateDedicatedMetricsServer(
+			infrastructure.MetricsServerConfig{
+				Port: 9080, // Dedicated metrics port
+				Host: "0.0.0.0",
+			},
+			prometheusAdapter,
+		)
+
+		log.Info("starting API gateway metrics server",
+			"metrics_port", 9080,
+			"metrics_endpoint", "http://localhost:9080/metrics",
+		)
+
+		if err := metricsServer.ListenAndServe(); err != nil {
+			log.Error("metrics server failed", "error", err)
+		}
+	}()
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	setupGracefulShutdown(cancel, gatewayApp)
+	setupGracefulShutdown(cancel, gatewayApp, log)
 
-	slog.Info(logServiceStarting, "port", cfg.Services.Gateway.Port)
+	log.Info(logServiceStarting, "port", cfg.Services.Gateway.Port)
 
 	if err := gatewayApp.Start(ctx); err != nil {
 		return fmt.Errorf(errStartServer, err)
 	}
 
 	<-ctx.Done()
-	slog.Info(logServiceShutdown)
+	log.Info(logServiceShutdown)
 
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), shutdownTimeoutSeconds*time.Second)
 	defer shutdownCancel()
 
 	if err := gatewayApp.Shutdown(shutdownCtx); err != nil {
-		slog.Error(logShutdownError, "error", err)
+		log.Error(logShutdownError, "error", err)
 		return err
 	}
 
-	slog.Info(logShutdownComplete)
+	log.Info(logShutdownComplete)
 	return nil
 }
 
@@ -101,20 +148,46 @@ func validateConfig(cfg *config.Config) error {
 	return nil
 }
 
-func setupGracefulShutdown(cancel context.CancelFunc, app *app.GatewayApplication) {
+func setupGracefulShutdown(cancel context.CancelFunc, app *app.GatewayApplication, log *logger.Logger) {
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 
 	go func() {
 		<-c
-		slog.Info(logShutdownSignal)
+		log.Info(logShutdownSignal)
 		cancel()
 
 		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), shutdownTimeoutSeconds*time.Second)
 		defer shutdownCancel()
 
 		if err := app.Shutdown(shutdownCtx); err != nil {
-			slog.Error(logShutdownError, "error", err)
+			log.Error(logShutdownError, "error", err)
 		}
 	}()
+}
+
+// getEnvironment returns the current environment from env vars
+func getEnvironment() string {
+	env := os.Getenv("ENVIRONMENT")
+	if env == "" {
+		env = os.Getenv("ENV")
+	}
+	if env == "" {
+		return "development"
+	}
+	return env
+}
+
+// isProduction determines if we're running in production
+func isProduction() bool {
+	env := getEnvironment()
+	return env == "production" || env == "prod"
+}
+
+// getServiceVersion returns the service version from env vars
+func getServiceVersion() string {
+	if version := os.Getenv("SERVICE_VERSION"); version != "" {
+		return version
+	}
+	return "dev"
 }

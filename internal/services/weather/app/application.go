@@ -11,6 +11,7 @@ import (
 	"weatherapi.app/internal/core/weather"
 	"weatherapi.app/internal/ports"
 	weathergrpc "weatherapi.app/internal/services/weather/adapters/grpc"
+	"weatherapi.app/pkg/logger"
 )
 
 const (
@@ -33,20 +34,27 @@ const (
 )
 
 type WeatherApplication struct {
-	config      *config.Config
-	weatherUC   *weather.UseCase
-	grpcHandler *weathergrpc.WeatherServiceServer
-	logger      ports.Logger
+	config         *config.Config
+	weatherUC      *weather.UseCase
+	grpcHandler    *weathergrpc.WeatherServiceServer
+	logger         ports.Logger
+	enhancedLogger *logger.Logger // Enhanced logger for new functionality
 }
 
 func NewWeatherApplication(cfg *config.Config) (*WeatherApplication, error) {
+	return NewWeatherApplicationWithLogger(cfg, nil)
+}
+
+// NewWeatherApplicationWithLogger creates a weather application with enhanced logger
+func NewWeatherApplicationWithLogger(cfg *config.Config, enhancedLogger *logger.Logger) (*WeatherApplication, error) {
 	if err := validateApplicationConfig(cfg); err != nil {
 		return nil, fmt.Errorf("invalid configuration: %w", err)
 	}
 
 	app := &WeatherApplication{
-		config: cfg,
-		logger: &infrastructure.SlogLoggerAdapter{},
+		config:         cfg,
+		logger:         &infrastructure.SlogLoggerAdapter{},
+		enhancedLogger: enhancedLogger,
 	}
 
 	if err := app.initializeWeatherUseCase(); err != nil {
@@ -132,7 +140,16 @@ func (a *WeatherApplication) initializeWeatherUseCase() error {
 func (a *WeatherApplication) initializeGRPCHandler() error {
 	slog.Info(logInitGRPCHandler)
 
-	grpcHandler := weathergrpc.NewWeatherServiceServer(a.weatherUC)
+	// Use enhanced logger if available, otherwise fallback to standard logger
+	var grpcHandler *weathergrpc.WeatherServiceServer
+	if a.enhancedLogger != nil {
+		grpcHandler = weathergrpc.NewWeatherServiceServer(a.weatherUC, a.enhancedLogger)
+	} else {
+		// Fallback for backward compatibility - create a basic logger
+		basicLogger := logger.New()
+		grpcHandler = weathergrpc.NewWeatherServiceServer(a.weatherUC, basicLogger)
+	}
+
 	a.grpcHandler = grpcHandler
 
 	slog.Info(logGRPCSuccess)

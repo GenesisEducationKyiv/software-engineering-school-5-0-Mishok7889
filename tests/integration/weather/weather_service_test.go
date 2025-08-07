@@ -21,6 +21,7 @@ import (
 	"weatherapi.app/internal/mocks"
 	"weatherapi.app/internal/ports"
 	weathergrpc "weatherapi.app/internal/services/weather/adapters/grpc"
+	"weatherapi.app/pkg/logger"
 )
 
 const (
@@ -137,8 +138,11 @@ func (s *WeatherServiceIntegrationSuite) createWeatherApplication() {
 	})
 	s.Require().NoError(err)
 
-	// Create gRPC handler directly (this is what we're testing)
-	s.grpcHandler = weathergrpc.NewWeatherServiceServer(weatherUC)
+	// Create a test logger for gRPC handler
+	testLogger := logger.NewServiceLogger("weather-service-test", "test", false)
+
+	// Create gRPC handler with both use case and logger (this is what we're testing)
+	s.grpcHandler = weathergrpc.NewWeatherServiceServer(weatherUC, testLogger)
 }
 
 func (s *WeatherServiceIntegrationSuite) setupGRPCServer() {

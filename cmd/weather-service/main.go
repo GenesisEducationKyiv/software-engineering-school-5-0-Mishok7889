@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"net"
 	"os"
 	"os/signal"
@@ -13,8 +12,11 @@ import (
 	"github.com/joho/godotenv"
 	"google.golang.org/grpc"
 	weatherpb "weatherapi.app/api/proto/weather"
+	"weatherapi.app/internal/adapters/infrastructure"
+	"weatherapi.app/internal/adapters/middleware"
 	"weatherapi.app/internal/config"
 	"weatherapi.app/internal/services/weather/app"
+	"weatherapi.app/pkg/logger"
 )
 
 const (
@@ -24,7 +26,6 @@ const (
 	exitCodeError          = 1
 
 	// Log messages
-	logNoEnvFile        = "No .env file found or error loading it"
 	logServiceFailed    = "Weather service failed"
 	logServiceStarting  = "Starting Weather Service"
 	logServiceShutdown  = "Shutting down Weather Service..."
@@ -40,12 +41,15 @@ const (
 )
 
 func main() {
-	if err := godotenv.Load(); err != nil {
-		slog.Info(logNoEnvFile)
-	}
+	_ = godotenv.Load() // Ignore error if .env file doesn't exist
 
 	if err := run(); err != nil {
-		slog.Error(logServiceFailed, "error", err)
+		log := logger.NewServiceLogger(
+			logger.WeatherServiceName,
+			getEnvironment(),
+			isProduction(),
+		)
+		log.LogCriticalError(logServiceFailed, "error", err)
 		os.Exit(exitCodeError)
 	}
 }
@@ -60,25 +64,80 @@ func run() error {
 		return fmt.Errorf("invalid configuration: %w", err)
 	}
 
-	weatherApp, err := app.NewWeatherApplication(cfg)
+	// Initialize service logger
+	log := logger.NewServiceLogger(
+		logger.WeatherServiceName,
+		getEnvironment(),
+		isProduction(),
+	).WithComponent("main")
+
+	log.Info("configuration loaded successfully",
+		"service", logger.WeatherServiceName,
+		"port", cfg.Services.Weather.Port,
+		"host", cfg.Services.Weather.Host,
+		"cache_enabled", cfg.Weather.EnableCache,
+		"provider_count", len(cfg.Weather.ProviderOrder),
+	)
+
+	weatherApp, err := app.NewWeatherApplicationWithLogger(cfg, log)
 	if err != nil {
 		return fmt.Errorf(errCreateApp, err)
 	}
 
+	// Add Prometheus metrics server in background
+	go func() {
+		metricsFactory := infrastructure.NewMetricsFactory(
+			logger.WeatherServiceName,
+			getServiceVersion(),
+			log.WithComponent("metrics"),
+		)
+
+		prometheusAdapter := metricsFactory.CreatePrometheusAdapter(nil)
+
+		metricsServer := metricsFactory.CreateDedicatedMetricsServer(
+			infrastructure.MetricsServerConfig{
+				Port: 9081, // Dedicated metrics port
+				Host: "0.0.0.0",
+			},
+			prometheusAdapter,
+		)
+
+		log.Info("starting weather service metrics server",
+			"metrics_port", 9081,
+			"metrics_endpoint", "http://localhost:9081/metrics",
+		)
+
+		if err := metricsServer.ListenAndServe(); err != nil {
+			log.Error("metrics server failed", "error", err)
+		}
+	}()
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	setupGracefulShutdown(cancel, weatherApp)
+	// Create correlation interceptor for gRPC
+	correlationInterceptor := middleware.NewGRPCCorrelationInterceptor(
+		log.WithComponent("grpc-interceptor"),
+	)
 
-	slog.Info(logServiceStarting, "port", cfg.Services.Weather.Port)
+	setupGracefulShutdown(cancel, weatherApp, log)
+
+	log.Info(logServiceStarting, "port", cfg.Services.Weather.Port)
 
 	lis, err := net.Listen("tcp", fmt.Sprintf(tcpPortFormat, cfg.Services.Weather.Port))
 	if err != nil {
 		return fmt.Errorf(errFailedListen, err)
 	}
 
-	grpcServer := grpc.NewServer()
+	grpcServer := grpc.NewServer(
+		correlationInterceptor.GRPCServerOptions()...,
+	)
 	weatherpb.RegisterWeatherServiceServer(grpcServer, weatherApp.GetGRPCHandler())
+
+	log.Info("gRPC server registered with correlation support",
+		"address", lis.Addr().String(),
+		"correlation_enabled", true,
+	)
 
 	errChan := make(chan error, 1)
 	go func() {
@@ -89,12 +148,12 @@ func run() error {
 
 	select {
 	case <-ctx.Done():
-		slog.Info(logServiceShutdown)
+		log.Info(logServiceShutdown)
 		grpcServer.GracefulStop()
 		if err := weatherApp.Shutdown(ctx); err != nil {
-			slog.Error(logShutdownError, "error", err)
+			log.Error(logShutdownError, "error", err)
 		}
-		slog.Info(logShutdownComplete)
+		log.Info(logShutdownComplete)
 		return nil
 	case err := <-errChan:
 		return err
@@ -114,20 +173,46 @@ func validateConfig(cfg *config.Config) error {
 	return nil
 }
 
-func setupGracefulShutdown(cancel context.CancelFunc, app *app.WeatherApplication) {
+func setupGracefulShutdown(cancel context.CancelFunc, app *app.WeatherApplication, log *logger.Logger) {
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 
 	go func() {
 		<-c
-		slog.Info(logShutdownSignal)
+		log.Info(logShutdownSignal)
 		cancel()
 
 		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), shutdownTimeoutSeconds*time.Second)
 		defer shutdownCancel()
 
 		if err := app.Shutdown(shutdownCtx); err != nil {
-			slog.Error(logShutdownError, "error", err)
+			log.Error(logShutdownError, "error", err)
 		}
 	}()
+}
+
+// getEnvironment returns the current environment from env vars
+func getEnvironment() string {
+	env := os.Getenv("ENVIRONMENT")
+	if env == "" {
+		env = os.Getenv("ENV")
+	}
+	if env == "" {
+		return "development"
+	}
+	return env
+}
+
+// isProduction determines if we're running in production
+func isProduction() bool {
+	env := getEnvironment()
+	return env == "production" || env == "prod"
+}
+
+// getServiceVersion returns the service version from env vars
+func getServiceVersion() string {
+	if version := os.Getenv("SERVICE_VERSION"); version != "" {
+		return version
+	}
+	return "dev"
 }
