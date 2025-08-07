@@ -7,6 +7,17 @@ import (
 	"github.com/google/uuid"
 )
 
+// buildHeaders creates common headers for events and commands
+func buildHeaders(typeKey, typeValue, idKey, idValue, correlationID string) map[string]string {
+	headers := make(map[string]string)
+	headers[typeKey] = typeValue
+	headers[idKey] = idValue
+	if correlationID != "" {
+		headers["correlation_id"] = correlationID
+	}
+	return headers
+}
+
 type EventType string
 
 const (
@@ -61,13 +72,7 @@ func (e *WeatherDataFetchedEvent) ID() string {
 }
 
 func (e *WeatherDataFetchedEvent) Headers() map[string]string {
-	headers := make(map[string]string)
-	headers["event_type"] = string(e.EventType)
-	headers["event_id"] = e.EventID
-	if e.CorrelationID != "" {
-		headers["correlation_id"] = e.CorrelationID
-	}
-	return headers
+	return buildHeaders("event_type", string(e.EventType), "event_id", e.EventID, e.CorrelationID)
 }
 
 type SubscriptionCreatedEvent struct {
@@ -109,13 +114,7 @@ func (e *SubscriptionCreatedEvent) ID() string {
 }
 
 func (e *SubscriptionCreatedEvent) Headers() map[string]string {
-	headers := make(map[string]string)
-	headers["event_type"] = string(e.EventType)
-	headers["event_id"] = e.EventID
-	if e.CorrelationID != "" {
-		headers["correlation_id"] = e.CorrelationID
-	}
-	return headers
+	return buildHeaders("event_type", string(e.EventType), "event_id", e.EventID, e.CorrelationID)
 }
 
 type SubscriptionCancelledEvent struct {
@@ -153,13 +152,7 @@ func (e *SubscriptionCancelledEvent) ID() string {
 }
 
 func (e *SubscriptionCancelledEvent) Headers() map[string]string {
-	headers := make(map[string]string)
-	headers["event_type"] = string(e.EventType)
-	headers["event_id"] = e.EventID
-	if e.CorrelationID != "" {
-		headers["correlation_id"] = e.CorrelationID
-	}
-	return headers
+	return buildHeaders("event_type", string(e.EventType), "event_id", e.EventID, e.CorrelationID)
 }
 
 type SendWeatherUpdatesCommand struct {
@@ -193,11 +186,5 @@ func (c *SendWeatherUpdatesCommand) ID() string {
 }
 
 func (c *SendWeatherUpdatesCommand) Headers() map[string]string {
-	headers := make(map[string]string)
-	headers["command_type"] = string(c.CommandType)
-	headers["command_id"] = c.CommandID
-	if c.CorrelationID != "" {
-		headers["correlation_id"] = c.CorrelationID
-	}
-	return headers
+	return buildHeaders("command_type", string(c.CommandType), "command_id", c.CommandID, c.CorrelationID)
 }
