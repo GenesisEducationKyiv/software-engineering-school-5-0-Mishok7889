@@ -94,8 +94,9 @@ func (s *WeatherServiceServer) GetWeather(ctx context.Context, req *weatherpb.Ge
 				"source", "grpc",
 			)
 
+			weatherProtoData := convertToProtobufWeatherData(weatherData)
 			return &weatherpb.GetWeatherResponse{
-				Weather: convertToProtobufWeatherData(weatherData),
+				Weather: &weatherProtoData,
 			}, nil
 		},
 		"city", req.GetCity(),
@@ -114,7 +115,7 @@ func (s *WeatherServiceServer) GetWeatherBatch(ctx context.Context, req *weather
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 
-	var weatherDataList []*weatherpb.WeatherData
+	var weatherDataList []weatherpb.WeatherData
 
 	for _, city := range req.Cities {
 		cityName := strings.TrimSpace(city)
@@ -240,8 +241,8 @@ func validateCityName(city string) error {
 	return nil
 }
 
-func convertToProtobufWeatherData(weatherData *weathercore.Weather) *weatherpb.WeatherData {
-	return &weatherpb.WeatherData{
+func convertToProtobufWeatherData(weatherData *weathercore.Weather) weatherpb.WeatherData {
+	return weatherpb.WeatherData{
 		Temperature: weatherData.Temperature,
 		Humidity:    weatherData.Humidity,
 		Description: weatherData.Description,
