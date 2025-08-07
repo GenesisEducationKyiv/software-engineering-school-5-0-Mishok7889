@@ -34,6 +34,17 @@ func NewSubscriptionServiceHTTPClient(config SubscriptionServiceHTTPConfig) (*Su
 	}, nil
 }
 
+// prepareJSONRequest creates an HTTP request with JSON content type header
+func (c *SubscriptionServiceHTTPClient) prepareJSONRequest(ctx context.Context, method, url string, body []byte) (*http.Request, error) {
+	req, err := http.NewRequestWithContext(ctx, method, url, bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	return req, nil
+}
+
 func (c *SubscriptionServiceHTTPClient) Subscribe(ctx context.Context, email, city, frequency string) error {
 	reqBody := map[string]string{
 		"email":     email,
@@ -46,13 +57,10 @@ func (c *SubscriptionServiceHTTPClient) Subscribe(ctx context.Context, email, ci
 		return fmt.Errorf("marshal request body: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
-		c.baseURL+"/api/v1/subscriptions", bytes.NewReader(jsonBody))
+	req, err := c.prepareJSONRequest(ctx, http.MethodPost, c.baseURL+"/api/v1/subscriptions", jsonBody)
 	if err != nil {
-		return fmt.Errorf("create request: %w", err)
+		return err
 	}
-
-	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
