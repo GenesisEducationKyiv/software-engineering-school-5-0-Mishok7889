@@ -174,12 +174,19 @@ func (a *UserApplication) GetGRPCHandler() *usergrpc.AuthServiceServer {
 func (a *UserApplication) Shutdown(ctx context.Context) error {
 	slog.Info(logShuttingDown)
 
-	if a.db != nil {
-		if db, err := a.db.DB(); err == nil {
-			if err := db.Close(); err != nil {
-				slog.Warn(logClosingDB, "error", err)
-			}
-		}
+	if a.db == nil {
+		slog.Info(logShutdownComplete)
+		return nil
+	}
+
+	db, err := a.db.DB()
+	if err != nil {
+		slog.Info(logShutdownComplete)
+		return nil
+	}
+
+	if err := db.Close(); err != nil {
+		slog.Warn(logClosingDB, "error", err)
 	}
 
 	slog.Info(logShutdownComplete)
