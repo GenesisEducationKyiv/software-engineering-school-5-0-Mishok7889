@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -58,7 +59,9 @@ func (c *SubscriptionServiceHTTPClient) Subscribe(ctx context.Context, email, ci
 		return fmt.Errorf("send request: %w", err)
 	}
 	defer func() {
-		_ = resp.Body.Close()
+		if err := resp.Body.Close(); err != nil {
+			slog.Warn("failed to close response body", "error", err)
+		}
 	}()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
@@ -96,7 +99,9 @@ func (c *SubscriptionServiceHTTPClient) ConfirmSubscription(ctx context.Context,
 		return fmt.Errorf("send request: %w", err)
 	}
 	defer func() {
-		_ = resp.Body.Close()
+		if err := resp.Body.Close(); err != nil {
+			slog.Warn("failed to close response body", "error", err)
+		}
 	}()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
@@ -118,7 +123,9 @@ func (c *SubscriptionServiceHTTPClient) Unsubscribe(ctx context.Context, token s
 		return fmt.Errorf("send request: %w", err)
 	}
 	defer func() {
-		_ = resp.Body.Close()
+		if err := resp.Body.Close(); err != nil {
+			slog.Warn("failed to close response body", "error", err)
+		}
 	}()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {

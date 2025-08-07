@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -57,7 +58,9 @@ func (c *NotificationServiceClient) SendConfirmationEmail(ctx context.Context, e
 		return fmt.Errorf("send HTTP request: %w", err)
 	}
 	defer func() {
-		_ = resp.Body.Close()
+		if err := resp.Body.Close(); err != nil {
+			slog.Warn("failed to close response body", "error", err)
+		}
 	}()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
@@ -93,7 +96,9 @@ func (c *NotificationServiceClient) SendWelcomeEmail(ctx context.Context, email,
 		return fmt.Errorf("send HTTP request: %w", err)
 	}
 	defer func() {
-		_ = resp.Body.Close()
+		if err := resp.Body.Close(); err != nil {
+			slog.Warn("failed to close response body", "error", err)
+		}
 	}()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
@@ -127,7 +132,9 @@ func (c *NotificationServiceClient) SendUnsubscribeConfirmationEmail(ctx context
 		return fmt.Errorf("send HTTP request: %w", err)
 	}
 	defer func() {
-		_ = resp.Body.Close()
+		if err := resp.Body.Close(); err != nil {
+			slog.Warn("failed to close response body", "error", err)
+		}
 	}()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
