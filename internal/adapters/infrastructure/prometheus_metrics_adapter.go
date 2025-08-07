@@ -72,6 +72,39 @@ func NewPrometheusMetricsAdapter(config PrometheusConfig) *PrometheusMetricsAdap
 	return adapter
 }
 
+func (p *PrometheusMetricsAdapter) createCounterVec(name, help string, commonLabels prometheus.Labels, labels []string) *prometheus.CounterVec {
+	return prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name:        name,
+			Help:        help,
+			ConstLabels: commonLabels,
+		},
+		labels,
+	)
+}
+
+func (p *PrometheusMetricsAdapter) createHistogramVec(name, help string, commonLabels prometheus.Labels, labels []string, buckets []float64) *prometheus.HistogramVec {
+	return prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:        name,
+			Help:        help,
+			ConstLabels: commonLabels,
+			Buckets:     buckets,
+		},
+		labels,
+	)
+}
+
+func (p *PrometheusMetricsAdapter) createGauge(name, help string, commonLabels prometheus.Labels) prometheus.Gauge {
+	return prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Name:        name,
+			Help:        help,
+			ConstLabels: commonLabels,
+		},
+	)
+}
+
 // initializeMetrics creates all Prometheus metrics
 func (p *PrometheusMetricsAdapter) initializeMetrics(serviceName, serviceVersion string) {
 	commonLabels := prometheus.Labels{
@@ -80,170 +113,134 @@ func (p *PrometheusMetricsAdapter) initializeMetrics(serviceName, serviceVersion
 	}
 
 	// HTTP metrics
-	p.httpRequestsTotal = prometheus.NewCounterVec(
-		prometheus.CounterOpts{
-			Name:        "http_requests_total",
-			Help:        "Total number of HTTP requests",
-			ConstLabels: commonLabels,
-		},
+	p.httpRequestsTotal = p.createCounterVec(
+		"http_requests_total",
+		"Total number of HTTP requests",
+		commonLabels,
 		[]string{"method", "endpoint", "status_code"},
 	)
 
-	p.httpRequestDuration = prometheus.NewHistogramVec(
-		prometheus.HistogramOpts{
-			Name:        "http_request_duration_seconds",
-			Help:        "HTTP request duration in seconds",
-			ConstLabels: commonLabels,
-			Buckets:     []float64{0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10},
-		},
+	p.httpRequestDuration = p.createHistogramVec(
+		"http_request_duration_seconds",
+		"HTTP request duration in seconds",
+		commonLabels,
 		[]string{"method", "endpoint"},
+		[]float64{0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10},
 	)
 
-	p.httpResponseSize = prometheus.NewHistogramVec(
-		prometheus.HistogramOpts{
-			Name:        "http_response_size_bytes",
-			Help:        "HTTP response size in bytes",
-			ConstLabels: commonLabels,
-			Buckets:     prometheus.ExponentialBuckets(100, 10, 8),
-		},
+	p.httpResponseSize = p.createHistogramVec(
+		"http_response_size_bytes",
+		"HTTP response size in bytes",
+		commonLabels,
 		[]string{"method", "endpoint"},
+		prometheus.ExponentialBuckets(100, 10, 8),
 	)
 
 	// Weather metrics
-	p.weatherRequestsTotal = prometheus.NewCounterVec(
-		prometheus.CounterOpts{
-			Name:        "weather_requests_total",
-			Help:        "Total number of weather API requests",
-			ConstLabels: commonLabels,
-		},
+	p.weatherRequestsTotal = p.createCounterVec(
+		"weather_requests_total",
+		"Total number of weather API requests",
+		commonLabels,
 		[]string{"provider", "city", "status"},
 	)
 
-	p.weatherRequestDuration = prometheus.NewHistogramVec(
-		prometheus.HistogramOpts{
-			Name:        "weather_request_duration_seconds",
-			Help:        "Weather API request duration in seconds",
-			ConstLabels: commonLabels,
-			Buckets:     []float64{0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30},
-		},
+	p.weatherRequestDuration = p.createHistogramVec(
+		"weather_request_duration_seconds",
+		"Weather API request duration in seconds",
+		commonLabels,
 		[]string{"provider"},
+		[]float64{0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30},
 	)
 
-	p.weatherProviderFailures = prometheus.NewCounterVec(
-		prometheus.CounterOpts{
-			Name:        "weather_provider_failures_total",
-			Help:        "Total number of weather provider failures",
-			ConstLabels: commonLabels,
-		},
+	p.weatherProviderFailures = p.createCounterVec(
+		"weather_provider_failures_total",
+		"Total number of weather provider failures",
+		commonLabels,
 		[]string{"provider", "error_type"},
 	)
 
 	// Cache metrics
-	p.cacheOperationsTotal = prometheus.NewCounterVec(
-		prometheus.CounterOpts{
-			Name:        "cache_operations_total",
-			Help:        "Total number of cache operations",
-			ConstLabels: commonLabels,
-		},
+	p.cacheOperationsTotal = p.createCounterVec(
+		"cache_operations_total",
+		"Total number of cache operations",
+		commonLabels,
 		[]string{"operation", "result"},
 	)
 
-	p.cacheHitRatio = prometheus.NewGauge(
-		prometheus.GaugeOpts{
-			Name:        "cache_hit_ratio",
-			Help:        "Cache hit ratio (0-1)",
-			ConstLabels: commonLabels,
-		},
+	p.cacheHitRatio = p.createGauge(
+		"cache_hit_ratio",
+		"Cache hit ratio (0-1)",
+		commonLabels,
 	)
 
-	p.cacheSizeBytes = prometheus.NewGauge(
-		prometheus.GaugeOpts{
-			Name:        "cache_size_bytes",
-			Help:        "Current cache size in bytes",
-			ConstLabels: commonLabels,
-		},
+	p.cacheSizeBytes = p.createGauge(
+		"cache_size_bytes",
+		"Current cache size in bytes",
+		commonLabels,
 	)
 
 	// Database metrics
-	p.dbConnectionsActive = prometheus.NewGauge(
-		prometheus.GaugeOpts{
-			Name:        "database_connections_active",
-			Help:        "Number of active database connections",
-			ConstLabels: commonLabels,
-		},
+	p.dbConnectionsActive = p.createGauge(
+		"database_connections_active",
+		"Number of active database connections",
+		commonLabels,
 	)
 
-	p.dbQueryDuration = prometheus.NewHistogramVec(
-		prometheus.HistogramOpts{
-			Name:        "database_query_duration_seconds",
-			Help:        "Database query duration in seconds",
-			ConstLabels: commonLabels,
-			Buckets:     []float64{0.001, 0.005, 0.01, 0.05, 0.1, 0.25, 0.5, 1},
-		},
+	p.dbQueryDuration = p.createHistogramVec(
+		"database_query_duration_seconds",
+		"Database query duration in seconds",
+		commonLabels,
 		[]string{"operation", "table"},
+		[]float64{0.001, 0.005, 0.01, 0.05, 0.1, 0.25, 0.5, 1},
 	)
 
-	p.dbQueryTotal = prometheus.NewCounterVec(
-		prometheus.CounterOpts{
-			Name:        "database_queries_total",
-			Help:        "Total number of database queries",
-			ConstLabels: commonLabels,
-		},
+	p.dbQueryTotal = p.createCounterVec(
+		"database_queries_total",
+		"Total number of database queries",
+		commonLabels,
 		[]string{"operation", "table", "status"},
 	)
 
 	// Message broker metrics
-	p.messageBrokerPublished = prometheus.NewCounterVec(
-		prometheus.CounterOpts{
-			Name:        "message_broker_published_total",
-			Help:        "Total number of published messages",
-			ConstLabels: commonLabels,
-		},
+	p.messageBrokerPublished = p.createCounterVec(
+		"message_broker_published_total",
+		"Total number of published messages",
+		commonLabels,
 		[]string{"topic", "status"},
 	)
 
-	p.messageBrokerConsumed = prometheus.NewCounterVec(
-		prometheus.CounterOpts{
-			Name:        "message_broker_consumed_total",
-			Help:        "Total number of consumed messages",
-			ConstLabels: commonLabels,
-		},
+	p.messageBrokerConsumed = p.createCounterVec(
+		"message_broker_consumed_total",
+		"Total number of consumed messages",
+		commonLabels,
 		[]string{"topic", "consumer_group", "status"},
 	)
 
-	p.messageBrokerErrors = prometheus.NewCounterVec(
-		prometheus.CounterOpts{
-			Name:        "message_broker_errors_total",
-			Help:        "Total number of message broker errors",
-			ConstLabels: commonLabels,
-		},
+	p.messageBrokerErrors = p.createCounterVec(
+		"message_broker_errors_total",
+		"Total number of message broker errors",
+		commonLabels,
 		[]string{"operation", "error_type"},
 	)
 
 	// Business metrics
-	p.subscriptionsActive = prometheus.NewGauge(
-		prometheus.GaugeOpts{
-			Name:        "subscriptions_active",
-			Help:        "Number of active subscriptions",
-			ConstLabels: commonLabels,
-		},
+	p.subscriptionsActive = p.createGauge(
+		"subscriptions_active",
+		"Number of active subscriptions",
+		commonLabels,
 	)
 
-	p.subscriptionsTotal = prometheus.NewCounterVec(
-		prometheus.CounterOpts{
-			Name:        "subscriptions_total",
-			Help:        "Total number of subscription operations",
-			ConstLabels: commonLabels,
-		},
+	p.subscriptionsTotal = p.createCounterVec(
+		"subscriptions_total",
+		"Total number of subscription operations",
+		commonLabels,
 		[]string{"operation", "frequency"},
 	)
 
-	p.emailsSent = prometheus.NewCounterVec(
-		prometheus.CounterOpts{
-			Name:        "emails_sent_total",
-			Help:        "Total number of emails sent",
-			ConstLabels: commonLabels,
-		},
+	p.emailsSent = p.createCounterVec(
+		"emails_sent_total",
+		"Total number of emails sent",
+		commonLabels,
 		[]string{"type", "status"},
 	)
 }
@@ -345,6 +342,46 @@ func (p *PrometheusMetricsAdapter) RecordEmailSent(emailType, status string) {
 	p.emailsSent.WithLabelValues(emailType, status).Inc()
 }
 
+// processCacheMetrics processes cache metrics with early returns
+func (p *PrometheusMetricsAdapter) processCacheMetrics(legacyMetrics map[string]interface{}) {
+	cacheData, ok := legacyMetrics["cache"].(CacheMetrics)
+	if !ok {
+		return
+	}
+
+	p.cacheHitRatio.Set(cacheData.HitRatio)
+	p.cacheOperationsTotal.WithLabelValues("get", "hit").Add(float64(cacheData.Hits))
+	p.cacheOperationsTotal.WithLabelValues("get", "miss").Add(float64(cacheData.Misses))
+}
+
+// processAPIMetrics processes API metrics with early returns
+func (p *PrometheusMetricsAdapter) processAPIMetrics(legacyMetrics map[string]interface{}) {
+	apiData, ok := legacyMetrics["api"].(map[string]interface{})
+	if !ok {
+		return
+	}
+
+	counters, ok := apiData["counters"].([]interface{})
+	if !ok {
+		return
+	}
+
+	for _, counterInterface := range counters {
+		counter, ok := counterInterface.(*CounterMetric)
+		if !ok {
+			continue
+		}
+
+		if counter.Name != "api_requests_total" {
+			continue
+		}
+
+		method := counter.Labels["method"]
+		endpoint := counter.Labels["endpoint"]
+		p.httpRequestsTotal.WithLabelValues(method, endpoint, "200").Add(float64(counter.Value))
+	}
+}
+
 // SyncFromLegacyMetrics updates Prometheus metrics from existing metrics collector
 func (p *PrometheusMetricsAdapter) SyncFromLegacyMetrics(ctx context.Context) error {
 	if p.metricsCollector == nil {
@@ -357,26 +394,8 @@ func (p *PrometheusMetricsAdapter) SyncFromLegacyMetrics(ctx context.Context) er
 		return err
 	}
 
-	if cacheData, ok := legacyMetrics["cache"].(CacheMetrics); ok {
-		p.cacheHitRatio.Set(cacheData.HitRatio)
-		p.cacheOperationsTotal.WithLabelValues("get", "hit").Add(float64(cacheData.Hits))
-		p.cacheOperationsTotal.WithLabelValues("get", "miss").Add(float64(cacheData.Misses))
-	}
-
-	if apiData, ok := legacyMetrics["api"].(map[string]interface{}); ok {
-		if counters, ok := apiData["counters"].([]interface{}); ok {
-			for _, counterInterface := range counters {
-				if counter, ok := counterInterface.(*CounterMetric); ok {
-					switch counter.Name {
-					case "api_requests_total":
-						method := counter.Labels["method"]
-						endpoint := counter.Labels["endpoint"]
-						p.httpRequestsTotal.WithLabelValues(method, endpoint, "200").Add(float64(counter.Value))
-					}
-				}
-			}
-		}
-	}
+	p.processCacheMetrics(legacyMetrics)
+	p.processAPIMetrics(legacyMetrics)
 
 	return nil
 }
