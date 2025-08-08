@@ -69,7 +69,7 @@ func (c *HTTPWeatherClient) ExecuteRequest(ctx context.Context, req HTTPWeatherR
 }
 
 // DecodeJSONResponse decodes JSON response and handles body cleanup
-func (c *HTTPWeatherClient) DecodeJSONResponse(resp *HTTPWeatherResponse, target interface{}, providerName string) error {
+func (c *HTTPWeatherClient) DecodeJSONResponse(resp *HTTPWeatherResponse, target any, providerName string) error {
 	defer func() {
 		if closeErr := resp.Body.Close(); closeErr != nil {
 			c.logger.Warn(fmt.Sprintf("Failed to close %s response body", providerName),

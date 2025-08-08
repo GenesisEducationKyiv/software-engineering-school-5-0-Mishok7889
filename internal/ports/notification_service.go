@@ -17,6 +17,10 @@ type NotificationStats struct {
 type NotificationService interface {
 	SendWeatherUpdates(ctx context.Context, frequency string) error
 	GetNotificationStats(ctx context.Context) (NotificationStats, error)
+	// Email sending methods for subscription service
+	SendConfirmationEmail(ctx context.Context, email, city, confirmationURL string) error
+	SendWelcomeEmail(ctx context.Context, email, city, frequency, unsubscribeURL string) error
+	SendUnsubscribeConfirmationEmail(ctx context.Context, email, city string) error
 }
 
 // NotificationScheduler defines the contract for scheduling notifications

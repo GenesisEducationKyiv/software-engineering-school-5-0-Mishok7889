@@ -1,0 +1,52 @@
+syntax = "proto3";
+
+package auth;
+option go_package = "weatherapi.app/api/proto";
+
+import "google/protobuf/timestamp.proto";
+
+service AuthService {
+  rpc ValidateToken(ValidateTokenRequest) returns (ValidateTokenResponse);
+  rpc GenerateToken(GenerateTokenRequest) returns (GenerateTokenResponse);
+  rpc RevokeToken(RevokeTokenRequest) returns (RevokeTokenResponse);
+  rpc GetUserInfo(GetUserInfoRequest) returns (GetUserInfoResponse);
+}
+
+message ValidateTokenRequest {
+  string token = 1;
+}
+
+message ValidateTokenResponse {
+  bool valid = 1;
+  string user_id = 2;
+  string email = 3;
+  google.protobuf.Timestamp expires_at = 4;
+}
+
+message GenerateTokenRequest {
+  string user_id = 1;
+  string email = 2;
+  int64 ttl_seconds = 3;
+}
+
+message GenerateTokenResponse {
+  string token = 1;
+  google.protobuf.Timestamp expires_at = 2;
+}
+
+message RevokeTokenRequest {
+  string token = 1;
+}
+
+message RevokeTokenResponse {
+  bool success = 1;
+}
+
+message GetUserInfoRequest {
+  string user_id = 1;
+}
+
+message GetUserInfoResponse {
+  string user_id = 1;
+  string email = 2;
+}

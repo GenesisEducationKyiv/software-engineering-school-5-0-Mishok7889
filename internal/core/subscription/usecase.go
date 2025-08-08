@@ -12,23 +12,21 @@ import (
 )
 
 type UseCase struct {
-	subscriptionRepo ports.SubscriptionRepository
-	tokenRepo        ports.TokenRepository
-	tokenGenerator   ports.TokenGenerator
-	emailProvider    ports.EmailProvider
-	emailBuilder     ports.EmailBuilder
-	config           ports.ConfigProvider
-	logger           ports.Logger
+	subscriptionRepo    ports.SubscriptionRepository
+	tokenRepo           ports.TokenRepository
+	tokenGenerator      ports.TokenGenerator
+	notificationService ports.NotificationService
+	config              ports.ConfigProvider
+	logger              ports.Logger
 }
 
 type UseCaseDependencies struct {
-	SubscriptionRepo ports.SubscriptionRepository
-	TokenRepo        ports.TokenRepository
-	TokenGenerator   ports.TokenGenerator
-	EmailProvider    ports.EmailProvider
-	EmailBuilder     ports.EmailBuilder
-	Config           ports.ConfigProvider
-	Logger           ports.Logger
+	SubscriptionRepo    ports.SubscriptionRepository
+	TokenRepo           ports.TokenRepository
+	TokenGenerator      ports.TokenGenerator
+	NotificationService ports.NotificationService
+	Config              ports.ConfigProvider
+	Logger              ports.Logger
 }
 
 func (deps UseCaseDependencies) Validate() error {
@@ -41,11 +39,8 @@ func (deps UseCaseDependencies) Validate() error {
 	if deps.TokenGenerator == nil {
 		return shared.NewValidationError(ErrGeneratorRequired)
 	}
-	if deps.EmailProvider == nil {
-		return shared.NewValidationError(ErrEmailProviderRequired)
-	}
-	if deps.EmailBuilder == nil {
-		return shared.NewValidationError(ErrEmailBuilderRequired)
+	if deps.NotificationService == nil {
+		return shared.NewValidationError(ErrNotificationServiceRequired)
 	}
 	if deps.Config == nil {
 		return shared.NewValidationError(ErrConfigRequired)
@@ -76,13 +71,12 @@ func NewUseCase(deps UseCaseDependencies) (*UseCase, error) {
 	}
 
 	return &UseCase{
-		subscriptionRepo: deps.SubscriptionRepo,
-		tokenRepo:        deps.TokenRepo,
-		tokenGenerator:   deps.TokenGenerator,
-		emailProvider:    deps.EmailProvider,
-		emailBuilder:     deps.EmailBuilder,
-		config:           deps.Config,
-		logger:           deps.Logger,
+		subscriptionRepo:    deps.SubscriptionRepo,
+		tokenRepo:           deps.TokenRepo,
+		tokenGenerator:      deps.TokenGenerator,
+		notificationService: deps.NotificationService,
+		config:              deps.Config,
+		logger:              deps.Logger,
 	}, nil
 }
 
@@ -241,7 +235,10 @@ func (uc *UseCase) ConfirmSubscription(ctx context.Context, params ConfirmParams
 	tokenData, err := uc.tokenRepo.FindByToken(ctx, params.Token)
 	if err != nil {
 		if shared.IsNotFoundError(err) || ports.IsNotFoundError(err) {
-			return shared.NewValidationError(ErrTokenConfirmExpired)
+			return shared.NewNotFoundError("token not found")
+		}
+		if ports.IsTokenExpiredError(err) {
+			return shared.NewValidationError(err.Error())
 		}
 		return fmt.Errorf("find token: %w", err)
 	}
@@ -297,11 +294,13 @@ func (uc *UseCase) Unsubscribe(ctx context.Context, params UnsubscribeParams) er
 	tokenData, err := uc.tokenRepo.FindByToken(ctx, params.Token)
 	if err != nil {
 		if shared.IsNotFoundError(err) || ports.IsNotFoundError(err) {
-			return shared.NewValidationError(ErrTokenUnsubExpired)
+			return shared.NewNotFoundError("token not found")
+		}
+		if ports.IsTokenExpiredError(err) {
+			return shared.NewValidationError(err.Error())
 		}
 		return fmt.Errorf("find token: %w", err)
 	}
-
 	if tokenData.IsExpired() {
 		return shared.NewValidationError(ErrTokenUnsubExpired)
 	}
@@ -375,19 +374,15 @@ func (uc *UseCase) sendConfirmationEmail(ctx context.Context, subscription *Subs
 		return fmt.Errorf("create confirmation token: %w", err)
 	}
 
-	emailParams, err := uc.emailBuilder.BuildConfirmationEmail(subscription.City, confirmToken.Value)
-	if err != nil {
-		return fmt.Errorf("build confirmation email: %w", err)
-	}
+	baseURL := uc.config.GetAppBaseURL()
+	confirmationURL := fmt.Sprintf("%s%s", baseURL, fmt.Sprintf(APIPathConfirm, confirmToken.Value))
 
-	emailParams.To = subscription.Email
-	if err := uc.emailProvider.SendEmail(ctx, emailParams); err != nil {
-		return fmt.Errorf("send confirmation email: %w", err)
+	if err := uc.notificationService.SendConfirmationEmail(ctx, subscription.Email, subscription.City, confirmationURL); err != nil {
+		return fmt.Errorf("send confirmation email via notification service: %w", err)
 	}
 
 	return nil
 }
-
 func (uc *UseCase) sendWelcomeEmail(ctx context.Context, subscription *Subscription) error {
 	unsubscribeToken, err := uc.createToken(ctx, CreateTokenParams{
 		SubscriptionID: subscription.ID,
@@ -399,32 +394,18 @@ func (uc *UseCase) sendWelcomeEmail(ctx context.Context, subscription *Subscript
 		return nil
 	}
 
-	emailParams, err := uc.emailBuilder.BuildWelcomeEmail(
-		subscription.City,
-		subscription.Frequency.String(),
-		unsubscribeToken.Value,
-	)
-	if err != nil {
-		return fmt.Errorf("build welcome email: %w", err)
-	}
+	unsubscribeURL := fmt.Sprintf("%s%s", uc.config.GetAppBaseURL(), fmt.Sprintf(APIPathUnsubscribe, unsubscribeToken.Value))
 
-	emailParams.To = subscription.Email
-	if err := uc.emailProvider.SendEmail(ctx, emailParams); err != nil {
-		return fmt.Errorf("send welcome email: %w", err)
+	if err := uc.notificationService.SendWelcomeEmail(ctx, subscription.Email, subscription.City, subscription.Frequency.String(), unsubscribeURL); err != nil {
+		return fmt.Errorf("send welcome email via notification service: %w", err)
 	}
 
 	return nil
 }
 
 func (uc *UseCase) sendUnsubscribeConfirmationEmail(ctx context.Context, subscription *Subscription) error {
-	emailParams, err := uc.emailBuilder.BuildUnsubscribeEmail(subscription.City)
-	if err != nil {
-		return fmt.Errorf("build unsubscribe email: %w", err)
-	}
-
-	emailParams.To = subscription.Email
-	if err := uc.emailProvider.SendEmail(ctx, emailParams); err != nil {
-		return fmt.Errorf("send unsubscribe confirmation email: %w", err)
+	if err := uc.notificationService.SendUnsubscribeConfirmationEmail(ctx, subscription.Email, subscription.City); err != nil {
+		return fmt.Errorf("send unsubscribe confirmation email via notification service: %w", err)
 	}
 
 	return nil

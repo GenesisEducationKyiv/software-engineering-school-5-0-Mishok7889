@@ -1,0 +1,37 @@
+# Dockerfile for Weather Service
+FROM golang:1.24-alpine AS builder
+
+# Install dependencies
+RUN apk add --no-cache git ca-certificates
+
+# Set working directory
+WORKDIR /app
+
+# Copy go mod files
+COPY go.mod go.sum ./
+
+# Download dependencies
+RUN go mod download
+
+# Copy source code
+COPY . .
+
+# Build the weather service
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o weather-service ./cmd/weather-service
+
+# Final stage
+FROM alpine:latest
+
+# Install ca-certificates for HTTPS calls
+RUN apk --no-cache add ca-certificates
+
+WORKDIR /root/
+
+# Copy the binary from builder stage
+COPY --from=builder /app/weather-service .
+
+# Expose port for gRPC
+EXPOSE 8081
+
+# Run the weather service
+CMD ["./weather-service"]

@@ -29,47 +29,6 @@ const (
 	ErrSubscriptionIDZero    = "subscription ID cannot be zero"
 )
 
-// Email templates
-const (
-	EmailSubjectConfirmation = "Confirm your weather subscription"
-	EmailSubjectWelcome      = "Welcome to Weather Updates!"
-	EmailSubjectUnsubscribe  = "You have been unsubscribed from weather updates"
-)
-
-// Email body templates
-const (
-	EmailBodyConfirmation = `
-		<h2>Confirm Your Weather Subscription</h2>
-		<p>Hello!</p>
-		<p>Thank you for subscribing to weather updates for <strong>{{.City}}</strong>.</p>
-		<p>Please click the link below to confirm your subscription:</p>
-		<p><a href="{{.ConfirmURL}}">Confirm Subscription</a></p>
-		<p>If you didn't request this subscription, you can safely ignore this email.</p>
-	`
-
-	EmailBodyWelcome = `
-		<h2>Welcome to Weather Updates!</h2>
-		<p>Hello!</p>
-		<p>Your subscription for <strong>{{.City}}</strong> weather updates has been confirmed.</p>
-		<p>You will receive <strong>{{.Frequency}}</strong> weather updates.</p>
-		<p>If you wish to unsubscribe, click <a href="{{.UnsubscribeURL}}">here</a>.</p>
-	`
-
-	EmailBodyUnsubscribe = `
-		<h2>Unsubscribed Successfully</h2>
-		<p>Hello!</p>
-		<p>You have been successfully unsubscribed from weather updates for <strong>{{.City}}</strong>.</p>
-		<p>We're sorry to see you go!</p>
-	`
-)
-
-// Frequency string constants
-const (
-	FrequencyStringHourly  = "hourly"
-	FrequencyStringDaily   = "daily"
-	FrequencyStringUnknown = "unknown"
-)
-
 // API paths
 const (
 	APIPathConfirm     = "/api/confirm/%s"
@@ -78,11 +37,10 @@ const (
 
 // Dependency error messages
 const (
-	ErrRepoRequired          = "subscription repository is required"
-	ErrTokenRepoRequired     = "token repository is required"
-	ErrGeneratorRequired     = "token generator is required"
-	ErrEmailProviderRequired = "email provider is required"
-	ErrEmailBuilderRequired  = "email builder is required"
-	ErrConfigRequired        = "config is required"
-	ErrLoggerRequired        = "logger is required"
+	ErrRepoRequired                = "subscription repository is required"
+	ErrTokenRepoRequired           = "token repository is required"
+	ErrGeneratorRequired           = "token generator is required"
+	ErrNotificationServiceRequired = "notification service is required"
+	ErrConfigRequired              = "config is required"
+	ErrLoggerRequired              = "logger is required"
 )

@@ -19,6 +19,7 @@ packages:
       WeatherService:
       SubscriptionRepository:
       SubscriptionService:
+      NotificationService:
       TokenRepository:
       TokenService:
       EmailProvider:
@@ -30,3 +31,10 @@ packages:
       CacheSerializer:
       MetricsCollector:
       TokenGenerator:
+  weatherapi.app/internal/ports/messaging:
+    interfaces:
+      MessageBroker:
+      Publisher:
+      Consumer:
+      Event:
+      Command:

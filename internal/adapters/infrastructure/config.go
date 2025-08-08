@@ -87,3 +87,8 @@ func (c *ConfigProviderAdapter) GetSchedulerConfig() ports.SchedulerConfig {
 		DailyInterval:  c.config.Scheduler.DailyInterval,
 	}
 }
+
+// GetAppBaseURL returns the application base URL
+func (c *ConfigProviderAdapter) GetAppBaseURL() string {
+	return c.config.AppBaseURL
+}

@@ -73,7 +73,7 @@ func TestTokenRepository_FindByToken_NotFound(t *testing.T) {
 	found, err := repo.FindByToken(ctx, "nonexistent-token")
 	assert.Error(t, err)
 	assert.Nil(t, found)
-	assert.True(t, ports.IsNotFoundError(err))
+	assert.True(t, ports.IsTokenExpiredError(err))
 }
 
 func TestTokenRepository_FindByToken_Expired(t *testing.T) {
@@ -93,7 +93,7 @@ func TestTokenRepository_FindByToken_Expired(t *testing.T) {
 	found, err := repo.FindByToken(ctx, "expired-token")
 	assert.Error(t, err)
 	assert.Nil(t, found)
-	assert.True(t, ports.IsNotFoundError(err))
+	assert.True(t, ports.IsTokenExpiredError(err))
 }
 
 func TestTokenRepository_FindBySubscriptionIDAndType(t *testing.T) {

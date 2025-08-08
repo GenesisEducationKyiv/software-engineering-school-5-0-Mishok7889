@@ -22,11 +22,11 @@ import (
 
 // SubscriptionTestDependencies contains all dependencies for subscription handler tests
 type SubscriptionTestDependencies struct {
-	Router           *gin.Engine
-	SubscriptionRepo *mocks.SubscriptionRepository
-	TokenRepo        *mocks.TokenRepository
-	TokenGenerator   *mocks.TokenGenerator
-	EmailProvider    *mocks.EmailProvider
+	Router              *gin.Engine
+	SubscriptionRepo    *mocks.SubscriptionRepository
+	TokenRepo           *mocks.TokenRepository
+	TokenGenerator      *mocks.TokenGenerator
+	NotificationService *mocks.NotificationService
 }
 
 func setupSubscriptionTestRouter(t *testing.T) SubscriptionTestDependencies {
@@ -35,8 +35,7 @@ func setupSubscriptionTestRouter(t *testing.T) SubscriptionTestDependencies {
 	mockSubscriptionRepo := mocks.NewSubscriptionRepository(t)
 	mockTokenRepo := mocks.NewTokenRepository(t)
 	mockTokenGenerator := mocks.NewTokenGenerator(t)
-	mockEmailProvider := mocks.NewEmailProvider(t)
-	mockEmailBuilder := mocks.NewEmailBuilder(t)
+	mockNotificationService := mocks.NewNotificationService(t)
 	mockConfig := mocks.NewConfigProvider(t)
 	mockLogger := mocks.NewLogger(t)
 
@@ -58,33 +57,28 @@ func setupSubscriptionTestRouter(t *testing.T) SubscriptionTestDependencies {
 		BaseURL: "http://localhost:8080",
 	}).Maybe()
 
-	// Set up default EmailBuilder expectations
-	mockEmailBuilder.EXPECT().BuildConfirmationEmail(mock.Anything, mock.Anything).Return(ports.EmailParams{
-		Subject: "Confirm your weather subscription",
-		Body:    "<p>Confirmation email body</p>",
-		Format:  ports.FormatHTML,
-	}, nil).Maybe()
+	mockConfig.EXPECT().GetAppBaseURL().Return("http://localhost:8080").Maybe()
 
-	mockEmailBuilder.EXPECT().BuildWelcomeEmail(mock.Anything, mock.Anything, mock.Anything).Return(ports.EmailParams{
-		Subject: "Welcome to Weather Updates!",
-		Body:    "<p>Welcome email body</p>",
-		Format:  ports.FormatHTML,
-	}, nil).Maybe()
+	// Set up default NotificationService expectations
+	mockNotificationService.EXPECT().SendConfirmationEmail(
+		mock.Anything, mock.Anything, mock.Anything, mock.Anything,
+	).Return(nil).Maybe()
 
-	mockEmailBuilder.EXPECT().BuildUnsubscribeEmail(mock.Anything).Return(ports.EmailParams{
-		Subject: "You have been unsubscribed from weather updates",
-		Body:    "<p>Unsubscribe confirmation body</p>",
-		Format:  ports.FormatHTML,
-	}, nil).Maybe()
+	mockNotificationService.EXPECT().SendWelcomeEmail(
+		mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything,
+	).Return(nil).Maybe()
+
+	mockNotificationService.EXPECT().SendUnsubscribeConfirmationEmail(
+		mock.Anything, mock.Anything, mock.Anything,
+	).Return(nil).Maybe()
 
 	subscriptionUseCase, err := subscription.NewUseCase(subscription.UseCaseDependencies{
-		SubscriptionRepo: mockSubscriptionRepo,
-		TokenRepo:        mockTokenRepo,
-		TokenGenerator:   mockTokenGenerator,
-		EmailProvider:    mockEmailProvider,
-		EmailBuilder:     mockEmailBuilder,
-		Config:           mockConfig,
-		Logger:           mockLogger,
+		SubscriptionRepo:    mockSubscriptionRepo,
+		TokenRepo:           mockTokenRepo,
+		TokenGenerator:      mockTokenGenerator,
+		NotificationService: mockNotificationService,
+		Config:              mockConfig,
+		Logger:              mockLogger,
 	})
 	assert.NoError(t, err)
 
@@ -100,11 +94,11 @@ func setupSubscriptionTestRouter(t *testing.T) SubscriptionTestDependencies {
 	router.GET("/api/unsubscribe/:token", validationMiddleware.ValidateTokenParam(), server.unsubscribe)
 
 	return SubscriptionTestDependencies{
-		Router:           router,
-		SubscriptionRepo: mockSubscriptionRepo,
-		TokenRepo:        mockTokenRepo,
-		TokenGenerator:   mockTokenGenerator,
-		EmailProvider:    mockEmailProvider,
+		Router:              router,
+		SubscriptionRepo:    mockSubscriptionRepo,
+		TokenRepo:           mockTokenRepo,
+		TokenGenerator:      mockTokenGenerator,
+		NotificationService: mockNotificationService,
 	}
 }
 
@@ -138,8 +132,8 @@ func TestSubscriptionHandler_Subscribe_Success_JSON(t *testing.T) {
 		GenerateToken().
 		Return("test-token")
 
-	deps.EmailProvider.EXPECT().
-		SendEmail(mock.Anything, mock.Anything).
+	deps.NotificationService.EXPECT().
+		SendConfirmationEmail(mock.Anything, "test@example.com", "London", mock.Anything).
 		Return(nil)
 
 	reqBody := SubscriptionRequest{
@@ -193,8 +187,8 @@ func TestSubscriptionHandler_Subscribe_Success_Form(t *testing.T) {
 		GenerateToken().
 		Return("test-token")
 
-	deps.EmailProvider.EXPECT().
-		SendEmail(mock.Anything, mock.Anything).
+	deps.NotificationService.EXPECT().
+		SendConfirmationEmail(mock.Anything, "test@example.com", "London", mock.Anything).
 		Return(nil)
 
 	formData := url.Values{}
@@ -380,8 +374,8 @@ func TestSubscriptionHandler_ConfirmSubscription_Success(t *testing.T) {
 		GenerateToken().
 		Return("unsubscribe-token")
 
-	deps.EmailProvider.EXPECT().
-		SendEmail(mock.Anything, mock.Anything).
+	deps.NotificationService.EXPECT().
+		SendWelcomeEmail(mock.Anything, "test@example.com", "London", "daily", mock.Anything).
 		Return(nil)
 
 	req := httptest.NewRequest("GET", "/api/confirm/test-token-123", nil)
@@ -436,8 +430,8 @@ func TestSubscriptionHandler_Unsubscribe_Success(t *testing.T) {
 		Return(nil)
 
 	// Mock confirmation email
-	deps.EmailProvider.EXPECT().
-		SendEmail(mock.Anything, mock.Anything).
+	deps.NotificationService.EXPECT().
+		SendUnsubscribeConfirmationEmail(mock.Anything, "test@example.com", "London").
 		Return(nil)
 
 	req := httptest.NewRequest("GET", "/api/unsubscribe/test-token-123", nil)

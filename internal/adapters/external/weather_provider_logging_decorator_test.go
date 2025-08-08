@@ -273,7 +273,7 @@ func (m *testWeatherProviderManager) GetProviderInfo() ports.ProviderInfo {
 type logEntry struct {
 	level   string
 	message string
-	fields  map[string]interface{}
+	fields  map[string]any
 }
 
 type testLogger struct {
@@ -297,7 +297,7 @@ func (l *testLogger) Error(msg string, fields ...ports.Field) {
 }
 
 func (l *testLogger) addEntry(level, message string, fields ...ports.Field) {
-	fieldMap := make(map[string]interface{})
+	fieldMap := make(map[string]any)
 	for _, field := range fields {
 		fieldMap[field.Key] = field.Value
 	}

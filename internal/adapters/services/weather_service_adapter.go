@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 
+	"weatherapi.app/internal/core/shared"
 	"weatherapi.app/internal/core/weather"
 	"weatherapi.app/internal/ports"
 )
@@ -33,6 +34,23 @@ func (a *WeatherServiceAdapter) GetWeather(ctx context.Context, city string) (*p
 		Description: weatherData.Description,
 		City:        weatherData.City,
 		Timestamp:   weatherData.Timestamp,
+	}, nil
+}
+
+// GetWeatherByCity returns weather data in shared format
+func (a *WeatherServiceAdapter) GetWeatherByCity(ctx context.Context, city string) (*shared.WeatherData, error) {
+	request := weather.WeatherRequest{City: city}
+	weatherData, err := a.weatherUseCase.GetWeather(ctx, request)
+	if err != nil {
+		return nil, err
+	}
+
+	return &shared.WeatherData{
+		City:        weatherData.City,
+		Temperature: weatherData.Temperature,
+		Humidity:    weatherData.Humidity,
+		Description: weatherData.Description,
+		LastUpdated: weatherData.Timestamp,
 	}, nil
 }
 

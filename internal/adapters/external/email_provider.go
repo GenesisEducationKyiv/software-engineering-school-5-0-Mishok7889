@@ -7,6 +7,7 @@ import (
 	"net/smtp"
 
 	"weatherapi.app/internal/adapters/infrastructure"
+	"weatherapi.app/internal/core/shared"
 	"weatherapi.app/internal/ports"
 )
 
@@ -51,7 +52,14 @@ func NewSMTPEmailProviderAdapter(config EmailProviderConfig) ports.EmailProvider
 }
 
 // SendEmail sends an email using SMTP with flexible authentication and TLS
-func (p *SMTPEmailProviderAdapter) SendEmail(ctx context.Context, params ports.EmailParams) error {
+func (p *SMTPEmailProviderAdapter) SendEmail(ctx context.Context, req shared.EmailRequest) error {
+	params := ports.EmailParams{
+		To:      req.To,
+		Subject: req.Subject,
+		Body:    req.Body,
+		Format:  ports.FormatText,
+	}
+
 	if err := params.Validate(); err != nil {
 		return err
 	}

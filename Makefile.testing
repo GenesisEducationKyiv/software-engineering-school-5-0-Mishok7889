@@ -1,19 +1,29 @@
 .PHONY: test-unit test-integration test-e2e test-architecture test-all test-clean test-deps lint help
-.PHONY: _check-docker _check-node _integration-setup _integration-cleanup _e2e-setup _e2e-cleanup
+.PHONY: _check-docker _check-node _e2e-setup _e2e-cleanup
+.PHONY: test-integration-weather test-integration-user test-integration-subscription test-integration-notification
+.PHONY: test-integration-isolated test-integration-microservices
 
 # Configuration
-INTEGRATION_COMPOSE_FILE := tests/docker/docker-compose.integration.yml
+MICROSERVICES_COMPOSE_FILE := docker-compose.microservices.yml
 E2E_COMPOSE_FILE := tests/e2e/docker/docker-compose.e2e.yml
-INTEGRATION_PROJECT := weatherapi-integration-test
+MICROSERVICES_PROJECT := weatherapi-microservices
 E2E_PROJECT := weatherapi-e2e-test
 INTEGRATION_PACKAGES := ./tests/integration/...
 UNIT_PACKAGES := ./internal/... ./pkg/...
-TIMEOUT := 10m
+TIMEOUT := 5m
+
+# Service URLs for microservices testing (for E2E only)
+GATEWAY_URL := http://localhost:8080
+WEATHER_SERVICE_URL := http://localhost:8081
+USER_SERVICE_URL := http://localhost:8082
+SUBSCRIPTION_SERVICE_URL := http://localhost:8083
+NOTIFICATION_SERVICE_URL := http://localhost:8084
 
 # Colors for output
 GREEN := \033[32m
 YELLOW := \033[33m
 RED := \033[31m
+BLUE := \033[34m
 NC := \033[0m
 
 # Default target
@@ -21,22 +31,41 @@ help:
 	@echo "$(GREEN)Weather API Testing Commands$(NC)"
 	@echo ""
 	@echo "$(YELLOW)Core Commands:$(NC)"
-	@echo "  test-unit         - Run unit tests"
-	@echo "  test-integration  - Run integration tests (auto setup/cleanup)"
-	@echo "  test-e2e          - Run E2E tests (auto setup/cleanup)"
-	@echo "  test-architecture - Run architecture tests"
-	@echo "  test-all          - Run all tests sequentially"
+	@echo "  test-unit                    - Run unit tests"
+	@echo "  test-integration             - Run integration tests (service isolation - fast)"
+	@echo "  test-integration-isolated    - Same as test-integration (recommended)"
+	@echo "  test-integration-microservices - Run full microservices stack for E2E-style testing"
+	@echo "  test-e2e                     - Run E2E tests with full stack"
+	@echo "  test-architecture            - Run architecture tests"
+	@echo "  test-all                     - Run all tests sequentially"
+	@echo ""
+	@echo "$(YELLOW)Individual Service Integration Tests:$(NC)"
+	@echo "  test-integration-weather     - Test Weather Service only"
+	@echo "  test-integration-user        - Test User Service only"
+	@echo "  test-integration-subscription - Test Subscription Service only"
+	@echo "  test-integration-notification - Test Notification Service only"
+	@echo ""
+	@echo "$(YELLOW)Microservices Commands (for E2E/debugging):$(NC)"
+	@echo "  microservices-up             - Start microservices stack"
+	@echo "  microservices-down           - Stop microservices stack"
+	@echo "  microservices-logs           - View microservices logs"
 	@echo ""
 	@echo "$(YELLOW)Utilities:$(NC)"
-	@echo "  test-clean        - Clean up all test environments"
-	@echo "  test-deps         - Install/verify test dependencies"
-	@echo "  lint              - Run code linting"
-	@echo "  help              - Show this help message"
+	@echo "  test-clean                   - Clean up all test environments"
+	@echo "  test-deps                    - Install/verify test dependencies"
+	@echo "  lint                         - Run code linting" 
+	@echo "  help                         - Show this help message"
+	@echo ""
+	@echo "$(YELLOW)Testing Philosophy:$(NC)"
+	@echo "  • Integration tests: Service isolation with mocked dependencies (fast)"
+	@echo "  • E2E tests: Full microservices stack with real communication (slower)"
 	@echo ""
 	@echo "$(YELLOW)Examples:$(NC)"
-	@echo "  make test-unit              # Quick unit tests"
-	@echo "  make test-integration       # Full integration testing"
-	@echo "  make test-all               # Complete test suite"
+	@echo "  make test-unit                         # Quick unit tests"
+	@echo "  make test-integration                  # Service isolation integration (recommended)"
+	@echo "  make test-integration-weather          # Test only Weather Service"
+	@echo "  make test-integration-microservices    # Full stack testing"
+	@echo "  make test-all                          # Complete test suite"
 
 # Unit Tests - Fast and simple
 test-unit:
@@ -44,14 +73,51 @@ test-unit:
 	@go test -v -race -timeout=$(TIMEOUT) -coverprofile=coverage.out $(UNIT_PACKAGES)
 	@echo "$(GREEN)Unit tests completed$(NC)"
 
-# Integration Tests - With auto setup/cleanup
-test-integration: _check-docker _integration-setup
-	@echo "$(GREEN)Running integration tests...$(NC)"
+# Integration Tests - Service Isolation (NEW DEFAULT - Fast and Reliable)
+test-integration:
+	@echo "$(GREEN)Running integration tests (service isolation)...$(NC)"
+	@echo "$(YELLOW)Testing individual services with mocked dependencies...$(NC)"
+	@go test -v -timeout=$(TIMEOUT) $(INTEGRATION_PACKAGES)
+	@echo "$(GREEN)Service isolation integration tests completed$(NC)"
+
+# Alias for clarity
+test-integration-isolated: test-integration
+
+# Individual Service Integration Tests
+test-integration-weather:
+	@echo "$(GREEN)Running Weather Service integration tests...$(NC)"
+	@go test -v -timeout=$(TIMEOUT) ./tests/integration/weather/
+	@echo "$(GREEN)Weather Service integration tests completed$(NC)"
+
+test-integration-user:
+	@echo "$(GREEN)Running User Service integration tests...$(NC)"
+	@go test -v -timeout=$(TIMEOUT) ./tests/integration/user/
+	@echo "$(GREEN)User Service integration tests completed$(NC)"
+
+test-integration-subscription:
+	@echo "$(GREEN)Running Subscription Service integration tests...$(NC)"
+	@go test -v -timeout=$(TIMEOUT) ./tests/integration/subscription/
+	@echo "$(GREEN)Subscription Service integration tests completed$(NC)"
+
+test-integration-notification:
+	@echo "$(GREEN)Running Notification Service integration tests...$(NC)"
+	@go test -v -timeout=$(TIMEOUT) ./tests/integration/notification/
+	@echo "$(GREEN)Notification Service integration tests completed$(NC)"
+
+# Integration Tests - Full Microservices Stack (for E2E-style testing)
+test-integration-microservices: _check-docker
+	@echo "$(GREEN)Running integration tests (full microservices stack)...$(NC)"
+	@echo "$(YELLOW)⚠️  This requires all services to be running - consider using 'test-integration' instead$(NC)"
+	@echo "$(YELLOW)Starting microservices stack...$(NC)"
+	@make -f Makefile.testing microservices-up
 	@set -e; \
 	ROOT_DIR=$$(pwd); \
-	trap "cd $$ROOT_DIR && make -f Makefile.testing _integration-cleanup" EXIT; \
-	go test -v -timeout=$(TIMEOUT) $(INTEGRATION_PACKAGES)
-	@echo "$(GREEN)Integration tests completed$(NC)"
+	trap "cd $$ROOT_DIR && make -f Makefile.testing microservices-down" EXIT; \
+	echo "$(YELLOW)Waiting for services to start...$(NC)"; \
+	sleep 30; \
+	echo "$(GREEN)Running full stack integration tests...$(NC)"; \
+	INTEGRATION_TEST_MODE=microservices go test -v -timeout=$(TIMEOUT) $(INTEGRATION_PACKAGES)
+	@echo "$(GREEN)Full stack integration tests completed$(NC)"
 
 # E2E Tests - With auto setup/cleanup
 test-e2e: _check-docker _check-node _e2e-setup
@@ -74,9 +140,28 @@ test-architecture:
 	@go test -v ./tests/architecture/...
 	@echo "$(GREEN)Architecture tests completed$(NC)"
 
-# Run all tests sequentially
-test-all: test-unit test-architecture test-integration test-e2e
+# Run all tests sequentially (using fast service isolation for integration)
+test-all: test-unit test-architecture test-integration
 	@echo "$(GREEN)All tests completed successfully!$(NC)"
+	@echo "$(YELLOW)Note: Used service isolation for integration tests (fast). Run 'make test-integration-microservices' for full stack testing.$(NC)"
+
+# Microservices Management Commands (primarily for E2E testing and debugging)
+microservices-up: _check-docker
+	@echo "$(GREEN)Starting microservices stack...$(NC)"
+	@echo "$(YELLOW)Note: This is mainly for E2E testing. Integration tests use service isolation.$(NC)"
+	@docker compose -f $(MICROSERVICES_COMPOSE_FILE) up -d --build
+	@echo "$(YELLOW)Microservices started. Waiting for startup...$(NC)"
+	@sleep 10
+	@echo "$(GREEN)Microservices should be ready for E2E testing$(NC)"
+
+microservices-down:
+	@echo "$(GREEN)Stopping microservices stack...$(NC)"
+	@docker compose -f $(MICROSERVICES_COMPOSE_FILE) down --volumes
+	@echo "$(GREEN)Microservices stopped$(NC)"
+
+microservices-logs:
+	@echo "$(GREEN)Showing microservices logs...$(NC)"
+	@docker compose -f $(MICROSERVICES_COMPOSE_FILE) logs -f
 
 # Linting
 lint:
@@ -92,15 +177,17 @@ lint:
 test-deps: _check-docker _check-node
 	@echo "$(GREEN)Installing test dependencies...$(NC)"
 	@go mod download
-	@cd tests/e2e && npm install
-	@cd tests/e2e && npx playwright install chromium firefox
+	@if [ -d "tests/e2e" ]; then \
+		cd tests/e2e && npm install; \
+		cd tests/e2e && npx playwright install chromium firefox; \
+	fi
 	@echo "$(GREEN)Test dependencies installed$(NC)"
 
 # Clean up all test environments
 test-clean:
 	@echo "$(GREEN)Cleaning up test environments...$(NC)"
-	@make _integration-cleanup || true
-	@make _e2e-cleanup || true
+	@make -f Makefile.testing microservices-down || true
+	@make -f Makefile.testing _e2e-cleanup || true
 	@docker system prune -f --filter "label=weatherapi-test" 2>/dev/null || true
 	@echo "$(GREEN)Test environments cleaned$(NC)"
 
@@ -112,6 +199,10 @@ _check-docker:
 	fi
 	@if ! docker info >/dev/null 2>&1; then \
 		echo "$(RED)Error: Docker daemon is not running$(NC)"; \
+		exit 1; \
+	fi
+	@if ! docker compose version >/dev/null 2>&1; then \
+		echo "$(RED)Error: docker compose is required but not installed$(NC)"; \
 		exit 1; \
 	fi
 
@@ -126,111 +217,21 @@ _check-node:
 		exit 1; \
 	fi
 
-# Internal: Setup integration test environment
-_integration-setup:
-	@echo "$(YELLOW)Setting up integration test environment...$(NC)"
-	@docker compose -f $(INTEGRATION_COMPOSE_FILE) -p $(INTEGRATION_PROJECT) down --volumes >/dev/null 2>&1 || true
-	@docker compose -f $(INTEGRATION_COMPOSE_FILE) -p $(INTEGRATION_PROJECT) build --quiet
-	@docker compose -f $(INTEGRATION_COMPOSE_FILE) -p $(INTEGRATION_PROJECT) up -d
-	@echo "$(YELLOW)Waiting for integration services...$(NC)"
-	@for i in $$(seq 1 30); do \
-		echo "Checking services (attempt $$i/30)..."; \
-		pg_ready=false; \
-		if docker compose -f $(INTEGRATION_COMPOSE_FILE) -p $(INTEGRATION_PROJECT) exec -T postgres-test pg_isready -U test_user -d weatherapi_test >/dev/null 2>&1; then \
-			pg_ready=true; \
-		fi; \
-		api_ready=false; \
-		if curl -f http://localhost:8081/health >/dev/null 2>&1; then \
-			api_ready=true; \
-		fi; \
-		mail_ready=false; \
-		if curl -f http://localhost:8025 >/dev/null 2>&1; then \
-			mail_ready=true; \
-		fi; \
-		if [ "$$pg_ready" = "true" ] && [ "$$api_ready" = "true" ] && [ "$$mail_ready" = "true" ]; then \
-			echo "$(GREEN)Integration services ready$(NC)"; \
-			break; \
-		fi; \
-		if [ $$i -eq 30 ]; then \
-			echo "$(RED)Integration services failed to start$(NC)"; \
-			docker compose -f $(INTEGRATION_COMPOSE_FILE) -p $(INTEGRATION_PROJECT) logs; \
-			exit 1; \
-		fi; \
-		sleep 2; \
-	done
-
-# Internal: Cleanup integration test environment
-_integration-cleanup:
-	@echo "$(YELLOW)Cleaning up integration test environment...$(NC)"
-	@docker compose -f $(INTEGRATION_COMPOSE_FILE) -p $(INTEGRATION_PROJECT) down --volumes >/dev/null 2>&1 || true
-
-# Internal: Setup E2E test environment
+# Internal: Setup E2E test environment  
 _e2e-setup:
 	@echo "$(YELLOW)Setting up E2E test environment...$(NC)"
-	@docker compose -f $(E2E_COMPOSE_FILE) -p $(E2E_PROJECT) down --volumes >/dev/null 2>&1 || true
-	@docker compose -f $(E2E_COMPOSE_FILE) -p $(E2E_PROJECT) build --quiet
-	@docker compose -f $(E2E_COMPOSE_FILE) -p $(E2E_PROJECT) up -d
-	@echo "$(YELLOW)Waiting for E2E services...$(NC)"
-	@for i in $$(seq 1 30); do \
-		echo "Checking E2E services (attempt $$i/30)..."; \
-		pg_ready=false; \
-		if docker compose -f $(E2E_COMPOSE_FILE) -p $(E2E_PROJECT) exec -T postgres-e2e pg_isready -U e2e_user -d weatherapi_e2e >/dev/null 2>&1; then \
-			pg_ready=true; \
-		fi; \
-		api_ready=false; \
-		if curl -f http://localhost:8082/health >/dev/null 2>&1; then \
-			api_ready=true; \
-		fi; \
-		mail_ready=false; \
-		if curl -f http://localhost:8026 >/dev/null 2>&1; then \
-			mail_ready=true; \
-		fi; \
-		if [ "$$pg_ready" = "true" ] && [ "$$api_ready" = "true" ] && [ "$$mail_ready" = "true" ]; then \
-			echo "$(GREEN)E2E services ready$(NC)"; \
-			break; \
-		fi; \
-		if [ $$i -eq 30 ]; then \
-			echo "$(RED)E2E services failed to start$(NC)"; \
-			docker compose -f $(E2E_COMPOSE_FILE) -p $(E2E_PROJECT) logs; \
-			exit 1; \
-		fi; \
-		sleep 3; \
-	done
-	@echo "$(YELLOW)Building and starting application...$(NC)"
-	@go build -o weatherapi ./cmd/app
-	@APP_URL="http://localhost:8080" \
-	DB_HOST="localhost" \
-	DB_PORT="5434" \
-	DB_USER="e2e_user" \
-	DB_PASSWORD="e2e_pass" \
-	DB_NAME="weatherapi_e2e" \
-	DB_SSL_MODE="disable" \
-	EMAIL_SMTP_HOST="localhost" \
-	EMAIL_SMTP_PORT="1026" \
-	EMAIL_SMTP_USERNAME="test" \
-	EMAIL_SMTP_PASSWORD="test" \
-	EMAIL_FROM_ADDRESS="test@example.com" \
-	WEATHER_API_KEY="test-key" \
-	OPENWEATHERMAP_API_KEY="test-key" \
-	ACCUWEATHER_API_KEY="test-key" \
-	WEATHER_API_BASE_URL="http://localhost:8082" \
-	OPENWEATHERMAP_API_BASE_URL="http://localhost:8082" \
-	ACCUWEATHER_API_BASE_URL="http://localhost:8082" \
-	CACHE_TYPE="memory" \
-	GIN_MODE="release" \
-	./weatherapi & echo $$! > weatherapi.pid
-	@echo "$(YELLOW)Waiting for application...$(NC)"
-	@for i in $$(seq 1 15); do \
-		if curl -f http://localhost:8080/api/debug >/dev/null 2>&1; then \
-			echo "$(GREEN)Application ready$(NC)"; \
-			break; \
-		fi; \
-		if [ $$i -eq 15 ]; then \
-			echo "$(RED)Application failed to start$(NC)"; \
-			exit 1; \
-		fi; \
-		sleep 2; \
-	done
+	@if [ -f "$(E2E_COMPOSE_FILE)" ]; then \
+		docker compose -f $(E2E_COMPOSE_FILE) -p $(E2E_PROJECT) down --volumes >/dev/null 2>&1 || true; \
+		docker compose -f $(E2E_COMPOSE_FILE) -p $(E2E_PROJECT) build --quiet; \
+		docker compose -f $(E2E_COMPOSE_FILE) -p $(E2E_PROJECT) up -d; \
+		echo "$(YELLOW)Waiting for E2E services...$(NC)"; \
+		sleep 20; \
+		echo "$(GREEN)E2E services should be ready$(NC)"; \
+	else \
+		echo "$(YELLOW)E2E compose file not found, using microservices for E2E testing$(NC)"; \
+		make -f Makefile.testing microservices-up; \
+		sleep 20; \
+	fi
 
 # Internal: Cleanup E2E test environment
 _e2e-cleanup:
@@ -240,4 +241,23 @@ _e2e-cleanup:
 		rm -f weatherapi.pid; \
 	fi
 	@rm -f weatherapi
-	@docker compose -f $(E2E_COMPOSE_FILE) -p $(E2E_PROJECT) down --volumes >/dev/null 2>&1 || true
+	@if [ -f "$(E2E_COMPOSE_FILE)" ]; then \
+		docker compose -f $(E2E_COMPOSE_FILE) -p $(E2E_PROJECT) down --volumes >/dev/null 2>&1 || true; \
+	fi
+
+# Development helpers (for debugging microservices)
+dev-setup: microservices-up
+	@echo "$(GREEN)Development environment ready!$(NC)"
+	@echo "$(YELLOW)Services available at:$(NC)"
+	@echo "  API Gateway:         $(GATEWAY_URL)"
+	@echo "  Weather Service:     $(WEATHER_SERVICE_URL)"  
+	@echo "  User Service:        $(USER_SERVICE_URL)"
+	@echo "  Subscription Service: $(SUBSCRIPTION_SERVICE_URL)"
+	@echo "  Notification Service: $(NOTIFICATION_SERVICE_URL)"
+	@echo ""
+	@echo "$(YELLOW)For testing:$(NC)"
+	@echo "  • 'make test-integration' - Fast service isolation tests (recommended)"
+	@echo "  • 'make test-integration-microservices' - Full stack integration tests"
+
+dev-teardown: microservices-down
+	@echo "$(GREEN)Development environment stopped$(NC)"

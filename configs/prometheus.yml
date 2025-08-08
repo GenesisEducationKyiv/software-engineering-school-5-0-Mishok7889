@@ -1,0 +1,97 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  # - "first_rules.yml"
+  # - "second_rules.yml"
+
+scrape_configs:
+  # Weather Service Metrics
+  - job_name: 'weather-service'
+    static_configs:
+      - targets: ['weather-service:9081']
+        labels:
+          service: 'weather-service'
+          team: 'backend'
+    scrape_interval: 10s
+    metrics_path: /metrics
+
+  # User Service Metrics  
+  - job_name: 'user-service'
+    static_configs:
+      - targets: ['user-service:9082']
+        labels:
+          service: 'user-service'
+          team: 'backend'
+    scrape_interval: 10s
+    metrics_path: /metrics
+
+  # Subscription Service Metrics
+  - job_name: 'subscription-service'
+    static_configs:
+      - targets: ['subscription-service:9083']
+        labels:
+          service: 'subscription-service'
+          team: 'backend'
+    scrape_interval: 10s
+    metrics_path: /metrics
+
+  # Notification Service Metrics
+  - job_name: 'notification-service'
+    static_configs:
+      - targets: ['notification-service:9084']
+        labels:
+          service: 'notification-service'
+          team: 'backend'
+    scrape_interval: 10s
+    metrics_path: /metrics
+
+  # API Gateway Metrics
+  - job_name: 'api-gateway'
+    static_configs:
+      - targets: ['api-gateway:9080']
+        labels:
+          service: 'api-gateway'
+          team: 'frontend'
+    scrape_interval: 10s
+    metrics_path: /metrics
+
+  # Infrastructure Metrics
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+        labels:
+          service: 'prometheus'
+          team: 'ops'
+
+  - job_name: 'nats'
+    static_configs:
+      - targets: ['nats:8222']
+        labels:
+          service: 'nats'
+          team: 'ops'
+    scrape_interval: 30s
+    metrics_path: /varz
+
+  # Database Exporters (if you add them later)
+  # - job_name: 'postgres-exporter'
+  #   static_configs:
+  #     - targets: ['postgres-exporter:9187']
+  #       labels:
+  #         service: 'postgres'
+  #         team: 'ops'
+
+  # - job_name: 'redis-exporter'
+  #   static_configs:
+  #     - targets: ['redis-exporter:9121']
+  #       labels:
+  #         service: 'redis'
+  #         team: 'ops'
+
+# Alerting configuration (for future use)
+# alerting:
+#   alertmanagers:
+#     - static_configs:
+#         - targets:
+#           # - alertmanager:9093

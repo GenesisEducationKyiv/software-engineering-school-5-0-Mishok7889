@@ -10,18 +10,24 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"weatherapi.app/internal/core/shared"
+	"weatherapi.app/internal/mocks"
 	"weatherapi.app/internal/ports"
 )
 
 var ginTestModeOnce sync.Once
 
-func setupErrorTestRouter() *gin.Engine {
+func setupErrorTestRouter(t *testing.T) *gin.Engine {
 	// Ensure gin.SetMode is called only once to avoid race conditions
 	ginTestModeOnce.Do(func() {
 		gin.SetMode(gin.TestMode)
 	})
 
-	server := &HTTPServerAdapter{}
+	// Create mock logger (though not used in handleError anymore)
+	mockLogger := mocks.NewLogger(t)
+
+	server := &HTTPServerAdapter{
+		logger: mockLogger,
+	}
 
 	router := gin.New()
 
@@ -153,7 +159,7 @@ func TestHTTPServerAdapter_HandleError(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			router := setupErrorTestRouter()
+			router := setupErrorTestRouter(t)
 
 			req := httptest.NewRequest("GET", tt.route, nil)
 			w := httptest.NewRecorder()
@@ -171,7 +177,7 @@ func TestHTTPServerAdapter_HandleError(t *testing.T) {
 }
 
 func TestHTTPServerAdapter_HandleError_ResponseStructure(t *testing.T) {
-	router := setupErrorTestRouter()
+	router := setupErrorTestRouter(t)
 
 	req := httptest.NewRequest("GET", "/test/validation", nil)
 	w := httptest.NewRecorder()
@@ -180,7 +186,7 @@ func TestHTTPServerAdapter_HandleError_ResponseStructure(t *testing.T) {
 
 	assert.Equal(t, "application/json; charset=utf-8", w.Header().Get("Content-Type"))
 
-	var response map[string]interface{}
+	var response map[string]any
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	assert.NoError(t, err)
 

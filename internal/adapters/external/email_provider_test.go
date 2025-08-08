@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"weatherapi.app/internal/core/shared"
 	"weatherapi.app/internal/ports"
 )
 
@@ -162,7 +163,15 @@ func TestSMTPEmailProviderAdapter_SendEmailValidation(t *testing.T) {
 			t.Parallel()
 
 			params := tt.modify(validParams)
-			err := provider.SendEmail(ctx, params)
+
+			// Convert EmailParams to EmailRequest for the new interface
+			emailRequest := shared.EmailRequest{
+				To:      params.To,
+				Subject: params.Subject,
+				Body:    params.Body,
+			}
+
+			err := provider.SendEmail(ctx, emailRequest)
 
 			if tt.expectError {
 				assert.Error(t, err)

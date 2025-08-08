@@ -1,6 +1,10 @@
 package ports
 
-import "context"
+import (
+	"context"
+
+	"weatherapi.app/internal/core/shared"
+)
 
 // EmailFormat represents the format of email content
 type EmailFormat string
@@ -43,5 +47,5 @@ func (p EmailParams) IsHTML() bool {
 
 // EmailProvider defines the contract for email sending
 type EmailProvider interface {
-	SendEmail(ctx context.Context, params EmailParams) error
+	SendEmail(ctx context.Context, req shared.EmailRequest) error
 }

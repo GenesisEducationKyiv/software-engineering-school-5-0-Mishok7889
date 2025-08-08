@@ -45,7 +45,7 @@ type SubscriptionUseCase interface {
 
 type MetricsCollector interface {
 	IncrementCounter(name string, labels map[string]string)
-	GetMetrics(ctx context.Context) (map[string]interface{}, error)
+	GetMetrics(ctx context.Context) (map[string]any, error)
 }
 
 // Middleware interfaces that the HTTP adapter depends on

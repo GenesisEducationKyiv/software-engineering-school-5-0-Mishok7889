@@ -1,0 +1,68 @@
+# Git
+.git
+.gitignore
+README.md
+.env*
+!.env.example
+
+# Build artifacts and executables
+*.exe
+app.exe
+weatherapi
+weather-service
+user-service
+subscription-service
+notification-service
+bin/
+dist/
+build/
+*.out
+
+# Dependencies
+node_modules/
+vendor/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+
+# Test coverage
+coverage.out
+*.prof
+
+# Docker
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# Documentation
+docs/
+*.md
+!README.md
+
+# CI/CD
+.github/
+.pre-commit-config.yaml
+
+# Testing
+tests/
+*_test.go
+testdata/
+
+# Package management
+pkg/mod/
+
+# Temporary files
+tmp/
+temp/
+.tmp/

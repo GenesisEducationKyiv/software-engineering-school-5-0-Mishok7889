@@ -5,7 +5,6 @@ import (
 	"text/template"
 
 	"github.com/stretchr/testify/assert"
-	"weatherapi.app/internal/core/subscription"
 	"weatherapi.app/internal/mocks"
 	"weatherapi.app/internal/ports"
 )
@@ -37,13 +36,15 @@ func TestBuilder_BuildConfirmationEmail(t *testing.T) {
 	builder, err := NewBuilder(mockConfig)
 	assert.NoError(t, err)
 
-	email, err := builder.BuildConfirmationEmail("New York", "test-token-123")
+	// Pass full URL as the subscription service would do in microservices architecture
+	fullConfirmationURL := testBaseURL + "/api/confirm/test-token-123"
+	email, err := builder.BuildConfirmationEmail("New York", fullConfirmationURL)
 
 	assert.NoError(t, err)
-	assert.Equal(t, subscription.EmailSubjectConfirmation, email.Subject)
+	assert.Equal(t, EmailSubjectConfirmation, email.Subject)
 	assert.Equal(t, ports.FormatHTML, email.Format)
 	assert.Contains(t, email.Body, "New York")
-	assert.Contains(t, email.Body, testBaseURL+"/api/confirm/test-token-123")
+	assert.Contains(t, email.Body, fullConfirmationURL)
 	assert.Contains(t, email.Body, "Confirm Your Weather Subscription")
 }
 
@@ -56,14 +57,16 @@ func TestBuilder_BuildWelcomeEmail(t *testing.T) {
 	builder, err := NewBuilder(mockConfig)
 	assert.NoError(t, err)
 
-	email, err := builder.BuildWelcomeEmail("London", "daily", "unsubscribe-token-456")
+	// Pass full URL as the subscription service would do in microservices architecture
+	fullUnsubscribeURL := testBaseURL + "/api/unsubscribe/unsubscribe-token-456"
+	email, err := builder.BuildWelcomeEmail("London", "daily", fullUnsubscribeURL)
 
 	assert.NoError(t, err)
-	assert.Equal(t, subscription.EmailSubjectWelcome, email.Subject)
+	assert.Equal(t, EmailSubjectWelcome, email.Subject)
 	assert.Equal(t, ports.FormatHTML, email.Format)
 	assert.Contains(t, email.Body, "London")
 	assert.Contains(t, email.Body, "daily")
-	assert.Contains(t, email.Body, testBaseURL+"/api/unsubscribe/unsubscribe-token-456")
+	assert.Contains(t, email.Body, fullUnsubscribeURL)
 	assert.Contains(t, email.Body, "Welcome to Weather Updates!")
 }
 
@@ -79,7 +82,7 @@ func TestBuilder_BuildUnsubscribeEmail(t *testing.T) {
 	email, err := builder.BuildUnsubscribeEmail("Paris")
 
 	assert.NoError(t, err)
-	assert.Equal(t, subscription.EmailSubjectUnsubscribe, email.Subject)
+	assert.Equal(t, EmailSubjectUnsubscribe, email.Subject)
 	assert.Equal(t, ports.FormatHTML, email.Format)
 	assert.Contains(t, email.Body, "Paris")
 	assert.Contains(t, email.Body, "Unsubscribed Successfully")

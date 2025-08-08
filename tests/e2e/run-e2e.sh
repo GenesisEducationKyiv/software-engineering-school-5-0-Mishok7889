@@ -68,9 +68,9 @@ case "$1" in
         
         # Setup Docker
         echo "[E2E] Setting up Docker services..."
-        docker-compose -f "$COMPOSE_FILE" -p "$PROJECT_NAME" down --volumes --remove-orphans || true
-        docker-compose -f "$COMPOSE_FILE" -p "$PROJECT_NAME" build --no-cache
-        docker-compose -f "$COMPOSE_FILE" -p "$PROJECT_NAME" up -d
+        docker compose -f "$COMPOSE_FILE" -p "$PROJECT_NAME" down --volumes --remove-orphans || true
+        docker compose -f "$COMPOSE_FILE" -p "$PROJECT_NAME" build --no-cache
+        docker compose -f "$COMPOSE_FILE" -p "$PROJECT_NAME" up -d
         
         # Wait for services
         echo "[E2E] Waiting for services to be ready..."
@@ -102,18 +102,18 @@ case "$1" in
         
     "cleanup")
         echo "[E2E] Cleaning up..."
-        docker-compose -f "$COMPOSE_FILE" -p "$PROJECT_NAME" down --volumes --remove-orphans
+        docker compose -f "$COMPOSE_FILE" -p "$PROJECT_NAME" down --volumes --remove-orphans
         echo "[E2E] Cleanup complete!"
         ;;
         
     "status")
         echo "[E2E] Service status:"
-        docker-compose -f "$COMPOSE_FILE" -p "$PROJECT_NAME" ps
+        docker compose -f "$COMPOSE_FILE" -p "$PROJECT_NAME" ps
         ;;
         
     "logs")
         echo "[E2E] Service logs:"
-        docker-compose -f "$COMPOSE_FILE" -p "$PROJECT_NAME" logs
+        docker compose -f "$COMPOSE_FILE" -p "$PROJECT_NAME" logs
         ;;
         
     *)

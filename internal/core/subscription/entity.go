@@ -33,11 +33,11 @@ const (
 func (f Frequency) String() string {
 	switch f {
 	case FrequencyHourly:
-		return FrequencyStringHourly
+		return "hourly"
 	case FrequencyDaily:
-		return FrequencyStringDaily
+		return "daily"
 	default:
-		return FrequencyStringUnknown
+		return "unknown"
 	}
 }
 
@@ -49,9 +49,9 @@ func (f Frequency) IsValid() bool {
 // FromString converts string to Frequency enum
 func FrequencyFromString(s string) Frequency {
 	switch s {
-	case FrequencyStringHourly:
+	case "hourly":
 		return FrequencyHourly
-	case FrequencyStringDaily:
+	case "daily":
 		return FrequencyDaily
 	default:
 		return FrequencyUnknown

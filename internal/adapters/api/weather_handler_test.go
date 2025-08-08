@@ -27,9 +27,9 @@ func (m *mockMetricsCollector) IncrementCounter(name string, labels map[string]s
 	m.Called(name, labels)
 }
 
-func (m *mockMetricsCollector) GetMetrics(ctx context.Context) (map[string]interface{}, error) {
+func (m *mockMetricsCollector) GetMetrics(ctx context.Context) (map[string]any, error) {
 	args := m.Called(ctx)
-	return args.Get(0).(map[string]interface{}), args.Error(1)
+	return args.Get(0).(map[string]any), args.Error(1)
 }
 
 func setupWeatherTestRouter(t *testing.T) (*gin.Engine, *mocks.WeatherProviderManager, *mocks.WeatherCache, *mockMetricsCollector) {

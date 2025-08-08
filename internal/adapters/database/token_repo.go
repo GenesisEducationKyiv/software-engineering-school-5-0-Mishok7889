@@ -24,6 +24,11 @@ func (TokenModel) TableName() string {
 	return "tokens"
 }
 
+// IsExpired checks if the token has expired
+func (t TokenModel) IsExpired() bool {
+	return t.ExpiresAt.Before(time.Now())
+}
+
 // TokenRepositoryAdapter implements the TokenRepository port using GORM
 type TokenRepositoryAdapter struct {
 	db *gorm.DB
@@ -66,12 +71,17 @@ func (r *TokenRepositoryAdapter) FindByToken(ctx context.Context, tokenStr strin
 	}
 
 	var model TokenModel
-	result := r.db.WithContext(ctx).Where("token = ? AND expires_at > ?", tokenStr, time.Now()).First(&model)
+	result := r.db.WithContext(ctx).Where("token = ?", tokenStr).First(&model)
 	if result.Error != nil {
 		if result.Error == gorm.ErrRecordNotFound {
-			return nil, ports.NewNotFoundError("token not found or expired")
+			return nil, ports.NewTokenExpiredError("invalid or expired token")
 		}
 		return nil, infrastructure.NewDatabaseError("failed to find token", result.Error)
+	}
+
+	// Check if the token is expired
+	if model.IsExpired() {
+		return nil, ports.NewTokenExpiredError("token has expired")
 	}
 
 	return r.modelToData(&model), nil

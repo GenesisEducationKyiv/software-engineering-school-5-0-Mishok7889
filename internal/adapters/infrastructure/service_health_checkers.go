@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"weatherapi.app/internal/adapters/api"
 	"weatherapi.app/internal/ports"
 )
 
@@ -21,13 +22,19 @@ func NewEmailHealthChecker(config ports.EmailConfig) *EmailHealthChecker {
 func (e *EmailHealthChecker) Check(ctx context.Context) ports.HealthStatus {
 	status := ports.HealthStatus{
 		Component: "smtp",
-		Status:    "healthy",
+		Status:    api.HealthyStatus,
 		Details: map[string]interface{}{
 			"host": e.config.SMTPHost,
 			"port": fmt.Sprintf("%d", e.config.SMTPPort),
 		},
 	}
 	return status
+}
+
+// IsHealthy implements the HealthChecker interface
+func (e *EmailHealthChecker) IsHealthy(ctx context.Context) bool {
+	status := e.Check(ctx)
+	return status.Status == api.HealthyStatus
 }
 
 // WeatherAPIHealthChecker implements weather API health checking
@@ -44,7 +51,7 @@ func NewWeatherAPIHealthChecker(weatherProvider ports.WeatherProviderManager) *W
 func (w *WeatherAPIHealthChecker) Check(ctx context.Context) ports.HealthStatus {
 	status := ports.HealthStatus{
 		Component: "weatherAPI",
-		Status:    "healthy",
+		Status:    api.HealthyStatus,
 		Details: map[string]interface{}{
 			"connected": true,
 		},
@@ -59,4 +66,10 @@ func (w *WeatherAPIHealthChecker) Check(ctx context.Context) ports.HealthStatus 
 	}
 
 	return status
+}
+
+// IsHealthy implements the HealthChecker interface
+func (w *WeatherAPIHealthChecker) IsHealthy(ctx context.Context) bool {
+	status := w.Check(ctx)
+	return status.Status == api.HealthyStatus
 }
