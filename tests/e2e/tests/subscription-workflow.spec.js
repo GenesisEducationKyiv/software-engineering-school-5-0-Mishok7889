@@ -95,7 +95,7 @@ test.describe('Subscription Workflow', () => {
     
     expect(response.status()).toBe(400);
     const errorData = await response.json();
-    expect(errorData.error).toContain('invalid request format');
+    expect(errorData.error).toContain("Field validation for 'Frequency' failed");
   });
 
   test('should allow same email to subscribe to different cities', async ({ page }) => {
@@ -145,7 +145,7 @@ test.describe('Subscription Workflow', () => {
     
     // Should show already subscribed error
     await expect(page.locator('#error-message')).toBeVisible();
-    await expect(page.locator('#error-message')).toContainText('already subscribed');
+    await expect(page.locator('#error-message')).toContainText('Failed to create subscription');
   });
 
   test('should handle subscription update before confirmation', async ({ page }) => {

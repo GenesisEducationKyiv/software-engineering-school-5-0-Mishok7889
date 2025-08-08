@@ -1,0 +1,166 @@
+package database
+
+import (
+	"context"
+	"time"
+
+	"gorm.io/gorm"
+	"weatherapi.app/internal/adapters/infrastructure"
+	"weatherapi.app/internal/ports"
+)
+
+// TokenModel represents the database model for tokens
+type TokenModel struct {
+	ID             uint      `gorm:"primaryKey"`
+	Token          string    `gorm:"uniqueIndex;not null"`
+	SubscriptionID uint      `gorm:"index;not null"`
+	Type           string    `gorm:"not null"`
+	ExpiresAt      time.Time `gorm:"not null"`
+	CreatedAt      time.Time
+	DeletedAt      gorm.DeletedAt `gorm:"index"`
+}
+
+func (TokenModel) TableName() string {
+	return "tokens"
+}
+
+// IsExpired checks if the token has expired
+func (t TokenModel) IsExpired() bool {
+	return t.ExpiresAt.Before(time.Now())
+}
+
+// TokenRepositoryAdapter implements the TokenRepository port using GORM
+type TokenRepositoryAdapter struct {
+	db *gorm.DB
+}
+
+// NewTokenRepositoryAdapter creates a new token repository adapter
+func NewTokenRepositoryAdapter(db *gorm.DB) ports.TokenRepository {
+	return &TokenRepositoryAdapter{
+		db: db,
+	}
+}
+
+// Save persists a token to the database
+func (r *TokenRepositoryAdapter) Save(ctx context.Context, token *ports.TokenData) error {
+	if token == nil {
+		return infrastructure.NewDatabaseError("token cannot be nil", nil)
+	}
+
+	model := r.dataToModel(token)
+	var result *gorm.DB
+
+	if token.ID == 0 {
+		result = r.db.WithContext(ctx).Create(model)
+		token.ID = model.ID
+	} else {
+		result = r.db.WithContext(ctx).Save(model)
+	}
+
+	if result.Error != nil {
+		return infrastructure.NewDatabaseError("failed to save token", result.Error)
+	}
+
+	return nil
+}
+
+// FindByToken retrieves a token by its string value
+func (r *TokenRepositoryAdapter) FindByToken(ctx context.Context, tokenStr string) (*ports.TokenData, error) {
+	if tokenStr == "" {
+		return nil, infrastructure.NewDatabaseError("token cannot be empty", nil)
+	}
+
+	var model TokenModel
+	result := r.db.WithContext(ctx).Where("token = ?", tokenStr).First(&model)
+	if result.Error != nil {
+		if result.Error == gorm.ErrRecordNotFound {
+			return nil, ports.NewTokenExpiredError("invalid or expired token")
+		}
+		return nil, infrastructure.NewDatabaseError("failed to find token", result.Error)
+	}
+
+	// Check if the token is expired
+	if model.IsExpired() {
+		return nil, ports.NewTokenExpiredError("token has expired")
+	}
+
+	return r.modelToData(&model), nil
+}
+
+// FindBySubscriptionID retrieves a token by subscription ID and type (alias for FindBySubscriptionIDAndType)
+func (r *TokenRepositoryAdapter) FindBySubscriptionID(ctx context.Context, subscriptionID uint, tokenType string) (*ports.TokenData, error) {
+	return r.FindBySubscriptionIDAndType(ctx, subscriptionID, tokenType)
+}
+
+// FindBySubscriptionIDAndType retrieves a token by subscription ID and type
+func (r *TokenRepositoryAdapter) FindBySubscriptionIDAndType(ctx context.Context, subscriptionID uint, tokenType string) (*ports.TokenData, error) {
+	if subscriptionID == 0 {
+		return nil, infrastructure.NewDatabaseError("subscription ID cannot be zero", nil)
+	}
+	if tokenType == "" {
+		return nil, infrastructure.NewDatabaseError("token type cannot be empty", nil)
+	}
+
+	var model TokenModel
+	result := r.db.WithContext(ctx).Where("subscription_id = ? AND type = ? AND expires_at > ?",
+		subscriptionID, tokenType, time.Now()).First(&model)
+	if result.Error != nil {
+		if result.Error == gorm.ErrRecordNotFound {
+			return nil, ports.NewNotFoundError("token not found or expired")
+		}
+		return nil, infrastructure.NewDatabaseError("failed to find token", result.Error)
+	}
+
+	return r.modelToData(&model), nil
+}
+
+// Delete removes a token from the database
+func (r *TokenRepositoryAdapter) Delete(ctx context.Context, token *ports.TokenData) error {
+	if token == nil {
+		return infrastructure.NewDatabaseError("token cannot be nil", nil)
+	}
+	if token.ID == 0 {
+		return infrastructure.NewDatabaseError("token ID cannot be zero for delete", nil)
+	}
+
+	result := r.db.WithContext(ctx).Delete(&TokenModel{}, token.ID)
+	if result.Error != nil {
+		return infrastructure.NewDatabaseError("failed to delete token", result.Error)
+	}
+
+	return nil
+}
+
+// DeleteExpiredTokens removes all expired tokens from the database
+func (r *TokenRepositoryAdapter) DeleteExpiredTokens(ctx context.Context) (int64, error) {
+	result := r.db.WithContext(ctx).Where("expires_at < ?", time.Now()).Delete(&TokenModel{})
+	if result.Error != nil {
+		return 0, infrastructure.NewDatabaseError("failed to delete expired tokens", result.Error)
+	}
+
+	return result.RowsAffected, nil
+}
+
+// dataToModel converts port data to database model
+func (r *TokenRepositoryAdapter) dataToModel(data *ports.TokenData) *TokenModel {
+	return &TokenModel{
+		ID:             data.ID,
+		Token:          data.Value, // Map domain Value → database Token
+		SubscriptionID: data.SubscriptionID,
+		Type:           data.Type,
+		ExpiresAt:      data.ExpiresAt,
+		CreatedAt:      data.CreatedAt,
+	}
+}
+
+// modelToData converts database model to port data
+func (r *TokenRepositoryAdapter) modelToData(model *TokenModel) *ports.TokenData {
+	return &ports.TokenData{
+		ID:             model.ID,
+		Value:          model.Token, // Map database Token → domain Value
+		SubscriptionID: model.SubscriptionID,
+		Type:           model.Type,
+		ExpiresAt:      model.ExpiresAt,
+		CreatedAt:      model.CreatedAt,
+	}
+}

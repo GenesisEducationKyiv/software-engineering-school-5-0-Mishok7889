@@ -1,4 +1,13 @@
 {
   "go.lintTool": "golangci-lint",
-  "go.lintOnSave": "workspace"
+  "go.lintOnSave": "workspace",
+  "emeraldwalk.runonsave": {
+    "commands": [
+      {
+        "match": "\\.go$",
+        "isAsync": true,
+        "cmd": "node .vscode/scripts/arch-lint.js"
+      }
+    ]
+  }
 }

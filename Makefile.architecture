@@ -1,0 +1,48 @@
+# Makefile for architecture testing
+# This makefile contains targets for testing the hexagonal architecture
+
+.PHONY: arch-help arch-install arch-test arch-test-verbose arch-graph arch-clean
+
+# Help target
+arch-help:
+	@echo "Architecture Testing Targets:"
+	@echo "  arch-install      - Install go-arch-lint tool"
+	@echo "  arch-test         - Run architecture tests"
+	@echo "  arch-test-verbose - Run architecture tests with verbose output"
+	@echo "  arch-graph        - Generate architecture dependency graph"
+	@echo "  arch-clean        - Clean architecture test artifacts"
+
+# Install go-arch-lint tool
+arch-install:
+	@echo "Installing go-arch-lint..."
+	@go install github.com/fe3dback/go-arch-lint@latest
+	@echo "✓ go-arch-lint installed successfully"
+
+# Run architecture tests
+arch-test:
+	@echo "Running architecture tests..."
+	@go-arch-lint check
+	@echo "✓ Architecture tests passed"
+
+# Run architecture tests with verbose output
+arch-test-verbose:
+	@echo "Running architecture tests (verbose)..."
+	@go-arch-lint check --verbose
+	@echo "✓ Architecture tests passed"
+
+# Generate architecture dependency graph
+arch-graph:
+	@echo "Generating architecture dependency graph..."
+	@mkdir -p docs
+	@go-arch-lint graph --out=docs/architecture-graph.svg
+	@echo "✓ Architecture graph generated: docs/architecture-graph.svg"
+
+# Clean architecture test artifacts
+arch-clean:
+	@echo "Cleaning architecture test artifacts..."
+	@rm -f docs/architecture-graph.svg
+	@echo "✓ Architecture artifacts cleaned"
+
+# Run all architecture-related tasks
+arch-all: arch-test arch-graph
+	@echo "✓ All architecture tasks completed"

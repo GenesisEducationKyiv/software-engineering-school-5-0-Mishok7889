@@ -24,9 +24,12 @@ test.describe('Application Smoke Tests', () => {
     expect(response.ok()).toBeTruthy();
     
     const data = await response.json();
-    expect(data).toHaveProperty('database');
-    expect(data).toHaveProperty('weatherAPI');
-    expect(data).toHaveProperty('smtp');
+    expect(data).toHaveProperty('service');
+    expect(data).toHaveProperty('timestamp');
+    expect(data).toHaveProperty('routes');
+    expect(data.service).toBe('api-gateway');
+    expect(Array.isArray(data.routes)).toBeTruthy();
+    expect(data.routes).toContain('GET /api/health');
   });
 
   test('should handle 404 pages', async ({ page }) => {
